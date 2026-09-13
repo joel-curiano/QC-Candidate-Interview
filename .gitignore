@@ -1,0 +1,11 @@
+.env
+.streamlit/secrets.toml
+__pycache__/
+.pytest_cache/
+.venv/
+
+
+*.db
+*.db-shm
+*.db-wal
+*.sqlite3
