@@ -805,19 +805,10 @@ else:
                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         sid = st.selectbox('Assessment', [r['id'] for r in rows], format_func=lambda value: next(f"#{r['id']} · {r['candidate_name']} · {r['discipline']}" for r in rows if r['id'] == value))
         sub = next(r for r in rows if r['id'] == sid)
-        st.write(f"Multiple Choice score: {sub['mcq_score']:g} points · {db.result(sub)}")
-        st.write({
-            'Candidate': sub['candidate_name'],
-            'Email': sub.get('email', ''),
-            'Job Title': sub.get('designation', ''),
-            'Iqama No': sub.get('iqama_no', ''),
-            'Employee No': sub.get('employee_no', ''),
-            'Project Location': sub.get('project_location', ''),
-            'Project Assignment': sub.get('project_assignment', sub.get('project_location', '')),
-            'Scheduled Test Date': sub.get('scheduled_test_date', ''),
-            'Exam Date': sub.get('exam_date', ''),
-        })
+        st.write(f"Multiple Choice score: {sub['mcq_score']:g} points")
         answers = db.answer_details(user['id'], sid)
+        questionnaire = st.expander('Questionnaire', expanded=sub['status'] != 'Graded')
+        questionnaire.__enter__()
         with st.form(f'grading_{sid}'):
             scores = {}
             for a in answers:
@@ -843,3 +834,11 @@ else:
                     st.rerun()
                 except ValueError as exc:
                     st.error(str(exc))
+        questionnaire.__exit__(None, None, None)
+        if sub['status'] == 'Graded':
+            st.subheader('Final Grades')
+            for kind, label in (('mcq', 'Multiple Choice'), ('essay', 'Essay'), ('oral', 'Oral Test'), ('practical', 'Practical Test')):
+                grade = db.category_result(sub, kind)
+                (st.success if grade.startswith('PASS') else st.error)(f'{label}: {grade}')
+            final_grade = db.result(sub)
+            (st.success if final_grade.startswith('PASS') else st.error)(f'Final Grade: {final_grade}')

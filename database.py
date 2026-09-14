@@ -59,7 +59,6 @@ def init_db():
         c.execute('ALTER TABLE questions DROP CONSTRAINT IF EXISTS questions_q_type_check')
         c.execute("UPDATE questions SET q_type='practical' WHERE q_type='practicum'")
         c.execute("UPDATE answers SET snapshot=jsonb_set(snapshot::jsonb, '{q_type}', '\"practical\"'::jsonb) WHERE snapshot::json->>'q_type'='practicum'")
-        c.execute("DELETE FROM answers WHERE submission_id IN (SELECT id FROM submissions WHERE created_at < CURRENT_TIMESTAMP - INTERVAL '7 days')")
         c.execute("ALTER TABLE questions ADD CONSTRAINT questions_q_type_check CHECK (q_type IN ('mcq', 'essay', 'oral', 'practical'))")
         c.execute("UPDATE questions SET max_points=1 WHERE q_type='mcq' AND max_points <> 1")
         c.execute("UPDATE questions SET max_points=10 WHERE q_type IN ('essay', 'oral', 'practical') AND max_points > 10")
@@ -75,6 +74,13 @@ def init_db():
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS essay_max DOUBLE PRECISION NOT NULL DEFAULT 0")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS oral_max DOUBLE PRECISION NOT NULL DEFAULT 0")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS practical_max DOUBLE PRECISION NOT NULL DEFAULT 0")
+        c.execute("""UPDATE submissions s SET
+            mcq_max=COALESCE((SELECT SUM(CASE WHEN snapshot::json->>'q_type'='mcq' THEN 1 ELSE 0 END) FROM answers a WHERE a.submission_id=s.id), 0),
+            essay_max=COALESCE((SELECT SUM(LEAST((snapshot::json->>'max_points')::numeric, 10)) FROM answers a WHERE a.submission_id=s.id AND snapshot::json->>'q_type'='essay'), 0),
+            oral_max=COALESCE((SELECT SUM(LEAST((snapshot::json->>'max_points')::numeric, 10)) FROM answers a WHERE a.submission_id=s.id AND snapshot::json->>'q_type'='oral'), 0),
+            practical_max=COALESCE((SELECT SUM(LEAST((snapshot::json->>'max_points')::numeric, 10)) FROM answers a WHERE a.submission_id=s.id AND snapshot::json->>'q_type'='practical'), 0)
+            WHERE s.mcq_max=0 AND s.essay_max=0 AND s.oral_max=0 AND s.practical_max=0""")
+        c.execute("DELETE FROM answers WHERE submission_id IN (SELECT id FROM submissions WHERE created_at < CURRENT_TIMESTAMP - INTERVAL '7 days')")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS test_date DATE")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMPTZ")
