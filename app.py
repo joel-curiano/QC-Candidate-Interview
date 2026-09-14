@@ -388,17 +388,17 @@ else:
         candidates = db.candidate_accounts(user['id'])
         
         col1, col2, col3 = st.columns(3)
-        with col1: search_name = st.text_input('Filter by Name')
-        with col2: search_discipline = st.text_input('Filter by Discipline')
-        with col3: search_iqama = st.text_input('Filter by Iqama')
+        with col1: search_name = st.selectbox('Filter by Name', ['All'] + sorted({c['name'] for c in candidates}), key='schedule_filter_name')
+        with col2: search_discipline = st.selectbox('Filter by Discipline', ['All'] + sorted({c.get('scheduled_discipline') or c.get('discipline', '') for c in candidates if c.get('scheduled_discipline') or c.get('discipline')}), key='schedule_filter_discipline')
+        with col3: search_iqama = st.selectbox('Filter by Iqama', ['All'] + sorted({c['iqama_no'] for c in candidates if c.get('iqama_no')}), key='schedule_filter_iqama')
         
         filtered = candidates
-        if search_name:
-            filtered = [c for c in filtered if search_name.lower() in c['name'].lower()]
-        if search_discipline:
-            filtered = [c for c in filtered if search_discipline.lower() in c['discipline'].lower()]
-        if search_iqama:
-            filtered = [c for c in filtered if search_iqama.lower() in c['iqama_no'].lower()]
+        if search_name != 'All':
+            filtered = [c for c in filtered if c['name'] == search_name]
+        if search_discipline != 'All':
+            filtered = [c for c in filtered if (c.get('scheduled_discipline') or c.get('discipline', '')) == search_discipline]
+        if search_iqama != 'All':
+            filtered = [c for c in filtered if c['iqama_no'] == search_iqama]
             
         if not filtered:
             st.info('No candidates found matching the filters.')
@@ -441,16 +441,16 @@ else:
         upcoming = [c for c in candidates if c['test_date'] and c['test_date'] >= today]
         
         col1, col2, col3 = st.columns(3)
-        with col1: search_name = st.text_input('Filter by Name', key='upc_name')
-        with col2: search_discipline = st.text_input('Filter by Discipline', key='upc_disc')
-        with col3: search_iqama = st.text_input('Filter by Iqama', key='upc_iqama')
+        with col1: search_name = st.selectbox('Filter by Name', ['All'] + sorted({c['name'] for c in upcoming}), key='upc_name')
+        with col2: search_discipline = st.selectbox('Filter by Discipline', ['All'] + sorted({c.get('scheduled_discipline') or c.get('discipline', '') for c in upcoming}), key='upc_disc')
+        with col3: search_iqama = st.selectbox('Filter by Iqama', ['All'] + sorted({c['iqama_no'] for c in upcoming if c.get('iqama_no')}), key='upc_iqama')
         
-        if search_name:
-            upcoming = [c for c in upcoming if search_name.lower() in c['name'].lower()]
-        if search_discipline:
-            upcoming = [c for c in upcoming if search_discipline.lower() in c['discipline'].lower()]
-        if search_iqama:
-            upcoming = [c for c in upcoming if search_iqama.lower() in c['iqama_no'].lower()]
+        if search_name != 'All':
+            upcoming = [c for c in upcoming if c['name'] == search_name]
+        if search_discipline != 'All':
+            upcoming = [c for c in upcoming if (c.get('scheduled_discipline') or c.get('discipline', '')) == search_discipline]
+        if search_iqama != 'All':
+            upcoming = [c for c in upcoming if c['iqama_no'] == search_iqama]
             
         if not upcoming:
             st.info('No upcoming schedules match the filters.')
