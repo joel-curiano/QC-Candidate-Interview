@@ -11,7 +11,7 @@ from email_service import EmailDeliveryError, send_candidate_invitation, send_re
 from question_import import QuestionImportError, parse_questions, template_bytes
 from result_export import excel_bytes
 
-st.set_page_config(page_title='QC Candidate Test Portal', page_icon='img/C.A.T. Emblem.jpg', layout='centered')
+st.set_page_config(page_title='Competency Technical Assessment (CTA)', page_icon='img/C.A.T. Emblem.jpg', layout='centered')
 st.logo('img/C.A.T. Emblem.jpg')
 st.markdown(
     '''<style>
@@ -37,7 +37,7 @@ def question_options(question):
 
 
 try:
-    with st.spinner('Loading QC Candidate Test Portal...'):
+    with st.spinner('Loading Competency Technical Assessment (CTA)...'):
         db.init_db()
 except db.DatabaseError as exc:
     st.error(str(exc))
@@ -190,7 +190,7 @@ if hasattr(st, 'dialog'):
             st.error(str(exc))
 
 st.image('img/C.A.T. Logo - Horizontal.jpg', width=300)
-st.title('QC Candidate Test Portal')
+st.title('Competency Technical Assessment (CTA)')
 st.caption('Technical assessments · Multiple disciplines · Evidence-based grading')
 if not db.has_users():
     st.subheader('Initial administrator setup')
@@ -291,7 +291,7 @@ if user['role'] == 'Candidate':
                             st.session_state.assessment_phase = 'mcq'
                             st.rerun()
                         except (TypeError, ValueError, json.JSONDecodeError) as exc:
-                            st.error(f'Unable to start the Candidate Test: {exc}')
+                            st.error(f'Unable to start the Competency Technical Assessment: {exc}')
             st.stop()
 
         question_map = {q['id']: q for q in bank}

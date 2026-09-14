@@ -76,7 +76,7 @@ def send_candidate_invitation(email, name, username, temporary_password, test_da
         'not forward this email.\n\n'
         'If your schedule or candidate information is incorrect, contact your assessment '
         'coordinator before the test date.\n\n'
-        'Regards,\nQC Candidate Test Portal\n'
+        'Regards,\nCompetency Technical Assessment (CTA)\n'
     )
     _deliver(message, host)
 
@@ -84,12 +84,12 @@ def send_candidate_invitation(email, name, username, temporary_password, test_da
 def send_reviewer_credentials(email, name, username, initial_password):
     host, sender, app_url = _email_settings()
     message = EmailMessage()
-    message['Subject'] = 'Your QC Candidate Test Portal reviewer account'
+    message['Subject'] = 'Your Competency Technical Assessment (CTA) reviewer account'
     message['From'] = sender
     message['To'] = email
     message.set_content(
         f'Dear {name},\n\n'
-        'A Reviewer account has been created for you in the QC Candidate Test Portal. '
+        'A Reviewer account has been created for you in the Competency Technical Assessment (CTA) portal. '
         'You can use this account to manage candidate schedules, review assigned assessments, '
         'and record grades and feedback.\n\n'
         f'Portal link: {app_url}\n'
@@ -100,7 +100,7 @@ def send_reviewer_credentials(email, name, username, initial_password):
         'Change password in the sidebar to choose your own password.\n\n'
         'Keep these credentials confidential and do not forward this email. If you did not '
         'expect this account or cannot sign in, contact the portal administrator.\n\n'
-        'Regards,\nQC Candidate Test Portal\n'
+        'Regards,\nCompetency Technical Assessment (CTA)\n'
     )
     _deliver(message, host)
 
@@ -109,14 +109,14 @@ def send_test_email(email, name='Administrator'):
     """Send a harmless message to verify the portal's SMTP configuration."""
     host, sender, app_url = _email_settings()
     message = EmailMessage()
-    message['Subject'] = 'QC Candidate Test Portal email test'
+    message['Subject'] = 'Competency Technical Assessment (CTA) email test'
     message['From'] = sender
     message['To'] = email
     message.set_content(
         f'Dear {name},\n\n'
-        'This is a test email from the QC Candidate Test Portal. '
+        'This is a test email from the Competency Technical Assessment (CTA) portal. '
         'Your SMTP configuration is working correctly.\n\n'
         f'Portal link: {app_url}\n\n'
-        'Regards,\nQC Candidate Test Portal\n'
+        'Regards,\nCompetency Technical Assessment (CTA)\n'
     )
     _deliver(message, host)

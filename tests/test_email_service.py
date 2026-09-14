@@ -94,6 +94,6 @@ def test_test_email_contains_portal_link(monkeypatch):
 
     message = sent['message']
     assert message['To'] == 'admin@example.com'
-    assert message['Subject'] == 'QC Candidate Test Portal email test'
+    assert message['Subject'] == 'Competency Technical Assessment (CTA) email test'
     assert 'SMTP configuration is working correctly' in message.get_content()
     assert 'https://qc.example.com' in message.get_content()
