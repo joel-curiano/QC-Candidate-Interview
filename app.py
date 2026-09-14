@@ -793,8 +793,12 @@ else:
         writer.writeheader()
         writer.writerows({k: "'" + v if isinstance(v, str) and v.lstrip().startswith(('=', '+', '-', '@')) else v for k, v in r.items()} for r in table)
         st.download_button('Download results CSV', output.getvalue(), 'qc-results.csv', 'text/csv')
-        st.download_button('Download CTA Record Log Excel', excel_bytes([dict(row, result=db.result(row)) for row in rows]), 'CTA Record Log.xlsx',
-                   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        if st.button('Prepare CTA Record Log Excel'):
+            st.session_state.prepare_results_excel = True
+        if st.session_state.get('prepare_results_excel'):
+            excel_data = excel_bytes([dict(row, result=db.result(row)) for row in rows])
+            st.download_button('Download CTA Record Log Excel', excel_data, 'CTA Record Log.xlsx',
+                       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         sid = st.selectbox('Assessment', [r['id'] for r in rows], format_func=lambda value: next(f"#{r['id']} · {r['candidate_name']} · {r['discipline']}" for r in rows if r['id'] == value))
         sub = next(r for r in rows if r['id'] == sid)
         st.write(f"Multiple Choice score: {sub['mcq_score']:g} points · {db.result(sub)}")

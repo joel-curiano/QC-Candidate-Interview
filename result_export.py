@@ -1,9 +1,12 @@
 """Excel export for the assessment results log."""
 from io import BytesIO
+import re
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+
+ILLEGAL_EXCEL_CHARS = re.compile(r'[\x00-\x08\x0B\x0C\x0E-\x1F]')
 
 
 RESULT_HEADERS = [
@@ -16,8 +19,10 @@ RESULT_HEADERS = [
 
 
 def _safe_cell(value):
-    if isinstance(value, str) and value.lstrip().startswith(('=', '+', '-', '@')):
-        return "'" + value
+    if isinstance(value, str):
+        value = ILLEGAL_EXCEL_CHARS.sub('', value)
+        if value.lstrip().startswith(('=', '+', '-', '@')):
+            return "'" + value
     return '' if value is None else value
 
 
