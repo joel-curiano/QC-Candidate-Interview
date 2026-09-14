@@ -238,10 +238,11 @@ if user['role'] == 'Candidate':
             st.info('No assessments are currently available.')
             st.stop()
         bank = db.questions(discipline)
+        settings = db.assessment_settings(user['id'])
         mcq_bank = [q for q in bank if q['q_type'] == 'mcq']
         reviewer_pools = {kind: [q for q in bank if q['q_type'] == kind] for kind in ('essay', 'oral', 'practical')}
-        if len(mcq_bank) < 20 or any(len(pool) < 5 for pool in reviewer_pools.values()):
-            st.error(f"This discipline needs at least 20 MCQ, 5 Essay, 5 Oral, and 5 Practical Test questions. It currently has {len(mcq_bank)} MCQ, {len(reviewer_pools['essay'])} Essay, {len(reviewer_pools['oral'])} Oral, and {len(reviewer_pools['practical'])} Practical Test questions.")
+        if len(mcq_bank) < settings['mcq'] or any(len(reviewer_pools[kind]) < settings[kind] for kind in reviewer_pools):
+            st.error(f"This discipline needs {settings['mcq']} MCQ, {settings['essay']} Essay, {settings['oral']} Oral, and {settings['practical']} Practical Test questions.")
             st.stop()
 
         if st.session_state.get('assessment_discipline') != discipline:
@@ -268,9 +269,10 @@ if user['role'] == 'Candidate':
                         }
                         rng = secrets.SystemRandom()
                         try:
-                            selected_mcqs = rng.sample(mcq_bank, 20)
+                            selected_mcqs = rng.sample(mcq_bank, settings['mcq'])
                             st.session_state.assessment_mcq_ids = [q['id'] for q in selected_mcqs]
-                            st.session_state.assessment_essay_ids = [q['id'] for kind in ('essay', 'oral', 'practical') for q in rng.sample(reviewer_pools[kind], 5)]
+                            st.session_state.assessment_essay_ids = [q['id'] for q in rng.sample(reviewer_pools['essay'], settings['essay'])]
+                            st.session_state.assessment_reviewer_ids = [q['id'] for kind in ('oral', 'practical') for q in rng.sample(reviewer_pools[kind], settings[kind])]
                             st.session_state.assessment_mcq_options = {
                                 q['id']: rng.sample(question_options(q), len(question_options(q)))
                                 for q in selected_mcqs
@@ -283,9 +285,9 @@ if user['role'] == 'Candidate':
 
         question_map = {q['id']: q for q in bank}
         mcq_questions = [question_map[qid] for qid in st.session_state.assessment_mcq_ids]
-        essay_questions = [question_map[qid] for qid in st.session_state.assessment_essay_ids]
+        essay_questions = [question_map[qid] for qid in st.session_state.assessment_essay_ids if question_map[qid]['q_type'] == 'essay']
         responses = st.session_state.setdefault('assessment_responses', {})
-        st.info('20 Multiple Choice Questions are followed by 5 Essay, 5 Oral, and 5 Practical Test questions. All answers are required.')
+        st.info(f"Complete {settings['mcq']} Multiple Choice Questions and {settings['essay']} Essay questions in the app. Oral ({settings['oral']}) and Practical Tests ({settings['practical']}) are completed and graded by a Reviewer.")
         if st.session_state.get('assessment_phase', 'mcq') == 'mcq':
             st.subheader('Multiple Choice Questions')
             with st.form('multiple_choice_questions'):
@@ -302,8 +304,8 @@ if user['role'] == 'Candidate':
                         st.session_state.assessment_phase = 'essay'
                         st.rerun()
         else:
-            st.subheader('Essay, Oral, and Practical Tests')
-            st.info('Read each question and type your answer in the response box. Essay answers are reviewed and scored by a Reviewer.')
+            st.subheader('Essay Questions')
+            st.info('Read each question and type your answer in the response box. Oral and Practical Tests are completed and graded by a Reviewer.')
             with st.form('reviewer_scored_questions'):
                 page_responses = {}
                 for number, question in enumerate(essay_questions, 1):
@@ -316,14 +318,14 @@ if user['role'] == 'Candidate':
                         key=f"answer_{question['id']}" )
                 if st.form_submit_button('Submit assessment', type='primary'):
                     if any(not isinstance(answer, str) or not answer.strip() for answer in page_responses.values()):
-                        st.error('Answer every Essay, Oral, and Practical question before submitting.')
+                        st.error('Answer every Essay question before submitting.')
                     else:
                         responses.update(page_responses)
                         try:
                             db.submit(
                                 user['id'], discipline, responses, st.session_state.attempt_token,
                                 st.session_state.candidate_details,
-                                st.session_state.assessment_mcq_ids + st.session_state.assessment_essay_ids)
+                                st.session_state.assessment_mcq_ids + st.session_state.assessment_essay_ids + st.session_state.assessment_reviewer_ids)
                             st.session_state.clear()
                             st.session_state.assessment_submitted = True
                             st.rerun()
@@ -331,6 +333,7 @@ if user['role'] == 'Candidate':
                             st.error(str(exc))
 else:
     pages = ['Review Assessments', 'Create Candidate Account', 'Create Candidate Schedules', 'Upcoming Candidate Schedules']
+    pages += ['Assessment Settings']
     if user['role'] == 'Admin':
         pages += ['Projects', 'Accounts']
     pages += ['Question Bank']
@@ -364,7 +367,22 @@ else:
     if st.sidebar.button('Sign out'):
         st.session_state.clear()
         st.rerun()
-    if page == 'Create Candidate Account':
+    if page == 'Assessment Settings':
+        st.subheader('Assessment Settings')
+        st.caption('Set how many questions of each type are included in each candidate assessment. Changes apply to new assessments.')
+        current = db.assessment_settings(user['id'])
+        with st.form('assessment_settings'):
+            counts = {kind: st.number_input(label, min_value=1, max_value=100, value=current[kind], step=1) for kind, label in {
+                'mcq': 'Multiple Choice Questions', 'essay': 'Essay Questions', 'oral': 'Oral Test Questions', 'practical': 'Practical Test Questions'
+            }.items()}
+            if st.form_submit_button('Save Assessment Settings', type='primary'):
+                try:
+                    db.update_assessment_settings(user['id'], {kind: int(value) for kind, value in counts.items()})
+                    st.success('Assessment Settings saved.')
+                    st.rerun()
+                except ValueError as exc:
+                    st.error(str(exc))
+    elif page == 'Create Candidate Account':
         st.subheader('Create a candidate account')
         account_form('candidate_account', actor=user['id'], allowed_roles=['Candidate'])
     elif page == 'Create Candidate Schedules':

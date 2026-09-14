@@ -74,6 +74,8 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS test_date DATE")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMPTZ")
         c.execute("CREATE TABLE IF NOT EXISTS projects (name TEXT PRIMARY KEY)")
+        c.execute("CREATE TABLE IF NOT EXISTS assessment_settings (question_type TEXT PRIMARY KEY, question_count INTEGER NOT NULL CHECK (question_count > 0))")
+        c.executemany("INSERT INTO assessment_settings(question_type, question_count) VALUES (%s,%s) ON CONFLICT (question_type) DO NOTHING", [('mcq', 20), ('essay', 5), ('oral', 5), ('practical', 5)])
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_projects TEXT[] NOT NULL DEFAULT '{}'")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS discipline TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS iqama_no TEXT NOT NULL DEFAULT ''")
@@ -228,6 +230,18 @@ def get_projects(actor):
     with connection() as c:
         require(c, actor, ('Admin', 'Reviewer', 'Candidate'))
         return [row['name'] for row in c.execute("SELECT name FROM projects ORDER BY name").fetchall()]
+
+def assessment_settings(actor):
+    with connection() as c:
+        require(c, actor, ('Admin', 'Reviewer', 'Candidate'))
+        return {row['question_type']: row['question_count'] for row in c.execute('SELECT question_type, question_count FROM assessment_settings')}
+
+def update_assessment_settings(actor, settings):
+    with connection() as c:
+        require(c, actor, ('Admin', 'Reviewer'))
+        if set(settings) != {'mcq', 'essay', 'oral', 'practical'} or any(not isinstance(v, int) or not 1 <= v <= 100 for v in settings.values()):
+            raise ValueError('Each question count must be a whole number from 1 to 100.')
+        c.executemany('UPDATE assessment_settings SET question_count=%s WHERE question_type=%s', [(v, k) for k, v in settings.items()])
 
 def add_project(actor, name):
     name = str(name).strip()
@@ -482,14 +496,18 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
             if len(question_ids) != len(set(question_ids)):
                 raise ValueError('The assessment contains duplicate questions.')
             qs = c.execute('SELECT * FROM questions WHERE discipline=%s AND active=1 AND id=ANY(%s) ORDER BY id FOR SHARE', (discipline, list(question_ids))).fetchall()
-        if not qs or set(responses) != {q['id'] for q in qs}:
+        candidate_question_ids = {q['id'] for q in qs if q['q_type'] not in ('oral', 'practical')}
+        if not qs or set(responses) != candidate_question_ids:
             raise ValueError('The question set changed. Reload the assessment before submitting.')
         if question_ids is not None:
-            counts = {kind: sum(q['q_type'] == kind for q in qs) for kind in ('mcq', 'essay', 'oral', 'practical')}
-            if counts != {'mcq': 20, 'essay': 5, 'oral': 5, 'practical': 5}:
-                raise ValueError('The assessment must contain 20 MCQ, 5 Essay, 5 Oral, and 5 Practical Test questions.')
+            settings = assessment_settings(actor)
+            counts = {kind: sum(q['q_type'] == kind for q in qs) for kind in settings}
+            if counts != settings:
+                raise ValueError('The assessment question counts do not match the current Assessment Settings.')
         for q in qs:
-            answer = responses[q['id']]
+            answer = responses.get(q['id'], '')
+            if q['q_type'] in ('oral', 'practical'):
+                continue
             if not isinstance(answer, str) or not answer.strip() or len(answer) > 20000:
                 raise ValueError('Answer every question (maximum 20,000 characters per answer).')
             if q['q_type'] == 'mcq' and answer not in json.loads(q['options']):
