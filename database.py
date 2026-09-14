@@ -128,7 +128,7 @@ def generate_password(length=12):
 
 
 def require(c, user_id, roles):
-    user = c.execute('SELECT id,username,name,email,role FROM users WHERE id=%s', (user_id,)).fetchone()
+    user = c.execute('SELECT id,username,name,email,role,discipline,scheduled_discipline,iqama_no,employee_no,project_assignment,test_date FROM users WHERE id=%s', (user_id,)).fetchone()
     if not user or user['role'] not in roles:
         raise ValueError('You do not have permission for this action.')
     return dict(user)

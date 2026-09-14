@@ -224,39 +224,6 @@ with db.connection() as conn:
     user = db.require(conn, user['id'], ('Candidate', 'Reviewer', 'Admin'))
 st.sidebar.write(f"**{user['name']}**")
 st.sidebar.caption(user['role'])
-with st.sidebar.expander('Change password'):
-    def generate_new_password():
-        generated = db.generate_password()
-        st.session_state.change_new_password = generated
-        st.session_state.change_confirm_password = generated
-        st.session_state.change_generated_password = generated
-
-    with st.form('change_password_form'):
-        current_password = st.text_input('Current password', type='password')
-        new_password = st.text_input(
-            'New password (at least 6 characters)', type='password', key='change_new_password'
-        )
-        confirm_password = st.text_input(
-            'Confirm new password', type='password', key='change_confirm_password'
-        )
-        st.form_submit_button('Generate random password', on_click=generate_new_password)
-        if st.form_submit_button('Change password', type='primary'):
-            try:
-                if new_password != confirm_password:
-                    raise ValueError('New passwords do not match.')
-                db.change_password(user['id'], current_password, new_password)
-                st.session_state.clear()
-                st.session_state.password_changed = True
-                st.rerun()
-            except ValueError as exc:
-                st.error(str(exc))
-    if generated := st.session_state.get('change_generated_password'):
-        st.caption('Copy your generated password before saving:')
-        st.code(generated, language=None)
-if st.sidebar.button('Sign out'):
-    st.session_state.clear()
-    st.rerun()
-
 if user['role'] == 'Candidate':
     if st.session_state.get('submitted_id'):
         st.success('This completes the online test. Next test is Oral and Practical Test.')
@@ -380,6 +347,35 @@ else:
         pages += ['Projects', 'Accounts']
     pages += ['Question Bank']
     page = st.sidebar.radio('Navigation', pages)
+    if user['role'] in ('Admin', 'Reviewer'):
+        with st.sidebar.expander('Change password'):
+            def generate_new_password():
+                generated = db.generate_password()
+                st.session_state.change_new_password = generated
+                st.session_state.change_confirm_password = generated
+                st.session_state.change_generated_password = generated
+
+            with st.form('change_password_form'):
+                current_password = st.text_input('Current password', type='password')
+                new_password = st.text_input('New password (at least 6 characters)', type='password', key='change_new_password')
+                confirm_password = st.text_input('Confirm new password', type='password', key='change_confirm_password')
+                st.form_submit_button('Generate random password', on_click=generate_new_password)
+                if st.form_submit_button('Change password', type='primary'):
+                    try:
+                        if new_password != confirm_password:
+                            raise ValueError('New passwords do not match.')
+                        db.change_password(user['id'], current_password, new_password)
+                        st.session_state.clear()
+                        st.session_state.password_changed = True
+                        st.rerun()
+                    except ValueError as exc:
+                        st.error(str(exc))
+            if generated := st.session_state.get('change_generated_password'):
+                st.caption('Copy your generated password before saving:')
+                st.code(generated, language=None)
+    if st.sidebar.button('Sign out'):
+        st.session_state.clear()
+        st.rerun()
     if page == 'Create Candidate Account':
         st.subheader('Create a candidate account')
         account_form('candidate_account', actor=user['id'], allowed_roles=['Candidate'])
@@ -458,7 +454,10 @@ else:
             for candidate in upcoming:
                 with st.expander(f"{candidate['name']} - {candidate['discipline']} - {candidate['iqama_no']} - {candidate['test_date']}"):
                     st.write(f"**Email:** {candidate['email']}")
-                    st.write('Invitation sent.' if candidate['invitation_sent_at'] else 'Invitation not sent.')
+                    if candidate['invitation_sent_at']:
+                        st.success('Invitation Sent')
+                    else:
+                        st.error('Invitation Not Sent')
                     
                     past = candidate.get('previous_schedules')
                     if past:
