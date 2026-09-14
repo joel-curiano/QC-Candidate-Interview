@@ -553,12 +553,12 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         maxima = {kind: sum(1 if q['q_type'] == 'mcq' else min(q['max_points'], 10) for q in qs if q['q_type'] == kind) for kind in ('mcq', 'essay', 'oral', 'practical')}
         sid = c.execute("INSERT INTO submissions(candidate_name,designation,iqama_no,employee_no,exam_date,project_assignment,discipline,mcq_score,max_possible_points,mcq_max,essay_max,oral_max,practical_max,status,user_id,token,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP) RETURNING id",
                         (candidate_name, str(details.get('designation', '')).strip(), str(details.get('iqama_no', '')).strip(),
-                         str(details.get('employee_no', '')).strip(), details.get('exam_date'), project_assignment, project_assignment,
+                         str(details.get('employee_no', '')).strip(), details.get('exam_date'), project_assignment,
                          discipline, mcq_score, max_points, maxima['mcq'], maxima['essay'], maxima['oral'], maxima['practical'], status, actor, token)).fetchone()['id']
         for q in qs:
             score = q['max_points'] if q['q_type'] == 'mcq' and responses[q['id']] == q['correct_answer'] else 0
             c.execute('INSERT INTO answers(submission_id,question_id,submitted_answer,awarded_score,snapshot) VALUES (%s,%s,%s,%s,%s)',
-                      (sid, q['id'], responses[q['id']], score, json.dumps(dict(q))))
+                      (sid, q['id'], responses.get(q['id'], ''), score, json.dumps(dict(q))))
         c.execute("UPDATE users SET test_date=NULL WHERE id=%s AND role='Candidate'", (actor,))
         return sid
 
