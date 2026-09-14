@@ -819,10 +819,11 @@ else:
                     'practical': 'Practical Test',
                 }.get(q['q_type'], q['q_type'])
                 st.write(f"{question_type}: {q['question_text']}")
-                st.text_area('Candidate response', value=a['submitted_answer'], disabled=True,
-                             height=160, key=f"response_{a['id']}")
                 if q['q_type'] in ('essay', 'oral', 'practical'):
-                    st.info(q['rubric'])
+                    if q['q_type'] == 'essay':
+                        st.text_area('Candidate response', value=a['submitted_answer'], disabled=True,
+                                     height=160, key=f"response_{a['id']}")
+                    st.info(f"Scoring guidance: {q['rubric']}")
                     scores[a['id']] = st.number_input(f"Points for answer #{a['id']} (max {q['max_points']})", min_value=0.0, max_value=float(q['max_points']), value=float(a['awarded_score']), step=0.5, disabled=sub['status'] == 'Graded')
                 else:
                     st.caption(f"Correct answer: {q['correct_answer']} · Awarded: {a['awarded_score']:g}")
