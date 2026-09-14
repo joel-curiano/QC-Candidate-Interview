@@ -21,7 +21,7 @@ def test_candidate_and_reviewer_flow(postgres_db):
     db.init_db()
     db.create_user('admin', 'Admin', PASSWORD, bootstrap=True)
     admin = db.authenticate('admin', PASSWORD)
-    db.create_user('candidate', 'Candidate', PASSWORD, actor=admin['id'], email='candidate@example.com', test_date=date.today())
+    db.create_user('candidate', 'Candidate', PASSWORD, actor=admin['id'], email='candidate@example.com', test_date=date.today(), discipline='Welding QC', iqama_no='1234567890', employee_no='EMP-1')
     for index in range(39):
         db.add_question(admin['id'], 'Welding QC', 'mcq', f'Additional choice {index}', ['A', 'B'], 'A', '', 10)
     for index in range(4):
@@ -35,10 +35,7 @@ def test_candidate_and_reviewer_flow(postgres_db):
     at.text_input[1].input(PASSWORD)
     next(b for b in at.button if b.label == 'Sign in').click().run()
     assert not at.exception
-    for field, value in {
-        'Designation': 'Inspector', 'Iqama No': '1234567890', 'Employee No': 'EMP-1',
-        'Project Location': 'Test project',
-    }.items():
+    for field, value in {'Designation': 'Inspector', 'Project Location': 'Test project'}.items():
         next(widget for widget in at.text_input if widget.label == field).input(value)
     next(b for b in at.button if b.label == 'Start Multiple Choice Questions').click().run()
     for radio in at.radio:

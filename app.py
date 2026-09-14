@@ -24,6 +24,18 @@ st.markdown(
     </style>''',
     unsafe_allow_html=True,
 )
+
+
+def question_options(question):
+    """Return MCQ options regardless of whether the database driver decoded JSON."""
+    raw_options = question.get('options')
+    if isinstance(raw_options, str):
+        raw_options = json.loads(raw_options)
+    if not isinstance(raw_options, list) or len(raw_options) < 2:
+        raise ValueError(f"Question {question.get('id', '')} has invalid Multiple Choice options.")
+    return [str(option) for option in raw_options]
+
+
 try:
     db.init_db()
 except db.DatabaseError as exc:
@@ -268,11 +280,13 @@ if user['role'] == 'Candidate':
                         st.write(r['reviewer_comments'] or 'No reviewer feedback provided.')
     else:
         st.subheader('Take an assessment')
-        disciplines = db.disciplines()
-        if not disciplines:
+        discipline = user.get('discipline', '')
+        if not discipline:
+            st.info('No discipline is assigned to this candidate.')
+            st.stop()
+        if discipline not in db.disciplines():
             st.info('No assessments are currently available.')
             st.stop()
-        discipline = st.selectbox('Discipline', disciplines)
         bank = db.questions(discipline)
         mcq_bank = [q for q in bank if q['q_type'] == 'mcq']
         reviewer_pools = {kind: [q for q in bank if q['q_type'] == kind] for kind in ('essay', 'oral', 'practicum')}
@@ -291,28 +305,29 @@ if user['role'] == 'Candidate':
         if not details:
             st.subheader('Candidate Details')
             with st.form('candidate_details'):
-                candidate_name = st.text_input('Name', value=user['name'])
-                candidate_email = st.text_input('Email', value=user.get('email', ''), disabled=True)
                 designation = st.text_input('Designation')
-                iqama_no = st.text_input('Iqama No')
-                employee_no = st.text_input('Employee No')
-                exam_date = st.date_input('Date of Exam', value=user.get('test_date') or date.today(), disabled=True)
-                project_location = st.text_input('Project Location')
                 if st.form_submit_button('Start Multiple Choice Questions', type='primary'):
-                    if not all(str(value).strip() for value in (candidate_name, candidate_email, designation, iqama_no, employee_no, project_location)):
+                    if not str(designation).strip():
                         st.error('Complete all candidate details before starting the assessment.')
                     else:
                         st.session_state.candidate_details = {
-                            'name': str(candidate_name).strip(), 'email': user.get('email', ''), 'designation': str(designation).strip(),
-                            'iqama_no': str(iqama_no).strip(), 'employee_no': str(employee_no).strip(),
-                            'exam_date': exam_date, 'project_location': str(project_location).strip(),
+                            'name': user['name'], 'email': user.get('email', ''), 'designation': str(designation).strip(),
+                            'iqama_no': user.get('iqama_no', ''), 'employee_no': user.get('employee_no', ''),
+                            'exam_date': user.get('test_date') or date.today(), 'project_assignment': user.get('project_assignment', ''),
                         }
                         rng = secrets.SystemRandom()
-                        st.session_state.assessment_mcq_ids = [q['id'] for q in rng.sample(mcq_bank, 20)]
-                        st.session_state.assessment_essay_ids = [q['id'] for kind in ('essay', 'oral', 'practicum') for q in rng.sample(reviewer_pools[kind], 5)]
-                        st.session_state.assessment_mcq_options = {q['id']: rng.sample(json.loads(q['options']), len(json.loads(q['options']))) for q in mcq_bank if q['id'] in st.session_state.assessment_mcq_ids}
-                        st.session_state.assessment_phase = 'mcq'
-                        st.rerun()
+                        try:
+                            selected_mcqs = rng.sample(mcq_bank, 20)
+                            st.session_state.assessment_mcq_ids = [q['id'] for q in selected_mcqs]
+                            st.session_state.assessment_essay_ids = [q['id'] for kind in ('essay', 'oral', 'practicum') for q in rng.sample(reviewer_pools[kind], 5)]
+                            st.session_state.assessment_mcq_options = {
+                                q['id']: rng.sample(question_options(q), len(question_options(q)))
+                                for q in selected_mcqs
+                            }
+                            st.session_state.assessment_phase = 'mcq'
+                            st.rerun()
+                        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                            st.error(f'Unable to start the Candidate Test: {exc}')
             st.stop()
 
         question_map = {q['id']: q for q in bank}
@@ -406,11 +421,13 @@ else:
                         value=current_test_date,
                         min_value=min(current_test_date, date.today()),
                     )
+                    projects = db.get_projects(user['id'])
+                    project_assignment = st.selectbox('Project Assignment', projects, index=(projects.index(candidate.get('project_assignment')) if candidate.get('project_assignment') in projects else None)) if projects else st.text_input('Project Assignment', value=candidate.get('project_assignment', ''))
                     if st.form_submit_button('Save Schedule', type='primary'):
                         try:
                             if schedule_date < date.today():
                                 raise ValueError('Test date must be today or a future date.')
-                            db.update_candidate_schedule(user['id'], candidate['id'], schedule_date)
+                            db.update_candidate_schedule(user['id'], candidate['id'], schedule_date, project_assignment)
                             st.success('Schedule saved successfully.')
                             st.rerun()
                         except ValueError as exc:
@@ -783,6 +800,7 @@ else:
             'Iqama No': sub.get('iqama_no', ''),
             'Employee No': sub.get('employee_no', ''),
             'Project Location': sub.get('project_location', ''),
+            'Project Assignment': sub.get('project_assignment', sub.get('project_location', '')),
             'Scheduled Test Date': sub.get('scheduled_test_date', ''),
             'Exam Date': sub.get('exam_date', ''),
         })

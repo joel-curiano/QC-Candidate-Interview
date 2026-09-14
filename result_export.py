@@ -8,7 +8,7 @@ from openpyxl.utils import get_column_letter
 
 RESULT_HEADERS = [
     'Reference', 'Candidate', 'Candidate Email', 'Username', 'Designation', 'Iqama No',
-    'Employee No', 'Discipline', 'Project Location', 'Scheduled Test Date', 'Exam Date',
+    'Employee No', 'Discipline', 'Project Location', 'Project Assignment', 'Scheduled Test Date', 'Exam Date',
     'Submitted (UTC)', 'Status', 'Multiple Choice Points', 'Essay Points',
     'Oral Points', 'Practicum Points', 'Practical Points', 'Maximum Points',
     'Result', 'Reviewer Comments', 'Graded (UTC)',
@@ -25,7 +25,7 @@ def _row_values(row):
     return [
         row.get('id'), row.get('candidate_name'), row.get('email', ''), row.get('username', ''),
         row.get('designation', ''), row.get('iqama_no', ''), row.get('employee_no', ''),
-        row.get('discipline', ''), row.get('project_location', ''), row.get('scheduled_test_date', ''),
+        row.get('discipline', ''), row.get('project_location', ''), row.get('project_assignment', row.get('project_location', '')), row.get('scheduled_test_date', ''),
         row.get('exam_date', ''), row.get('created_at') or 'Legacy record', row.get('status', ''),
         row.get('mcq_score', 0), row.get('essay_only_score', 0) if row.get('status') == 'Graded' else None,
         row.get('oral_score', 0) if row.get('status') == 'Graded' else None,

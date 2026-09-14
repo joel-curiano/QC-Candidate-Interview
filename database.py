@@ -64,6 +64,7 @@ def init_db():
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS employee_no TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS exam_date DATE NOT NULL DEFAULT CURRENT_DATE")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS project_location TEXT NOT NULL DEFAULT ''")
+        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS project_assignment TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS test_date DATE")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMPTZ")
@@ -74,6 +75,7 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_no TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mobile_no TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS previous_schedules JSONB NOT NULL DEFAULT '[]'::jsonb")
+        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS project_assignment TEXT NOT NULL DEFAULT ''")
         original_questions = json.loads(Path(__file__).with_name('seed_questions.json').read_text(encoding='utf-8'))
         original_questions = [row[:4] + [row[4], row[5], 1 if row[1] == 'mcq' else row[6]] for row in original_questions]
         has_any_users = c.execute('SELECT 1 FROM users LIMIT 1').fetchone()
@@ -164,7 +166,7 @@ def authenticate(username, password):
     stored = user['password'] if user else password_hash('dummy password', '0' * 32)
     valid_password = hmac.compare_digest(password_hash(password, stored.split('$')[0]), stored)
     if valid_password and user and (user['role'] != 'Candidate' or user['test_date'] == date.today()):
-        return {k: user[k] for k in ('id', 'username', 'name', 'role', 'email', 'test_date')}
+        return {k: user[k] for k in ('id', 'username', 'name', 'role', 'email', 'test_date', 'discipline', 'iqama_no', 'employee_no', 'project_assignment')}
     return None
 
 def change_password(actor, current_password, new_password):
@@ -211,7 +213,7 @@ def candidate_accounts(actor):
     with connection() as c:
         require(c, actor, ('Admin', 'Reviewer'))
         return [dict(row) for row in c.execute(
-            "SELECT id,username,name,email,test_date,invitation_sent_at,discipline,iqama_no,employee_no,mobile_no,previous_schedules FROM users WHERE role='Candidate' ORDER BY test_date NULLS LAST, name"
+            "SELECT id,username,name,email,test_date,project_assignment,invitation_sent_at,discipline,iqama_no,employee_no,mobile_no,previous_schedules FROM users WHERE role='Candidate' ORDER BY test_date NULLS LAST, name"
         )]
 
 def get_projects(actor):
@@ -297,12 +299,14 @@ def delete_user(actor, user_id):
             
         c.execute('DELETE FROM users WHERE id=%s', (user_id,))
 
-def update_candidate_schedule(actor, candidate_id, test_date):
+def update_candidate_schedule(actor, candidate_id, test_date, project_assignment):
     if not test_date:
         raise ValueError('Candidate test date is required.')
     with connection() as c:
         require(c, actor, ('Admin', 'Reviewer'))
-        current_user = c.execute("SELECT email, test_date, previous_schedules FROM users WHERE id=%s", (candidate_id,)).fetchone()
+        if not project_assignment or not str(project_assignment).strip():
+            raise ValueError('Project assignment is required.')
+        current_user = c.execute("SELECT email, test_date, project_assignment, previous_schedules FROM users WHERE id=%s", (candidate_id,)).fetchone()
         if not current_user:
             raise ValueError('Candidate account not found.')
         
@@ -310,11 +314,12 @@ def update_candidate_schedule(actor, candidate_id, test_date):
         if current_user['test_date'] and str(current_user['test_date']) != str(test_date):
             history.append({
                 'test_date': str(current_user['test_date']),
+                'project_assignment': current_user.get('project_assignment', ''),
                 'scheduled_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
             })
             
-        c.execute("UPDATE users SET test_date=%s, previous_schedules=%s::jsonb, invitation_sent_at=NULL WHERE id=%s AND role='Candidate'",
-                  (test_date, json.dumps(history), candidate_id))
+        c.execute("UPDATE users SET test_date=%s, project_assignment=%s, previous_schedules=%s::jsonb, invitation_sent_at=NULL WHERE id=%s AND role='Candidate'",
+                  (test_date, str(project_assignment).strip(), json.dumps(history), candidate_id))
 
 def remove_candidate_schedule(actor, candidate_id):
     """Remove an upcoming schedule without deleting the Candidate account."""
@@ -486,9 +491,10 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
             raise ValueError('Candidate name is required.')
         mcq_score = sum(q['max_points'] for q in qs if q['q_type'] == 'mcq' and responses[q['id']] == q['correct_answer'])
         status = 'Pending Review' if any(q['q_type'] in ('essay', 'practicum', 'oral', 'practical') for q in qs) else 'Graded'
-        sid = c.execute("INSERT INTO submissions(candidate_name,designation,iqama_no,employee_no,exam_date,project_location,discipline,mcq_score,max_possible_points,status,user_id,token,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP) RETURNING id",
+        project_assignment = str(details.get('project_assignment', details.get('project_location', ''))).strip()
+        sid = c.execute("INSERT INTO submissions(candidate_name,designation,iqama_no,employee_no,exam_date,project_location,project_assignment,discipline,mcq_score,max_possible_points,status,user_id,token,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP) RETURNING id",
                         (candidate_name, str(details.get('designation', '')).strip(), str(details.get('iqama_no', '')).strip(),
-                         str(details.get('employee_no', '')).strip(), details.get('exam_date'), str(details.get('project_location', '')).strip(),
+                         str(details.get('employee_no', '')).strip(), details.get('exam_date'), project_assignment, project_assignment,
                          discipline, mcq_score, sum(q['max_points'] for q in qs), status, actor, token)).fetchone()['id']
         for q in qs:
             score = q['max_points'] if q['q_type'] == 'mcq' and responses[q['id']] == q['correct_answer'] else 0

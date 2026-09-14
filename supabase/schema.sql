@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS qc_portal.users (
     name TEXT NOT NULL,
     email TEXT NOT NULL DEFAULT '',
     test_date DATE,
+    project_assignment TEXT NOT NULL DEFAULT '',
     invitation_sent_at TIMESTAMPTZ,
     password TEXT NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('Candidate', 'Reviewer', 'Admin'))
@@ -32,6 +33,7 @@ CREATE TABLE IF NOT EXISTS qc_portal.submissions (
     employee_no TEXT NOT NULL DEFAULT '',
     exam_date DATE NOT NULL DEFAULT CURRENT_DATE,
     project_location TEXT NOT NULL DEFAULT '',
+    project_assignment TEXT NOT NULL DEFAULT '',
     discipline TEXT NOT NULL,
     mcq_score DOUBLE PRECISION NOT NULL DEFAULT 0,
     essay_score DOUBLE PRECISION NOT NULL DEFAULT 0,
