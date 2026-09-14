@@ -279,7 +279,7 @@ if user['role'] == 'Candidate':
                         st.write(r['reviewer_comments'] or 'No reviewer feedback provided.')
     else:
         st.subheader('Take an assessment')
-        discipline = user.get('discipline', '')
+        discipline = user.get('scheduled_discipline') or user.get('discipline', '')
         if not discipline:
             st.info('No discipline is assigned to this candidate.')
             st.stop()
@@ -420,13 +420,15 @@ else:
                         value=current_test_date,
                         min_value=min(current_test_date, date.today()),
                     )
+                    disciplines = db.disciplines()
+                    scheduled_discipline = st.selectbox('Candidate Discipline', disciplines, index=(disciplines.index(candidate.get('scheduled_discipline') or candidate.get('discipline')) if (candidate.get('scheduled_discipline') or candidate.get('discipline')) in disciplines else None))
                     projects = db.get_projects(user['id'])
                     project_assignment = st.selectbox('Project Assignment', projects, index=(projects.index(candidate.get('project_assignment')) if candidate.get('project_assignment') in projects else None)) if projects else st.text_input('Project Assignment', value=candidate.get('project_assignment', ''))
                     if st.form_submit_button('Save Schedule', type='primary'):
                         try:
                             if schedule_date < date.today():
                                 raise ValueError('Test date must be today or a future date.')
-                            db.update_candidate_schedule(user['id'], candidate['id'], schedule_date, project_assignment)
+                            db.update_candidate_schedule(user['id'], candidate['id'], schedule_date, project_assignment, scheduled_discipline)
                             st.success('Schedule saved successfully.')
                             st.rerun()
                         except ValueError as exc:
@@ -473,7 +475,7 @@ else:
                                 db.set_candidate_temporary_password(user['id'], candidate['id'], temporary_password)
                                 send_candidate_invitation(
                                     candidate['email'], candidate['name'], candidate['username'],
-                                    temporary_password, candidate['test_date'], candidate['discipline'],
+                                    temporary_password, candidate['test_date'], candidate.get('scheduled_discipline') or candidate['discipline'],
                                 )
                                 db.mark_invitation_sent(user['id'], candidate['id'])
                                 st.success('Schedule and login credentials sent. The temporary password is now active.')

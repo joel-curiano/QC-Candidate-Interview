@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS qc_portal.users (
     email TEXT NOT NULL DEFAULT '',
     test_date DATE,
     project_assignment TEXT NOT NULL DEFAULT '',
+    scheduled_discipline TEXT NOT NULL DEFAULT '',
     invitation_sent_at TIMESTAMPTZ,
     password TEXT NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('Candidate', 'Reviewer', 'Admin'))

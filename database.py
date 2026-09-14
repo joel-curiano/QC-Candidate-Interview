@@ -78,6 +78,7 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mobile_no TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS previous_schedules JSONB NOT NULL DEFAULT '[]'::jsonb")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS project_assignment TEXT NOT NULL DEFAULT ''")
+        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS scheduled_discipline TEXT NOT NULL DEFAULT ''")
         original_questions = json.loads(Path(__file__).with_name('seed_questions.json').read_text(encoding='utf-8'))
         original_questions = [row[:4] + [row[4], row[5], 1 if row[1] == 'mcq' else row[6]] for row in original_questions]
         has_any_users = c.execute('SELECT 1 FROM users LIMIT 1').fetchone()
@@ -168,7 +169,7 @@ def authenticate(username, password):
     stored = user['password'] if user else password_hash('dummy password', '0' * 32)
     valid_password = hmac.compare_digest(password_hash(password, stored.split('$')[0]), stored)
     if valid_password and user and (user['role'] != 'Candidate' or user['test_date'] == date.today()):
-        return {k: user[k] for k in ('id', 'username', 'name', 'role', 'email', 'test_date', 'discipline', 'iqama_no', 'employee_no', 'project_assignment')}
+        return {k: user[k] for k in ('id', 'username', 'name', 'role', 'email', 'test_date', 'discipline', 'scheduled_discipline', 'iqama_no', 'employee_no', 'project_assignment')}
     return None
 
 def change_password(actor, current_password, new_password):
@@ -215,7 +216,7 @@ def candidate_accounts(actor):
     with connection() as c:
         require(c, actor, ('Admin', 'Reviewer'))
         return [dict(row) for row in c.execute(
-            "SELECT id,username,name,email,test_date,project_assignment,invitation_sent_at,discipline,iqama_no,employee_no,mobile_no,previous_schedules FROM users WHERE role='Candidate' ORDER BY test_date NULLS LAST, name"
+            "SELECT id,username,name,email,test_date,project_assignment,scheduled_discipline,invitation_sent_at,discipline,iqama_no,employee_no,mobile_no,previous_schedules FROM users WHERE role='Candidate' ORDER BY test_date NULLS LAST, name"
         )]
 
 def get_projects(actor):
@@ -301,14 +302,14 @@ def delete_user(actor, user_id):
             
         c.execute('DELETE FROM users WHERE id=%s', (user_id,))
 
-def update_candidate_schedule(actor, candidate_id, test_date, project_assignment):
+def update_candidate_schedule(actor, candidate_id, test_date, project_assignment, scheduled_discipline):
     if not test_date:
         raise ValueError('Candidate test date is required.')
     with connection() as c:
         require(c, actor, ('Admin', 'Reviewer'))
-        if not project_assignment or not str(project_assignment).strip():
-            raise ValueError('Project assignment is required.')
-        current_user = c.execute("SELECT email, test_date, project_assignment, previous_schedules FROM users WHERE id=%s", (candidate_id,)).fetchone()
+        if not project_assignment or not str(project_assignment).strip() or not scheduled_discipline or not str(scheduled_discipline).strip():
+            raise ValueError('Candidate Discipline and Project Assignment are required.')
+        current_user = c.execute("SELECT email, test_date, project_assignment, scheduled_discipline, discipline, previous_schedules FROM users WHERE id=%s", (candidate_id,)).fetchone()
         if not current_user:
             raise ValueError('Candidate account not found.')
         
@@ -317,18 +318,19 @@ def update_candidate_schedule(actor, candidate_id, test_date, project_assignment
             history.append({
                 'test_date': str(current_user['test_date']),
                 'project_assignment': current_user.get('project_assignment', ''),
+                'discipline': current_user.get('scheduled_discipline') or current_user.get('discipline', ''),
                 'scheduled_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
             })
             
-        c.execute("UPDATE users SET test_date=%s, project_assignment=%s, previous_schedules=%s::jsonb, invitation_sent_at=NULL WHERE id=%s AND role='Candidate'",
-                  (test_date, str(project_assignment).strip(), json.dumps(history), candidate_id))
+        c.execute("UPDATE users SET test_date=%s, project_assignment=%s, scheduled_discipline=%s, previous_schedules=%s::jsonb, invitation_sent_at=NULL WHERE id=%s AND role='Candidate'",
+                  (test_date, str(project_assignment).strip(), str(scheduled_discipline).strip(), json.dumps(history), candidate_id))
 
 def remove_candidate_schedule(actor, candidate_id):
     """Remove an upcoming schedule without deleting the Candidate account."""
     with connection() as c:
         require(c, actor, ('Admin',))
         candidate = c.execute(
-            "UPDATE users SET test_date=NULL, invitation_sent_at=NULL "
+            "UPDATE users SET test_date=NULL, project_assignment='', scheduled_discipline='', invitation_sent_at=NULL "
             "WHERE id=%s AND role='Candidate' RETURNING id",
             (candidate_id,),
         ).fetchone()
