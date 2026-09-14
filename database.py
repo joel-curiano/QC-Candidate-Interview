@@ -75,7 +75,7 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMPTZ")
         c.execute("CREATE TABLE IF NOT EXISTS projects (name TEXT PRIMARY KEY)")
         c.execute("CREATE TABLE IF NOT EXISTS assessment_settings (question_type TEXT PRIMARY KEY, question_count INTEGER NOT NULL CHECK (question_count > 0))")
-        c.executemany("INSERT INTO assessment_settings(question_type, question_count) VALUES (%s,%s) ON CONFLICT (question_type) DO NOTHING", [('mcq', 20), ('essay', 5), ('oral', 5), ('practical', 5)])
+        c.cursor().executemany("INSERT INTO assessment_settings(question_type, question_count) VALUES (%s,%s) ON CONFLICT (question_type) DO NOTHING", [('mcq', 20), ('essay', 5), ('oral', 5), ('practical', 5)])
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_projects TEXT[] NOT NULL DEFAULT '{}'")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS discipline TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS iqama_no TEXT NOT NULL DEFAULT ''")
@@ -241,7 +241,7 @@ def update_assessment_settings(actor, settings):
         require(c, actor, ('Admin', 'Reviewer'))
         if set(settings) != {'mcq', 'essay', 'oral', 'practical'} or any(not isinstance(v, int) or not 1 <= v <= 100 for v in settings.values()):
             raise ValueError('Each question count must be a whole number from 1 to 100.')
-        c.executemany('UPDATE assessment_settings SET question_count=%s WHERE question_type=%s', [(v, k) for k, v in settings.items()])
+        c.cursor().executemany('UPDATE assessment_settings SET question_count=%s WHERE question_type=%s', [(v, k) for k, v in settings.items()])
 
 def add_project(actor, name):
     name = str(name).strip()
