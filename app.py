@@ -119,7 +119,7 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
 
 def result_table(rows):
     return [{'Reference': r['id'], 'Candidate': r['candidate_name'], 'Candidate Email': r.get('email', ''),
-             'Username': r.get('username', ''), 'Designation': r.get('designation', ''),
+             'Username': r.get('username', ''), 'Job Title': r.get('designation', ''),
              'Iqama No': r.get('iqama_no', ''), 'Employee No': r.get('employee_no', ''),
              'Discipline': r['discipline'], 'Project Location': r.get('project_location', ''),
              'Scheduled Test Date': r.get('scheduled_test_date', ''), 'Exam Date': r.get('exam_date', ''),
@@ -270,7 +270,8 @@ if user['role'] == 'Candidate':
         if not details:
             st.subheader('Candidate Details')
             with st.form('candidate_details'):
-                designation = st.text_input('Designation')
+                st.text_input('Discipline', value=discipline, disabled=True)
+                designation = st.text_input('Job Title (Inspector, Supervisor, Technician...)')
                 if st.form_submit_button('Start Multiple Choice Questions', type='primary'):
                     if not str(designation).strip():
                         st.error('Complete all candidate details before starting the assessment.')
@@ -795,7 +796,7 @@ else:
         st.write({
             'Candidate': sub['candidate_name'],
             'Email': sub.get('email', ''),
-            'Designation': sub.get('designation', ''),
+            'Job Title': sub.get('designation', ''),
             'Iqama No': sub.get('iqama_no', ''),
             'Employee No': sub.get('employee_no', ''),
             'Project Location': sub.get('project_location', ''),
