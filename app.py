@@ -202,6 +202,8 @@ if not db.has_users():
 if 'user' not in st.session_state:
     if st.session_state.pop('password_changed', False):
         st.success('Password changed. Sign in with your new password.')
+    if st.session_state.pop('assessment_submitted', False):
+        st.success('Assessment submitted successfully. You have been logged out.')
     with st.form('login'):
         username = st.text_input('Username')
         password = st.text_input('Password', type='password')
@@ -225,25 +227,8 @@ with db.connection() as conn:
 st.sidebar.write(f"**{user['name']}**")
 st.sidebar.caption(user['role'])
 if user['role'] == 'Candidate':
-    if st.session_state.get('submitted_id'):
-        st.success('This completes the online test. Next test is Oral and Practical Test.')
-        if st.button('Sign out'):
-            st.session_state.clear()
-            st.rerun()
-        st.stop()
-    page = st.sidebar.radio('Navigation', ['Take assessment', 'My results'])
-    if page == 'My results':
-        st.subheader('My results')
-        rows = db.submissions(user['id'])
-        if not rows:
-            st.info('Your submitted assessments will appear here.')
-        else:
-            st.dataframe(result_table(rows), hide_index=True, use_container_width=True)
-            for r in rows:
-                if r['status'] == 'Graded':
-                    with st.expander(f"Assessment #{r['id']} · {db.result(r)}"):
-                        st.write(r['reviewer_comments'] or 'No reviewer feedback provided.')
-    else:
+    page = st.sidebar.radio('Navigation', ['Take assessment'])
+    if page == 'Take assessment':
         st.subheader('Take an assessment')
         discipline = user.get('scheduled_discipline') or user.get('discipline', '')
         if not discipline:
@@ -261,7 +246,7 @@ if user['role'] == 'Candidate':
 
         if st.session_state.get('assessment_discipline') != discipline:
             for key in list(st.session_state):
-                if isinstance(key, str) and (key.startswith('assessment_') or key.startswith('answer_') or key == 'candidate_details'):
+                if isinstance(key, str) and (key.startswith('assessment_') or key.startswith('answer_') or key in ('candidate_details', 'candidate_discipline_display', 'candidate_job_title')):
                     del st.session_state[key]
             st.session_state.assessment_discipline = discipline
             st.session_state.attempt_token = secrets.token_hex(24)
@@ -269,9 +254,9 @@ if user['role'] == 'Candidate':
         details = st.session_state.get('candidate_details')
         if not details:
             st.subheader('Candidate Details')
-            with st.form('candidate_details'):
-                st.text_input('Discipline', value=discipline, disabled=True)
-                designation = st.text_input('Job Title (Inspector, Supervisor, Technician...)')
+            with st.form('candidate_details_form'):
+                st.text_input('Discipline', value=discipline, disabled=True, key='candidate_discipline_display')
+                designation = st.text_input('Job Title (Inspector, Supervisor, Technician...)', key='candidate_job_title')
                 if st.form_submit_button('Start Multiple Choice Questions', type='primary'):
                     if not str(designation).strip():
                         st.error('Complete all candidate details before starting the assessment.')
@@ -335,10 +320,12 @@ if user['role'] == 'Candidate':
                     else:
                         responses.update(page_responses)
                         try:
-                            st.session_state.submitted_id = db.submit(
+                            db.submit(
                                 user['id'], discipline, responses, st.session_state.attempt_token,
                                 st.session_state.candidate_details,
                                 st.session_state.assessment_mcq_ids + st.session_state.assessment_essay_ids)
+                            st.session_state.clear()
+                            st.session_state.assessment_submitted = True
                             st.rerun()
                         except ValueError as exc:
                             st.error(str(exc))
