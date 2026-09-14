@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS qc_portal.submissions (
     discipline TEXT NOT NULL,
     mcq_score DOUBLE PRECISION NOT NULL DEFAULT 0,
     essay_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    oral_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    practical_score DOUBLE PRECISION NOT NULL DEFAULT 0,
     max_possible_points DOUBLE PRECISION NOT NULL CHECK (max_possible_points > 0),
     status TEXT NOT NULL CHECK (status IN ('Pending Review', 'Graded')),
     reviewer_comments TEXT DEFAULT '',

@@ -59,6 +59,7 @@ def init_db():
         c.execute('ALTER TABLE questions DROP CONSTRAINT IF EXISTS questions_q_type_check')
         c.execute("UPDATE questions SET q_type='practical' WHERE q_type='practicum'")
         c.execute("UPDATE answers SET snapshot=jsonb_set(snapshot::jsonb, '{q_type}', '\"practical\"'::jsonb) WHERE snapshot::json->>'q_type'='practicum'")
+        c.execute("DELETE FROM answers WHERE submission_id IN (SELECT id FROM submissions WHERE created_at < CURRENT_TIMESTAMP - INTERVAL '7 days')")
         c.execute("ALTER TABLE questions ADD CONSTRAINT questions_q_type_check CHECK (q_type IN ('mcq', 'essay', 'oral', 'practical'))")
         c.execute("UPDATE questions SET max_points=1 WHERE q_type='mcq' AND max_points <> 1")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS designation TEXT NOT NULL DEFAULT ''")
@@ -67,6 +68,8 @@ def init_db():
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS exam_date DATE NOT NULL DEFAULT CURRENT_DATE")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS project_location TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS project_assignment TEXT NOT NULL DEFAULT ''")
+        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS oral_score DOUBLE PRECISION NOT NULL DEFAULT 0")
+        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS practical_score DOUBLE PRECISION NOT NULL DEFAULT 0")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS test_date DATE")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMPTZ")
@@ -513,9 +516,7 @@ def submissions(actor):
         assigned_projects = c.execute("SELECT assigned_projects FROM users WHERE id=%s", (actor,)).fetchone()['assigned_projects']
         return [dict(r) for r in c.execute("""
             SELECT s.*, u.email, u.username, u.test_date AS scheduled_test_date,
-                   (SELECT COALESCE(SUM(a.awarded_score), 0) FROM answers a WHERE a.submission_id = s.id AND a.snapshot::json->>'q_type' = 'essay') AS essay_only_score,
-                   (SELECT COALESCE(SUM(a.awarded_score), 0) FROM answers a WHERE a.submission_id = s.id AND a.snapshot::json->>'q_type' = 'oral') AS oral_score,
-                   (SELECT COALESCE(SUM(a.awarded_score), 0) FROM answers a WHERE a.submission_id = s.id AND a.snapshot::json->>'q_type' = 'practical') AS practical_score
+                   s.essay_score AS essay_only_score, s.oral_score, s.practical_score
             FROM submissions s LEFT JOIN users u ON u.id=s.user_id
             WHERE s.user_id=%s OR %s = 'Admin' OR (%s = 'Reviewer' AND s.project_location = ANY(%s))
             ORDER BY s.id DESC
@@ -540,8 +541,9 @@ def grade(actor, sid, scores, comments):
             if not isinstance(score, (int, float)) or not math.isfinite(score) or not 0 <= score <= json.loads(a['snapshot'])['max_points']:
                 raise ValueError("Each score must be within the question's point range.")
             c.execute('UPDATE answers SET awarded_score=%s WHERE id=%s', (score, a['id']))
-        c.execute("UPDATE submissions SET essay_score=%s,status='Graded',reviewer_comments=%s,reviewer_id=%s,graded_at=CURRENT_TIMESTAMP WHERE id=%s",
-                  (sum(scores.values()), comments.strip(), actor, sid))
+        typed_scores = {kind: sum(scores[a['id']] for a in essays if json.loads(a['snapshot'])['q_type'] == kind) for kind in ('essay', 'oral', 'practical')}
+        c.execute("UPDATE submissions SET essay_score=%s,oral_score=%s,practical_score=%s,status='Graded',reviewer_comments=%s,reviewer_id=%s,graded_at=CURRENT_TIMESTAMP WHERE id=%s",
+                  (typed_scores['essay'], typed_scores['oral'], typed_scores['practical'], comments.strip(), actor, sid))
 
 def result(sub):
     if sub['status'] != 'Graded':
