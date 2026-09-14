@@ -62,6 +62,7 @@ def init_db():
         c.execute("DELETE FROM answers WHERE submission_id IN (SELECT id FROM submissions WHERE created_at < CURRENT_TIMESTAMP - INTERVAL '7 days')")
         c.execute("ALTER TABLE questions ADD CONSTRAINT questions_q_type_check CHECK (q_type IN ('mcq', 'essay', 'oral', 'practical'))")
         c.execute("UPDATE questions SET max_points=1 WHERE q_type='mcq' AND max_points <> 1")
+        c.execute("UPDATE questions SET max_points=10 WHERE q_type IN ('essay', 'oral', 'practical') AND max_points > 10")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS designation TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS iqama_no TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS employee_no TEXT NOT NULL DEFAULT ''")
@@ -378,8 +379,8 @@ def add_question(actor, discipline, kind, prompt, options, correct, rubric, poin
 
 def _validate_question(discipline, kind, prompt, options, correct, rubric, points):
     options = [v.strip() for v in options if v.strip()]
-    if not discipline.strip() or not prompt.strip() or not 1 <= points <= 100:
-        raise ValueError('Discipline, question, and points (1-100) are required.')
+    if not discipline.strip() or not prompt.strip() or not 1 <= points <= (1 if kind == 'mcq' else 10):
+        raise ValueError('Discipline and question are required. MCQ points must be 1; other question types must be 1-10.')
     if kind not in ('mcq', 'essay', 'oral', 'practical'):
         raise ValueError('Invalid question type.')
     if kind == 'mcq' and points != 1:
@@ -519,10 +520,11 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         mcq_score = sum(q['max_points'] for q in qs if q['q_type'] == 'mcq' and responses[q['id']] == q['correct_answer'])
         status = 'Pending Review' if any(q['q_type'] in ('essay', 'oral', 'practical') for q in qs) else 'Graded'
         project_assignment = str(details.get('project_assignment', details.get('project_location', ''))).strip()
+        max_points = sum(1 if q['q_type'] == 'mcq' else min(q['max_points'], 10) for q in qs)
         sid = c.execute("INSERT INTO submissions(candidate_name,designation,iqama_no,employee_no,exam_date,project_location,project_assignment,discipline,mcq_score,max_possible_points,status,user_id,token,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP) RETURNING id",
                         (candidate_name, str(details.get('designation', '')).strip(), str(details.get('iqama_no', '')).strip(),
                          str(details.get('employee_no', '')).strip(), details.get('exam_date'), project_assignment, project_assignment,
-                         discipline, mcq_score, sum(q['max_points'] for q in qs), status, actor, token)).fetchone()['id']
+                         discipline, mcq_score, max_points, status, actor, token)).fetchone()['id']
         for q in qs:
             score = q['max_points'] if q['q_type'] == 'mcq' and responses[q['id']] == q['correct_answer'] else 0
             c.execute('INSERT INTO answers(submission_id,question_id,submitted_answer,awarded_score,snapshot) VALUES (%s,%s,%s,%s,%s)',
@@ -558,7 +560,7 @@ def grade(actor, sid, scores, comments):
             raise ValueError('Score every essay before finalizing.')
         for a in essays:
             score = scores[a['id']]
-            if not isinstance(score, (int, float)) or not math.isfinite(score) or not 0 <= score <= json.loads(a['snapshot'])['max_points']:
+            if not isinstance(score, (int, float)) or not math.isfinite(score) or score != int(score) or not 0 <= score <= min(json.loads(a['snapshot'])['max_points'], 10):
                 raise ValueError("Each score must be within the question's point range.")
             c.execute('UPDATE answers SET awarded_score=%s WHERE id=%s', (score, a['id']))
         typed_scores = {kind: sum(scores[a['id']] for a in essays if json.loads(a['snapshot'])['q_type'] == kind) for kind in ('essay', 'oral', 'practical')}
@@ -568,5 +570,5 @@ def grade(actor, sid, scores, comments):
 def result(sub):
     if sub['status'] != 'Graded':
         return 'Pending Review'
-    percentage = 100 * (sub['mcq_score'] + sub['essay_score']) / sub['max_possible_points'] if sub['max_possible_points'] else 0
+    percentage = 100 * (sub['mcq_score'] + sub['essay_score'] + sub.get('oral_score', 0) + sub.get('practical_score', 0)) / sub['max_possible_points'] if sub['max_possible_points'] else 0
     return f"{'PASS' if percentage >= 70 else 'FAIL'} ({percentage:.1f}%)"

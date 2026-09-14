@@ -57,9 +57,9 @@ def parse_questions(workbook_bytes):
             try:
                 max_points = int(float(points))
             except ValueError as exc:
-                raise QuestionImportError('Maximum points must be a whole number from 1 to 100.') from exc
-            if not 1 <= max_points <= 100:
-                raise QuestionImportError('Maximum points must be a whole number from 1 to 100.')
+                raise QuestionImportError('MCQ maximum points must be 1; other question types must be between 1 and 10.') from exc
+            if not 1 <= max_points <= (1 if kind == 'mcq' else 10):
+                raise QuestionImportError('MCQ maximum points must be 1; other question types must be between 1 and 10.')
             option_values = [value.strip() for value in options.replace(';', '\n').splitlines() if value.strip()]
             if kind == 'mcq':
                 if len(option_values) < 2 or len(set(option_values)) != len(option_values) or correct not in option_values:

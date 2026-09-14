@@ -689,7 +689,7 @@ else:
                 options = st.text_area('Multiple Choice options (one per line)') if kind == 'mcq' else ''
                 correct = st.text_input('Correct answer (exact option text)') if kind == 'mcq' else ''
                 rubric = st.text_area('Scoring rubric') if kind in ('essay', 'oral', 'practical') else ''
-                points = st.number_input('Maximum points', 1, 100, 1 if kind == 'mcq' else 10, disabled=kind == 'mcq')
+                points = st.number_input('Maximum points', 1, 1 if kind == 'mcq' else 10, 1 if kind == 'mcq' else 10, disabled=kind == 'mcq')
                 if st.form_submit_button('Add question'):
                     try:
                         db.add_question(user['id'], discipline, kind, prompt, options.splitlines(), correct.strip(), rubric, points)
@@ -828,7 +828,8 @@ else:
                         st.text_area('Candidate response', value=a['submitted_answer'], disabled=True,
                                      height=160, key=f"response_{a['id']}")
                     st.info(f"Scoring guidance: {q['rubric']}")
-                    scores[a['id']] = st.number_input(f"Points for answer #{a['id']} (max {q['max_points']})", min_value=0.0, max_value=float(q['max_points']), value=float(a['awarded_score']), step=0.5, disabled=sub['status'] == 'Graded')
+                    score_max = min(q['max_points'], 10)
+                    scores[a['id']] = st.number_input(f"Points for answer #{a['id']} (max {score_max})", min_value=0, max_value=score_max, value=min(int(a['awarded_score']), score_max), step=1, disabled=sub['status'] == 'Graded')
                 else:
                     st.caption(f"Correct answer: {q['correct_answer']} · Awarded: {a['awarded_score']:g}")
             comments = st.text_area('Reviewer feedback', value=sub['reviewer_comments'] or '', disabled=sub['status'] == 'Graded')

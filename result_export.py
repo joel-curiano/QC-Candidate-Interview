@@ -1,6 +1,7 @@
 """Excel export for the assessment results log."""
 from io import BytesIO
 import re
+from datetime import datetime
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -19,6 +20,8 @@ RESULT_HEADERS = [
 
 
 def _safe_cell(value):
+    if isinstance(value, datetime) and value.tzinfo is not None:
+        return value.replace(tzinfo=None)
     if isinstance(value, str):
         value = ILLEGAL_EXCEL_CHARS.sub('', value)
         if value.lstrip().startswith(('=', '+', '-', '@')):
