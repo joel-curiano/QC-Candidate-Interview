@@ -62,7 +62,7 @@ def test_account_password_minimum(monkeypatch, password, accepted):
         connection.assert_not_called()
     else:
         monkeypatch.setattr(db, 'require', lambda c, actor, roles: {'role': 'Admin'})
-        db.create_user('candidate', 'Candidate', password, actor=1, email='candidate@example.com', test_date=date.today())
+        db.create_user('candidate', 'Candidate', password, actor=1, email='candidate@example.com', test_date=date.today(), iqama_no='1234567890')
         params = connection.return_value.__enter__.return_value.execute.call_args.args[1]
         assert params[0] == 'candidate'
         assert params[4] != password

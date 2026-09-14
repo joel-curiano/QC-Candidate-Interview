@@ -56,20 +56,17 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
 
     form_key = f'{key}_{st.session_state.get(f"{key}_reset", 0)}'
     with st.form(form_key):
-        name = st.text_input('Full name')
-        username = st.text_input('Username')
+        name = st.text_input('Full name *')
+        username = st.text_input('Username *')
         
         is_candidate = allowed_roles == ['Candidate']
-        account_email = st.text_input('Email') if is_candidate or actor is not None or bootstrap else ''
+        account_email = st.text_input('Email *') if is_candidate or actor is not None or bootstrap else ''
         
-        discipline = ''
         iqama_no = ''
         employee_no = ''
         mobile_no = ''
         if is_candidate:
-            disciplines = db.disciplines()
-            discipline = st.selectbox('Discipline', disciplines) if disciplines else st.text_input('Discipline')
-            iqama_no = st.text_input('Iqama No')
+            iqama_no = st.text_input('Iqama No *')
             employee_no = st.text_input('Employee No')
             mobile_no = st.text_input('Mobile No')
             
@@ -87,13 +84,15 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
             try:
                 if password != confirm:
                     raise ValueError('Passwords do not match.')
+                if is_candidate and not all(value.strip() for value in (name, username, account_email, iqama_no)):
+                    raise ValueError('Name, username, email, and Iqama No are required for Candidate accounts.')
                 if role == 'Reviewer' and not account_email.strip():
                     raise ValueError('Reviewer email is required so login credentials can be sent.')
                 
                 candidate_id = db.create_user(
                     username, name, password, role, actor, bootstrap, 
                     email=account_email, test_date=None,
-                    discipline=discipline, iqama_no=iqama_no, 
+                    discipline='', iqama_no=iqama_no, 
                     employee_no=employee_no, mobile_no=mobile_no
                 )
                 if role == 'Reviewer':

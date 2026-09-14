@@ -157,6 +157,8 @@ def create_user(username, name, password, role='Candidate', actor=None, bootstra
             raise ValueError('Only Admin and Reviewer users can create Candidate accounts.')
         if role in ('Candidate', 'Reviewer') and not email:
             raise ValueError(f'{role} email is required.')
+        if role == 'Candidate' and not iqama_no.strip():
+            raise ValueError('Candidate Iqama No is required.')
         if role not in ('Candidate', 'Reviewer', 'Admin'):
             raise ValueError('Invalid role.')
         try:
