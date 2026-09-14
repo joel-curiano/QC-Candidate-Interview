@@ -37,7 +37,8 @@ def question_options(question):
 
 
 try:
-    db.init_db()
+    with st.spinner('Loading QC Candidate Test Portal...'):
+        db.init_db()
 except db.DatabaseError as exc:
     st.error(str(exc))
     st.stop()
@@ -220,8 +221,9 @@ if 'user' not in st.session_state:
     st.stop()
 
 user = st.session_state.user
-with db.connection() as conn:
-    user = db.require(conn, user['id'], ('Candidate', 'Reviewer', 'Admin'))
+with st.spinner('Refreshing your session...'):
+    with db.connection() as conn:
+        user = db.require(conn, user['id'], ('Candidate', 'Reviewer', 'Admin'))
 st.sidebar.write(f"**{user['name']}**")
 st.sidebar.caption(user['role'])
 if user['role'] == 'Candidate':
