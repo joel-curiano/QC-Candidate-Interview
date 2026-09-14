@@ -588,7 +588,7 @@ def answer_details(actor, sid):
         require(c, actor, ('Reviewer', 'Admin'))
         return [dict(r) for r in c.execute('SELECT * FROM answers WHERE submission_id=%s ORDER BY id', (sid,))]
 
-def grade(actor, sid, scores, comments):
+def grade(actor, sid, scores, comments, observed_responses=None):
     with connection() as c:
         require(c, actor, ('Reviewer', 'Admin'))
         sub = c.execute('SELECT * FROM submissions WHERE id=%s FOR UPDATE', (sid,)).fetchone()
@@ -602,6 +602,10 @@ def grade(actor, sid, scores, comments):
             if not isinstance(score, (int, float)) or not math.isfinite(score) or score != int(score) or not 0 <= score <= min(json.loads(a['snapshot'])['max_points'], 10):
                 raise ValueError("Each score must be within the question's point range.")
             c.execute('UPDATE answers SET awarded_score=%s WHERE id=%s', (score, a['id']))
+        for answer_id, response in (observed_responses or {}).items():
+            if not isinstance(response, str) or len(response) > 20000:
+                raise ValueError('Observed responses must be 20,000 characters or fewer.')
+            c.execute("UPDATE answers SET submitted_answer=%s WHERE id=%s AND submission_id=%s", (response.strip(), answer_id, sid))
         typed_scores = {kind: sum(scores[a['id']] for a in essays if json.loads(a['snapshot'])['q_type'] == kind) for kind in ('essay', 'oral', 'practical')}
         c.execute("UPDATE submissions SET essay_score=%s,oral_score=%s,practical_score=%s,status='Graded',reviewer_comments=%s,reviewer_id=%s,graded_at=CURRENT_TIMESTAMP WHERE id=%s",
                   (typed_scores['essay'], typed_scores['oral'], typed_scores['practical'], comments.strip(), actor, sid))

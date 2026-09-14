@@ -300,6 +300,8 @@ if user['role'] == 'Candidate':
         responses = st.session_state.setdefault('assessment_responses', {})
         st.info(f"Complete {settings['mcq']} Multiple Choice Questions and {settings['essay']} Essay questions in the app. Oral ({settings['oral']}) and Practical Tests ({settings['practical']}) are completed and graded by a Reviewer.")
         if st.session_state.get('assessment_phase', 'mcq') == 'mcq':
+            section = st.expander('Multiple Choice Questions', expanded=True)
+            section.__enter__()
             st.subheader('Multiple Choice Questions')
             with st.form('multiple_choice_questions'):
                 page_responses = {}
@@ -307,14 +309,17 @@ if user['role'] == 'Candidate':
                     page_responses[question['id']] = st.radio(
                         f"{number}. {question['question_text']}", st.session_state.assessment_mcq_options[question['id']], index=None,
                         key=f"answer_{question['id']}" )
-                if st.form_submit_button('Continue to Essay, Oral, and Practical Tests', type='primary'):
+                if st.form_submit_button('Continue to Essay Questions', type='primary'):
                     if any(not isinstance(answer, str) or not answer.strip() for answer in page_responses.values()):
                         st.error('Answer every Multiple Choice Question before continuing.')
                     else:
                         responses.update(page_responses)
                         st.session_state.assessment_phase = 'essay'
                         st.rerun()
+            section.__exit__(None, None, None)
         else:
+            section = st.expander('Essay Questions', expanded=True)
+            section.__enter__()
             st.subheader('Essay Questions')
             st.info('Read each question and type your answer in the response box. Oral and Practical Tests are completed and graded by a Reviewer.')
             with st.form('reviewer_scored_questions'):
@@ -343,6 +348,7 @@ if user['role'] == 'Candidate':
                             st.rerun()
                         except ValueError as exc:
                             st.error(str(exc))
+            section.__exit__(None, None, None)
 else:
     pages = ['Review Assessments', 'Create Candidate Account', 'Create Candidate Schedules', 'Upcoming Candidate Schedules']
     pages += ['Assessment Settings']
@@ -834,8 +840,18 @@ else:
         questionnaire.__enter__()
         with st.form(f'grading_{sid}'):
             scores = {}
+            observed_responses = {}
+            question_section = None
+            question_section_type = None
             for a in answers:
                 q = json.loads(a['snapshot'])
+                if q['q_type'] != question_section_type:
+                    if question_section is not None:
+                        question_section.__exit__(None, None, None)
+                    question_section_type = q['q_type']
+                    section_title = {'mcq': 'Multiple Choice Questions', 'essay': 'Essay Questions', 'oral': 'Oral Test', 'practical': 'Practical Test'}.get(q['q_type'], 'Questions')
+                    question_section = st.expander(section_title, expanded=sub['status'] != 'Graded')
+                    question_section.__enter__()
                 question_type = {
                     'mcq': 'Multiple Choice Question', 'essay': 'Essay', 'oral': 'Oral Test',
                     'practical': 'Practical Test',
@@ -845,15 +861,20 @@ else:
                     if q['q_type'] == 'essay':
                         st.text_area('Candidate response', value=a['submitted_answer'], disabled=True,
                                      height=160, key=f"response_{a['id']}")
+                    else:
+                        observed_responses[a['id']] = st.text_area('Observed response', value=a['submitted_answer'], height=120,
+                                                                    key=f"observed_response_{a['id']}", disabled=sub['status'] == 'Graded')
                     st.info(f"Scoring guidance: {q['rubric']}")
                     score_max = min(q['max_points'], 10)
                     scores[a['id']] = st.number_input(f"Points for answer #{a['id']} (max {score_max})", min_value=0, max_value=score_max, value=min(int(a['awarded_score']), score_max), step=1, disabled=sub['status'] == 'Graded')
                 else:
                     st.caption(f"Correct answer: {q['correct_answer']} · Awarded: {a['awarded_score']:g}")
+            if question_section is not None:
+                question_section.__exit__(None, None, None)
             comments = st.text_area('Reviewer feedback', value=sub['reviewer_comments'] or '', disabled=sub['status'] == 'Graded')
             if st.form_submit_button('Finalize grade', disabled=sub['status'] == 'Graded', type='primary'):
                 try:
-                    db.grade(user['id'], sid, scores, comments)
+                    db.grade(user['id'], sid, scores, comments, observed_responses)
                     st.rerun()
                 except ValueError as exc:
                     st.error(str(exc))
