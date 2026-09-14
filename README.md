@@ -61,13 +61,7 @@ For subsequent runs, open the project terminal and run:
 
 The app seeds sample questions when the question bank is empty. It also adds Civil QC MCQ and essay questions to existing databases when that discipline is missing, without duplicating or reactivating archived questions. Candidates complete a randomized session of 20 MCQ, 5 Essay, 5 Oral, and 5 Practicum questions; the selected discipline must have at least those active questions. The MCQ answer pool is shuffled for each session. Candidate details are captured with each submission. Admin and Reviewer users can assign or revise Candidate test dates and send a meaningful invitation containing the schedule, discipline, assessment link, username, and a newly generated temporary password. New Reviewer accounts receive an email containing the portal link, role, username, initial password, and password-change instructions. Configure `APP_URL`, `SMTP_HOST`, `SMTP_PORT`, and `SMTP_FROM`; optionally configure `SMTP_USERNAME` and `SMTP_PASSWORD`. Invitations use SMTP with STARTTLS and state clearly that candidate login is accepted only on the assigned test date. Practicum, Oral Test, and Practical Test questions are supported in the question bank, Excel import, candidate assessment, and reviewer grading flow. Startup applies safe additive migrations for the question type, candidate submission fields, email, and schedule. Missing configuration or connection/schema failures show a setup message rather than database credentials.
 
-To generate the expanded Excel question bank, run:
-
-```powershell
-.\.venv\Scripts\python scripts/generate_aramco_question_template.py
-```
-
-This writes `qc-question-template.xlsx` with 2,000 original prompts: 80 MCQ, 40 essay, 40 oral, and 40 practicum questions for each of Civil, Electrical, E&I, Instrumentation, Mechanical, NDT, Piping, Welding, Pipeline QC, and PQCS. The workbook keeps the seven-column importer format. Questions use public Saudi Aramco standard identifiers as topic anchors and include a reminder to verify each item against the controlled current revision and project quality plan. They are original assessment prompts, not copied standard text.
+The included `qc-question-template.xlsx` is ready for Admin import. Review every question against the controlled current revision and project quality plan before formal use.
 
 ## Access from a phone on the same network
 
@@ -153,6 +147,5 @@ Integration tests create and drop only a random `qc_test_...` schema for each te
 - `supabase/schema.sql`: One-time PostgreSQL schema setup.
 - `.streamlit/secrets.toml.example`: Placeholder connection configuration.
 - `seed_questions.json`: Original technical sample question bank.
-- `scripts/generate_aramco_question_template.py`: Reproducibly generates the populated 2,000-row question workbook for 10 disciplines.
 - `qc-question-template.xlsx`: Generated Excel question bank ready for Admin import.
 - `tests/`, `.github/workflows/tests.yml`: Unit and real PostgreSQL integration checks.

@@ -128,7 +128,6 @@ def result_table(rows):
              'Multiple Choice Points': r['mcq_score'],
              'Essay Points': r.get('essay_only_score', 0) if r['status'] == 'Graded' else None,
              'Oral Points': r.get('oral_score', 0) if r['status'] == 'Graded' else None,
-             'Practicum Points': r.get('practicum_score', 0) if r['status'] == 'Graded' else None,
              'Practical Points': r.get('practical_score', 0) if r['status'] == 'Graded' else None,
              'Maximum Points': r['max_possible_points'], 'Result': db.result(r),
              'Reviewer Comments': r.get('reviewer_comments', ''), 'Graded (UTC)': r.get('graded_at', '')} for r in rows]
@@ -261,7 +260,7 @@ if st.sidebar.button('Sign out'):
 
 if user['role'] == 'Candidate':
     if st.session_state.get('submitted_id'):
-        st.success('This completes the online test. Next test is Oral and Practicum.')
+        st.success('This completes the online test. Next test is Oral and Practical Test.')
         if st.button('Sign out'):
             st.session_state.clear()
             st.rerun()
@@ -289,9 +288,9 @@ if user['role'] == 'Candidate':
             st.stop()
         bank = db.questions(discipline)
         mcq_bank = [q for q in bank if q['q_type'] == 'mcq']
-        reviewer_pools = {kind: [q for q in bank if q['q_type'] == kind] for kind in ('essay', 'oral', 'practicum')}
+        reviewer_pools = {kind: [q for q in bank if q['q_type'] == kind] for kind in ('essay', 'oral', 'practical')}
         if len(mcq_bank) < 20 or any(len(pool) < 5 for pool in reviewer_pools.values()):
-            st.error(f"This discipline needs at least 20 MCQ, 5 Essay, 5 Oral, and 5 Practicum questions. It currently has {len(mcq_bank)} MCQ, {len(reviewer_pools['essay'])} Essay, {len(reviewer_pools['oral'])} Oral, and {len(reviewer_pools['practicum'])} Practicum questions.")
+            st.error(f"This discipline needs at least 20 MCQ, 5 Essay, 5 Oral, and 5 Practical Test questions. It currently has {len(mcq_bank)} MCQ, {len(reviewer_pools['essay'])} Essay, {len(reviewer_pools['oral'])} Oral, and {len(reviewer_pools['practical'])} Practical Test questions.")
             st.stop()
 
         if st.session_state.get('assessment_discipline') != discipline:
@@ -319,7 +318,7 @@ if user['role'] == 'Candidate':
                         try:
                             selected_mcqs = rng.sample(mcq_bank, 20)
                             st.session_state.assessment_mcq_ids = [q['id'] for q in selected_mcqs]
-                            st.session_state.assessment_essay_ids = [q['id'] for kind in ('essay', 'oral', 'practicum') for q in rng.sample(reviewer_pools[kind], 5)]
+                            st.session_state.assessment_essay_ids = [q['id'] for kind in ('essay', 'oral', 'practical') for q in rng.sample(reviewer_pools[kind], 5)]
                             st.session_state.assessment_mcq_options = {
                                 q['id']: rng.sample(question_options(q), len(question_options(q)))
                                 for q in selected_mcqs
@@ -334,7 +333,7 @@ if user['role'] == 'Candidate':
         mcq_questions = [question_map[qid] for qid in st.session_state.assessment_mcq_ids]
         essay_questions = [question_map[qid] for qid in st.session_state.assessment_essay_ids]
         responses = st.session_state.setdefault('assessment_responses', {})
-        st.info('20 Multiple Choice Questions are followed by 5 Essay, 5 Oral, and 5 Practicum questions. All answers are required.')
+        st.info('20 Multiple Choice Questions are followed by 5 Essay, 5 Oral, and 5 Practical Test questions. All answers are required.')
         if st.session_state.get('assessment_phase', 'mcq') == 'mcq':
             st.subheader('Multiple Choice Questions')
             with st.form('multiple_choice_questions'):
@@ -357,7 +356,7 @@ if user['role'] == 'Candidate':
                 page_responses = {}
                 for number, question in enumerate(essay_questions, 1):
                     question_type = {
-                        'essay': 'Essay', 'oral': 'Oral Test', 'practical': 'Practical Test', 'practicum': 'Practicum'
+                        'essay': 'Essay', 'oral': 'Oral Test', 'practical': 'Practical Test'
                     }.get(question['q_type'], 'Question')
                     page_responses[question['id']] = st.text_area(
                         f"{number}. {question_type}: {question['question_text']}",
@@ -674,8 +673,8 @@ else:
                         progress_bar.empty()
                         st.error(str(exc))
         with st.expander('Add a question', expanded=True):
-            kind = st.selectbox('Question type', ['mcq', 'essay', 'practicum', 'oral', 'practical'], format_func=lambda value: {
-                'mcq': 'Multiple Choice Question', 'essay': 'Essay', 'practicum': 'Practicum',
+            kind = st.selectbox('Question type', ['mcq', 'essay', 'oral', 'practical'], format_func=lambda value: {
+                'mcq': 'Multiple Choice Question', 'essay': 'Essay',
                 'oral': 'Oral Test', 'practical': 'Practical Test'
             }[value])
             with st.form('new_question'):
@@ -683,7 +682,7 @@ else:
                 prompt = st.text_area('Question')
                 options = st.text_area('Multiple Choice options (one per line)') if kind == 'mcq' else ''
                 correct = st.text_input('Correct answer (exact option text)') if kind == 'mcq' else ''
-                rubric = st.text_area('Scoring rubric') if kind in ('essay', 'practicum', 'oral', 'practical') else ''
+                rubric = st.text_area('Scoring rubric') if kind in ('essay', 'oral', 'practical') else ''
                 points = st.number_input('Maximum points', 1, 100, 1 if kind == 'mcq' else 10, disabled=kind == 'mcq')
                 if st.form_submit_button('Add question'):
                     try:
@@ -695,8 +694,8 @@ else:
             with st.expander('Auto-generate placeholder questions'):
                 with st.form('autogenerate'):
                     auto_discipline = st.selectbox('Discipline', db.STARTER_DISCIPLINES)
-                    auto_kind = st.selectbox('Question type', ['mcq', 'essay', 'practicum', 'oral', 'practical'], format_func=lambda value: {
-                        'mcq': 'Multiple Choice Question', 'essay': 'Essay', 'practicum': 'Practicum',
+                    auto_kind = st.selectbox('Question type', ['mcq', 'essay', 'oral', 'practical'], format_func=lambda value: {
+                        'mcq': 'Multiple Choice Question', 'essay': 'Essay',
                         'oral': 'Oral Test', 'practical': 'Practical Test'
                     }[value])
                     auto_count = st.number_input('Number of questions', 1, 500, 5)
@@ -723,7 +722,7 @@ else:
         col1, col2 = st.columns(2)
         filter_discipline = col1.selectbox('Filter by Discipline', ['All'] + all_disciplines)
         type_options = {
-            'mcq': 'Multiple Choice Question', 'essay': 'Essay', 'practicum': 'Practicum',
+            'mcq': 'Multiple Choice Question', 'essay': 'Essay',
             'oral': 'Oral Test', 'practical': 'Practical Test'
         }
         filter_type = col2.selectbox('Filter by Question Type', ['All'] + all_types, format_func=lambda x: type_options.get(x, x))
@@ -811,12 +810,12 @@ else:
                 q = json.loads(a['snapshot'])
                 question_type = {
                     'mcq': 'Multiple Choice Question', 'essay': 'Essay', 'oral': 'Oral Test',
-                    'practical': 'Practical Test', 'practicum': 'Practicum',
+                    'practical': 'Practical Test',
                 }.get(q['q_type'], q['q_type'])
                 st.write(f"{question_type}: {q['question_text']}")
                 st.text_area('Candidate response', value=a['submitted_answer'], disabled=True,
                              height=160, key=f"response_{a['id']}")
-                if q['q_type'] in ('essay', 'practicum', 'oral', 'practical'):
+                if q['q_type'] in ('essay', 'oral', 'practical'):
                     st.info(q['rubric'])
                     scores[a['id']] = st.number_input(f"Points for answer #{a['id']} (max {q['max_points']})", min_value=0.0, max_value=float(q['max_points']), value=float(a['awarded_score']), step=0.5, disabled=sub['status'] == 'Graded')
                 else:

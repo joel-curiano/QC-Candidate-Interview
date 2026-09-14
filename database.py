@@ -15,7 +15,7 @@ from pathlib import Path
 
 DB_SCHEMA = 'qc_portal'
 STARTER_DISCIPLINES = (
-    'Civil QC', 'Coating QC', 'Communications QC', 'Electrical QC', 'E&I QC', 'Instrumentation QC',
+    'Cathodic Protection QC', 'Civil QC', 'Coating QC', 'Communications QC', 'Electrical QC', 'E&I QC', 'Instrumentation QC',
     'Mechanical QC', 'NDT QC', 'Piping QC', 'Welding QC',
     'Pipeline QC', 'PQCS',
 )
@@ -57,7 +57,9 @@ def init_db():
     with connection() as c:
         c.execute('SELECT pg_advisory_xact_lock(74192001)')
         c.execute('ALTER TABLE questions DROP CONSTRAINT IF EXISTS questions_q_type_check')
-        c.execute("ALTER TABLE questions ADD CONSTRAINT questions_q_type_check CHECK (q_type IN ('mcq', 'essay', 'practicum', 'oral', 'practical'))")
+        c.execute("UPDATE questions SET q_type='practical' WHERE q_type='practicum'")
+        c.execute("UPDATE answers SET snapshot=jsonb_set(snapshot::jsonb, '{q_type}', '\"practical\"'::jsonb) WHERE snapshot::json->>'q_type'='practicum'")
+        c.execute("ALTER TABLE questions ADD CONSTRAINT questions_q_type_check CHECK (q_type IN ('mcq', 'essay', 'oral', 'practical'))")
         c.execute("UPDATE questions SET max_points=1 WHERE q_type='mcq' AND max_points <> 1")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS designation TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS iqama_no TEXT NOT NULL DEFAULT ''")
@@ -357,13 +359,13 @@ def _validate_question(discipline, kind, prompt, options, correct, rubric, point
     options = [v.strip() for v in options if v.strip()]
     if not discipline.strip() or not prompt.strip() or not 1 <= points <= 100:
         raise ValueError('Discipline, question, and points (1-100) are required.')
-    if kind not in ('mcq', 'essay', 'practicum', 'oral', 'practical'):
+    if kind not in ('mcq', 'essay', 'oral', 'practical'):
         raise ValueError('Invalid question type.')
     if kind == 'mcq' and points != 1:
         raise ValueError('Multiple Choice questions must be worth exactly 1 point.')
     if kind == 'mcq' and (len(options) < 2 or len(set(options)) != len(options) or correct not in options):
         raise ValueError('Provide unique options and an exact matching correct answer.')
-    if kind in ('essay', 'practicum', 'oral', 'practical') and not rubric.strip():
+    if kind in ('essay', 'oral', 'practical') and not rubric.strip():
         raise ValueError('Essay, oral, and practical questions require a scoring rubric.')
     return (discipline.strip(), kind, prompt.strip(), options, correct.strip(), rubric.strip(), points)
 
@@ -397,7 +399,7 @@ def add_questions(actor, parse_results, progress_callback=None):
 def autogenerate_questions(actor, discipline, kind, count, progress_callback=None):
     if not isinstance(count, int) or not (1 <= count <= 500):
         raise ValueError('Count must be between 1 and 500.')
-    if kind not in ('mcq', 'essay', 'practicum', 'oral', 'practical'):
+    if kind not in ('mcq', 'essay', 'oral', 'practical'):
         raise ValueError('Invalid question type.')
     with connection() as c:
         require(c, actor, ('Admin',))
@@ -476,9 +478,9 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         if not qs or set(responses) != {q['id'] for q in qs}:
             raise ValueError('The question set changed. Reload the assessment before submitting.')
         if question_ids is not None:
-            counts = {kind: sum(q['q_type'] == kind for q in qs) for kind in ('mcq', 'essay', 'oral', 'practicum')}
-            if counts != {'mcq': 20, 'essay': 5, 'oral': 5, 'practicum': 5}:
-                raise ValueError('The assessment must contain 20 MCQ, 5 Essay, 5 Oral, and 5 Practicum questions.')
+            counts = {kind: sum(q['q_type'] == kind for q in qs) for kind in ('mcq', 'essay', 'oral', 'practical')}
+            if counts != {'mcq': 20, 'essay': 5, 'oral': 5, 'practical': 5}:
+                raise ValueError('The assessment must contain 20 MCQ, 5 Essay, 5 Oral, and 5 Practical Test questions.')
         for q in qs:
             answer = responses[q['id']]
             if not isinstance(answer, str) or not answer.strip() or len(answer) > 20000:
@@ -490,7 +492,7 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         if not candidate_name:
             raise ValueError('Candidate name is required.')
         mcq_score = sum(q['max_points'] for q in qs if q['q_type'] == 'mcq' and responses[q['id']] == q['correct_answer'])
-        status = 'Pending Review' if any(q['q_type'] in ('essay', 'practicum', 'oral', 'practical') for q in qs) else 'Graded'
+        status = 'Pending Review' if any(q['q_type'] in ('essay', 'oral', 'practical') for q in qs) else 'Graded'
         project_assignment = str(details.get('project_assignment', details.get('project_location', ''))).strip()
         sid = c.execute("INSERT INTO submissions(candidate_name,designation,iqama_no,employee_no,exam_date,project_location,project_assignment,discipline,mcq_score,max_possible_points,status,user_id,token,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP) RETURNING id",
                         (candidate_name, str(details.get('designation', '')).strip(), str(details.get('iqama_no', '')).strip(),
@@ -511,7 +513,6 @@ def submissions(actor):
             SELECT s.*, u.email, u.username, u.test_date AS scheduled_test_date,
                    (SELECT COALESCE(SUM(a.awarded_score), 0) FROM answers a WHERE a.submission_id = s.id AND a.snapshot::json->>'q_type' = 'essay') AS essay_only_score,
                    (SELECT COALESCE(SUM(a.awarded_score), 0) FROM answers a WHERE a.submission_id = s.id AND a.snapshot::json->>'q_type' = 'oral') AS oral_score,
-                   (SELECT COALESCE(SUM(a.awarded_score), 0) FROM answers a WHERE a.submission_id = s.id AND a.snapshot::json->>'q_type' = 'practicum') AS practicum_score,
                    (SELECT COALESCE(SUM(a.awarded_score), 0) FROM answers a WHERE a.submission_id = s.id AND a.snapshot::json->>'q_type' = 'practical') AS practical_score
             FROM submissions s LEFT JOIN users u ON u.id=s.user_id
             WHERE s.user_id=%s OR %s = 'Admin' OR (%s = 'Reviewer' AND s.project_location = ANY(%s))
@@ -529,7 +530,7 @@ def grade(actor, sid, scores, comments):
         sub = c.execute('SELECT * FROM submissions WHERE id=%s FOR UPDATE', (sid,)).fetchone()
         if not sub or sub['status'] == 'Graded':
             raise ValueError('This assessment has already been graded or is unavailable.')
-        essays = [dict(a) for a in c.execute('SELECT * FROM answers WHERE submission_id=%s', (sid,)) if json.loads(a['snapshot'])['q_type'] in ('essay', 'practicum', 'oral', 'practical')]
+        essays = [dict(a) for a in c.execute('SELECT * FROM answers WHERE submission_id=%s', (sid,)) if json.loads(a['snapshot'])['q_type'] in ('essay', 'oral', 'practical')]
         if set(scores) != {a['id'] for a in essays}:
             raise ValueError('Score every essay before finalizing.')
         for a in essays:

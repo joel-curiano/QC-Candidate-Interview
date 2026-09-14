@@ -10,7 +10,7 @@ RESULT_HEADERS = [
     'Reference', 'Candidate', 'Candidate Email', 'Username', 'Designation', 'Iqama No',
     'Employee No', 'Discipline', 'Project Location', 'Project Assignment', 'Scheduled Test Date', 'Exam Date',
     'Submitted (UTC)', 'Status', 'Multiple Choice Points', 'Essay Points',
-    'Oral Points', 'Practicum Points', 'Practical Points', 'Maximum Points',
+    'Oral Points', 'Practical Points', 'Maximum Points',
     'Result', 'Reviewer Comments', 'Graded (UTC)',
 ]
 
@@ -29,7 +29,6 @@ def _row_values(row):
         row.get('exam_date', ''), row.get('created_at') or 'Legacy record', row.get('status', ''),
         row.get('mcq_score', 0), row.get('essay_only_score', 0) if row.get('status') == 'Graded' else None,
         row.get('oral_score', 0) if row.get('status') == 'Graded' else None,
-        row.get('practicum_score', 0) if row.get('status') == 'Graded' else None,
         row.get('practical_score', 0) if row.get('status') == 'Graded' else None,
         row.get('max_possible_points', 0), row.get('result', ''), row.get('reviewer_comments', ''),
         row.get('graded_at', ''),

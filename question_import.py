@@ -52,8 +52,8 @@ def parse_questions(workbook_bytes):
         try:
             if not discipline or not prompt:
                 raise QuestionImportError('Discipline and question are required.')
-            if kind not in ('mcq', 'essay', 'practicum', 'oral', 'practical'):
-                raise QuestionImportError('Question type must be mcq, essay, practicum, oral, or practical.')
+            if kind not in ('mcq', 'essay', 'oral', 'practical'):
+                raise QuestionImportError('Question type must be mcq, essay, oral, or practical.')
             try:
                 max_points = int(float(points))
             except ValueError as exc:
@@ -106,8 +106,8 @@ def template_bytes():
     instructions = workbook.create_sheet('Instructions')
     instructions.append(['Question bank import instructions'])
     instructions.append(['Fill the Questions sheet and leave no completely blank rows between questions.'])
-    instructions.append(['Question type must be mcq, essay, practicum, oral, or practical. For Multiple Choice questions, put one option per line in Multiple Choice options.'])
-    instructions.append(['MCQ rows must use Maximum points = 1. Essay, oral, practicum, and practical rows may use a whole number from 1 to 100. Keep the headers unchanged.'])
+    instructions.append(['Question type must be mcq, essay, oral, or practical. For Multiple Choice questions, put one option per line in Multiple Choice options.'])
+    instructions.append(['MCQ rows must use Maximum points = 1. Essay, oral, and practical rows may use a whole number from 1 to 100. Keep the headers unchanged.'])
     instructions.column_dimensions['A'].width = 110
     output = BytesIO()
     workbook.save(output)
