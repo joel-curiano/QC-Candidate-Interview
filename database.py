@@ -555,6 +555,15 @@ def submissions(actor):
             ORDER BY s.id DESC
         """, (actor, user['role'], user['role'], assigned_projects))]
 
+def delete_assessment(actor, submission_id):
+    with connection() as c:
+        require(c, actor, ('Admin',))
+        row = c.execute('SELECT id FROM submissions WHERE id=%s FOR UPDATE', (submission_id,)).fetchone()
+        if not row:
+            raise ValueError('Assessment not found.')
+        c.execute('DELETE FROM answers WHERE submission_id=%s', (submission_id,))
+        c.execute('DELETE FROM submissions WHERE id=%s', (submission_id,))
+
 def answer_details(actor, sid):
     with connection() as c:
         require(c, actor, ('Reviewer', 'Admin'))

@@ -121,17 +121,11 @@ def result_table(rows):
     return [{'Reference': r['id'], 'Candidate': r['candidate_name'], 'Job Title': r.get('designation', ''),
              'Employee No': r.get('employee_no', ''),
              'Discipline': r['discipline'], 'Project Location': r.get('project_location', ''),
-             'Scheduled Test Date': r.get('scheduled_test_date', ''), 'Exam Date': r.get('exam_date', ''),
-             'Submitted (UTC)': r['created_at'] or 'Legacy record', 'Status': r['status'],
-             'Multiple Choice Points': r['mcq_score'],
+             'Exam Date': r.get('exam_date', ''), 'Status': r['status'],
              'Multiple Choice Grade': db.category_result(r, 'mcq'),
-             'Essay Points': r.get('essay_only_score', 0) if r['status'] == 'Graded' else None,
              'Essay Grade': db.category_result(r, 'essay'),
-             'Oral Points': r.get('oral_score', 0) if r['status'] == 'Graded' else None,
              'Oral Grade': db.category_result(r, 'oral'),
-             'Practical Points': r.get('practical_score', 0) if r['status'] == 'Graded' else None,
              'Practical Grade': db.category_result(r, 'practical'),
-             'Maximum Points': r['max_possible_points'],
              'Reviewer Comments': r.get('reviewer_comments', ''), 'Graded (UTC)': r.get('graded_at', ''),
              'Overall Result': db.result(r)} for r in rows]
 
@@ -386,6 +380,23 @@ else:
                     st.rerun()
                 except ValueError as exc:
                     st.error(str(exc))
+        if user['role'] == 'Admin':
+            st.divider()
+            st.subheader('Delete Individual Assessment')
+            assessments = db.submissions(user['id'])
+            if assessments:
+                assessment_options = {r['id']: f"#{r['id']} · {r['candidate_name']} · {r['discipline']} · {r['status']}" for r in assessments}
+                delete_id = st.selectbox('Assessment to delete', list(assessment_options), format_func=lambda value: assessment_options[value], key='delete_assessment_id')
+                confirm_delete = st.checkbox('I understand this permanently deletes the selected assessment and its answers.', key='confirm_delete_assessment')
+                if st.button('Delete Selected Assessment', type='secondary', disabled=not confirm_delete):
+                    try:
+                        db.delete_assessment(user['id'], delete_id)
+                        st.success('Assessment deleted permanently.')
+                        st.rerun()
+                    except ValueError as exc:
+                        st.error(str(exc))
+            else:
+                st.info('No assessments are available to delete.')
     elif page == 'Create Candidate Account':
         st.subheader('Create a candidate account')
         account_form('candidate_account', actor=user['id'], allowed_roles=['Candidate'])
@@ -796,16 +807,12 @@ else:
         writer = csv.DictWriter(output, fieldnames=table[0].keys())
         writer.writeheader()
         writer.writerows({k: "'" + v if isinstance(v, str) and v.lstrip().startswith(('=', '+', '-', '@')) else v for k, v in r.items()} for r in table)
-        st.download_button('Download results CSV', output.getvalue(), 'qc-results.csv', 'text/csv')
-        if st.button('Prepare CTA Record Log Excel'):
-            st.session_state.prepare_results_excel = True
-        if st.session_state.get('prepare_results_excel'):
-            excel_data = excel_bytes([dict(row, result=db.result(row)) for row in rows])
-            st.download_button('Download CTA Record Log Excel', excel_data, 'CTA Record Log.xlsx',
-                       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        st.download_button('Download Individual Test Result (CSV)', output.getvalue(), 'individual-test-result.csv', 'text/csv')
+        excel_data = excel_bytes([dict(row, result=db.result(row)) for row in rows])
+        st.download_button('Download CTA Record Log (Excel)', excel_data, 'CTA Record Log.xlsx',
+                   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         sid = st.selectbox('Assessment', [r['id'] for r in rows], format_func=lambda value: next(f"#{r['id']} · {r['candidate_name']} · {r['discipline']}" for r in rows if r['id'] == value))
         sub = next(r for r in rows if r['id'] == sid)
-        st.write(f"Multiple Choice score: {sub['mcq_score']:g} points")
         answers = db.answer_details(user['id'], sid)
         questionnaire = st.expander('Questionnaire', expanded=sub['status'] != 'Graded')
         questionnaire.__enter__()
