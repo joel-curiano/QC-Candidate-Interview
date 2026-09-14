@@ -818,7 +818,7 @@ else:
         left, right = st.columns(2)
         left.metric('Pending review', sum(r['status'] == 'Pending Review' for r in rows))
         right.metric('Graded', sum(r['status'] == 'Graded' for r in rows))
-        status = st.selectbox('Status', ['All', 'Pending Review', 'Graded'])
+        status = st.selectbox('Status', ['All', 'Pending Review', 'Graded'], index=1)
         rows = [r for r in rows if status == 'All' or r['status'] == status]
         if not rows:
             st.info('No assessments match this view.')
