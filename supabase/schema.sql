@@ -40,7 +40,6 @@ CREATE TABLE IF NOT EXISTS qc_portal.submissions (
     iqama_no TEXT NOT NULL DEFAULT '',
     employee_no TEXT NOT NULL DEFAULT '',
     exam_date DATE NOT NULL DEFAULT CURRENT_DATE,
-    project_location TEXT NOT NULL DEFAULT '',
     project_assignment TEXT NOT NULL DEFAULT '',
     discipline TEXT NOT NULL,
     mcq_score DOUBLE PRECISION NOT NULL DEFAULT 0,

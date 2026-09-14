@@ -68,6 +68,8 @@ def init_db():
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS exam_date DATE NOT NULL DEFAULT CURRENT_DATE")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS project_location TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS project_assignment TEXT NOT NULL DEFAULT ''")
+        c.execute("UPDATE submissions SET project_assignment=project_location WHERE COALESCE(project_assignment, '')='' AND project_location<>''")
+        c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS project_location")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS oral_score DOUBLE PRECISION NOT NULL DEFAULT 0")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS practical_score DOUBLE PRECISION NOT NULL DEFAULT 0")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS mcq_max DOUBLE PRECISION NOT NULL DEFAULT 0")
@@ -95,6 +97,8 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS previous_schedules JSONB NOT NULL DEFAULT '[]'::jsonb")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS project_assignment TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS scheduled_discipline TEXT NOT NULL DEFAULT ''")
+        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_token TEXT")
+        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_at TIMESTAMPTZ")
         original_questions = json.loads(Path(__file__).with_name('seed_questions.json').read_text(encoding='utf-8'))
         original_questions = [row[:4] + [row[4], row[5], 1 if row[1] == 'mcq' else row[6]] for row in original_questions]
         has_any_users = c.execute('SELECT 1 FROM users LIMIT 1').fetchone()
@@ -149,6 +153,21 @@ def require(c, user_id, roles):
 def has_users():
     with connection() as c:
         return bool(c.execute('SELECT 1 FROM users LIMIT 1').fetchone())
+
+def claim_login(user_id, token):
+    with connection() as c:
+        row = c.execute("""UPDATE users SET active_login_token=%s, active_login_at=CURRENT_TIMESTAMP
+                          WHERE id=%s AND (active_login_token IS NULL OR active_login_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes')
+                          RETURNING id""", (token, user_id)).fetchone()
+        return bool(row)
+
+def refresh_login(user_id, token):
+    with connection() as c:
+        c.execute("UPDATE users SET active_login_at=CURRENT_TIMESTAMP WHERE id=%s AND active_login_token=%s", (user_id, token))
+
+def release_login(user_id, token):
+    with connection() as c:
+        c.execute("UPDATE users SET active_login_token=NULL, active_login_at=NULL WHERE id=%s AND active_login_token=%s", (user_id, token))
 
 def create_user(username, name, password, role='Candidate', actor=None, bootstrap=False, email='', test_date=None, discipline='', iqama_no='', employee_no='', mobile_no=''):
     username, name = username.strip().lower(), name.strip()
@@ -529,10 +548,10 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
             raise ValueError('Candidate name is required.')
         mcq_score = sum(q['max_points'] for q in qs if q['q_type'] == 'mcq' and responses[q['id']] == q['correct_answer'])
         status = 'Pending Review' if any(q['q_type'] in ('essay', 'oral', 'practical') for q in qs) else 'Graded'
-        project_assignment = str(details.get('project_assignment', details.get('project_location', ''))).strip()
+        project_assignment = str(details.get('project_assignment', '')).strip()
         max_points = sum(1 if q['q_type'] == 'mcq' else min(q['max_points'], 10) for q in qs)
         maxima = {kind: sum(1 if q['q_type'] == 'mcq' else min(q['max_points'], 10) for q in qs if q['q_type'] == kind) for kind in ('mcq', 'essay', 'oral', 'practical')}
-        sid = c.execute("INSERT INTO submissions(candidate_name,designation,iqama_no,employee_no,exam_date,project_location,project_assignment,discipline,mcq_score,max_possible_points,mcq_max,essay_max,oral_max,practical_max,status,user_id,token,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP) RETURNING id",
+        sid = c.execute("INSERT INTO submissions(candidate_name,designation,iqama_no,employee_no,exam_date,project_assignment,discipline,mcq_score,max_possible_points,mcq_max,essay_max,oral_max,practical_max,status,user_id,token,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP) RETURNING id",
                         (candidate_name, str(details.get('designation', '')).strip(), str(details.get('iqama_no', '')).strip(),
                          str(details.get('employee_no', '')).strip(), details.get('exam_date'), project_assignment, project_assignment,
                          discipline, mcq_score, max_points, maxima['mcq'], maxima['essay'], maxima['oral'], maxima['practical'], status, actor, token)).fetchone()['id']
@@ -551,7 +570,7 @@ def submissions(actor):
             SELECT s.*, u.email, u.username, u.test_date AS scheduled_test_date,
                    s.essay_score AS essay_only_score, s.oral_score, s.practical_score
             FROM submissions s LEFT JOIN users u ON u.id=s.user_id
-            WHERE s.user_id=%s OR %s = 'Admin' OR (%s = 'Reviewer' AND s.project_location = ANY(%s))
+            WHERE s.user_id=%s OR %s = 'Admin' OR (%s = 'Reviewer' AND s.project_assignment = ANY(%s))
             ORDER BY s.id DESC
         """, (actor, user['role'], user['role'], assigned_projects))]
 

@@ -121,7 +121,7 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
 def result_table(rows):
     return [{'Reference': r['id'], 'Candidate': r['candidate_name'], 'Job Title': r.get('designation', ''),
              'Employee No': r.get('employee_no', ''),
-             'Discipline': r['discipline'], 'Project Location': r.get('project_location', ''),
+             'Discipline': r['discipline'], 'Project Assignment': r.get('project_assignment', ''),
              'Exam Date': r.get('exam_date', ''), 'Status': r['status'],
              'Multiple Choice Grade': db.category_result(r, 'mcq'),
              'Essay Grade': db.category_result(r, 'essay'),
@@ -212,8 +212,13 @@ if 'user' not in st.session_state:
             else:
                 user = db.authenticate(username, password)
                 if user:
+                    login_token = secrets.token_urlsafe(32)
+                    if not db.claim_login(user['id'], login_token):
+                        st.error('This account is already logged in on another session.')
+                        st.stop()
                     st.session_state.clear()
                     st.session_state.user = user
+                    st.session_state.login_token = login_token
                     st.rerun()
                 else:
                     st.session_state.retry_after = time.time() + 3
@@ -221,6 +226,12 @@ if 'user' not in st.session_state:
     st.stop()
 
 user = st.session_state.user
+login_token = st.session_state.get('login_token')
+if not login_token:
+    st.session_state.clear()
+    st.error('Your login session is invalid. Please sign in again.')
+    st.stop()
+db.refresh_login(user['id'], login_token)
 with st.spinner('Refreshing your session...'):
     with db.connection() as conn:
         user = db.require(conn, user['id'], ('Candidate', 'Reviewer', 'Admin'))
@@ -326,6 +337,7 @@ if user['role'] == 'Candidate':
                                 user['id'], discipline, responses, st.session_state.attempt_token,
                                 st.session_state.candidate_details,
                                 st.session_state.assessment_mcq_ids + st.session_state.assessment_essay_ids + st.session_state.assessment_reviewer_ids)
+                            db.release_login(user['id'], st.session_state.login_token)
                             st.session_state.clear()
                             st.session_state.assessment_submitted = True
                             st.rerun()
@@ -356,6 +368,7 @@ else:
                         if new_password != confirm_password:
                             raise ValueError('New passwords do not match.')
                         db.change_password(user['id'], current_password, new_password)
+                        db.release_login(user['id'], login_token)
                         st.session_state.clear()
                         st.session_state.password_changed = True
                         st.rerun()
@@ -365,6 +378,7 @@ else:
                 st.caption('Copy your generated password before saving:')
                 st.code(generated, language=None)
     if st.sidebar.button('Sign out'):
+        db.release_login(user['id'], login_token)
         st.session_state.clear()
         st.rerun()
     if page == 'Assessment Settings':

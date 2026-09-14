@@ -12,7 +12,7 @@ ILLEGAL_EXCEL_CHARS = re.compile(r'[\x00-\x08\x0B\x0C\x0E-\x1F]')
 
 
 RESULT_HEADERS = [
-    'Reference', 'Candidate', 'Job Title', 'Employee No', 'Discipline', 'Project Location', 'Project Assignment', 'Exam Date',
+    'Reference', 'Candidate', 'Job Title', 'Employee No', 'Discipline', 'Project Assignment', 'Exam Date',
     'Status', 'Multiple Choice Grade', 'Essay Grade', 'Oral Grade', 'Practical Grade',
     'Reviewer Comments', 'Graded (UTC)', 'Overall Result',
 ]
@@ -31,7 +31,7 @@ def _safe_cell(value):
 def _row_values(row):
     return [
         row.get('id'), row.get('candidate_name'), row.get('designation', ''), row.get('employee_no', ''),
-        row.get('discipline', ''), row.get('project_location', ''), row.get('project_assignment', row.get('project_location', '')),
+        row.get('discipline', ''), row.get('project_assignment', ''),
         row.get('exam_date', ''), row.get('status', ''),
         row.get('multiple_choice_grade', db.category_result(row, 'mcq')), row.get('essay_grade', db.category_result(row, 'essay')),
         row.get('oral_grade', db.category_result(row, 'oral')), row.get('practical_grade', db.category_result(row, 'practical')),
