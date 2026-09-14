@@ -71,6 +71,10 @@ def init_db():
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS project_assignment TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS oral_score DOUBLE PRECISION NOT NULL DEFAULT 0")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS practical_score DOUBLE PRECISION NOT NULL DEFAULT 0")
+        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS mcq_max DOUBLE PRECISION NOT NULL DEFAULT 0")
+        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS essay_max DOUBLE PRECISION NOT NULL DEFAULT 0")
+        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS oral_max DOUBLE PRECISION NOT NULL DEFAULT 0")
+        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS practical_max DOUBLE PRECISION NOT NULL DEFAULT 0")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS test_date DATE")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMPTZ")
@@ -521,10 +525,11 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         status = 'Pending Review' if any(q['q_type'] in ('essay', 'oral', 'practical') for q in qs) else 'Graded'
         project_assignment = str(details.get('project_assignment', details.get('project_location', ''))).strip()
         max_points = sum(1 if q['q_type'] == 'mcq' else min(q['max_points'], 10) for q in qs)
-        sid = c.execute("INSERT INTO submissions(candidate_name,designation,iqama_no,employee_no,exam_date,project_location,project_assignment,discipline,mcq_score,max_possible_points,status,user_id,token,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP) RETURNING id",
+        maxima = {kind: sum(1 if q['q_type'] == 'mcq' else min(q['max_points'], 10) for q in qs if q['q_type'] == kind) for kind in ('mcq', 'essay', 'oral', 'practical')}
+        sid = c.execute("INSERT INTO submissions(candidate_name,designation,iqama_no,employee_no,exam_date,project_location,project_assignment,discipline,mcq_score,max_possible_points,mcq_max,essay_max,oral_max,practical_max,status,user_id,token,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP) RETURNING id",
                         (candidate_name, str(details.get('designation', '')).strip(), str(details.get('iqama_no', '')).strip(),
                          str(details.get('employee_no', '')).strip(), details.get('exam_date'), project_assignment, project_assignment,
-                         discipline, mcq_score, max_points, status, actor, token)).fetchone()['id']
+                         discipline, mcq_score, max_points, maxima['mcq'], maxima['essay'], maxima['oral'], maxima['practical'], status, actor, token)).fetchone()['id']
         for q in qs:
             score = q['max_points'] if q['q_type'] == 'mcq' and responses[q['id']] == q['correct_answer'] else 0
             c.execute('INSERT INTO answers(submission_id,question_id,submitted_answer,awarded_score,snapshot) VALUES (%s,%s,%s,%s,%s)',
@@ -571,4 +576,14 @@ def result(sub):
     if sub['status'] != 'Graded':
         return 'Pending Review'
     percentage = 100 * (sub['mcq_score'] + sub['essay_score'] + sub.get('oral_score', 0) + sub.get('practical_score', 0)) / sub['max_possible_points'] if sub['max_possible_points'] else 0
-    return f"{'PASS' if percentage >= 70 else 'FAIL'} ({percentage:.1f}%)"
+    minimums = all(category_percentage(sub, kind) >= 50 for kind in ('mcq', 'essay', 'oral', 'practical'))
+    return f"{'PASS' if percentage >= 70 and minimums else 'FAIL'} ({percentage:.1f}%)"
+
+def category_percentage(sub, kind):
+    return 100 * sub.get(f'{kind}_score', 0) / sub.get(f'{kind}_max', 0) if sub.get(f'{kind}_max', 0) else 0
+
+def category_result(sub, kind):
+    if sub['status'] != 'Graded':
+        return 'Pending Review'
+    pct = category_percentage(sub, kind)
+    return f"{'PASS' if pct >= 50 else 'FAIL'} ({pct:.1f}%)"

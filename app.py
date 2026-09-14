@@ -118,18 +118,22 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
 
 
 def result_table(rows):
-    return [{'Reference': r['id'], 'Candidate': r['candidate_name'], 'Candidate Email': r.get('email', ''),
-             'Username': r.get('username', ''), 'Job Title': r.get('designation', ''),
-             'Iqama No': r.get('iqama_no', ''), 'Employee No': r.get('employee_no', ''),
+    return [{'Reference': r['id'], 'Candidate': r['candidate_name'], 'Job Title': r.get('designation', ''),
+             'Employee No': r.get('employee_no', ''),
              'Discipline': r['discipline'], 'Project Location': r.get('project_location', ''),
              'Scheduled Test Date': r.get('scheduled_test_date', ''), 'Exam Date': r.get('exam_date', ''),
              'Submitted (UTC)': r['created_at'] or 'Legacy record', 'Status': r['status'],
              'Multiple Choice Points': r['mcq_score'],
+             'Multiple Choice Grade': db.category_result(r, 'mcq'),
              'Essay Points': r.get('essay_only_score', 0) if r['status'] == 'Graded' else None,
+             'Essay Grade': db.category_result(r, 'essay'),
              'Oral Points': r.get('oral_score', 0) if r['status'] == 'Graded' else None,
+             'Oral Grade': db.category_result(r, 'oral'),
              'Practical Points': r.get('practical_score', 0) if r['status'] == 'Graded' else None,
-             'Maximum Points': r['max_possible_points'], 'Result': db.result(r),
-             'Reviewer Comments': r.get('reviewer_comments', ''), 'Graded (UTC)': r.get('graded_at', '')} for r in rows]
+             'Practical Grade': db.category_result(r, 'practical'),
+             'Maximum Points': r['max_possible_points'],
+             'Reviewer Comments': r.get('reviewer_comments', ''), 'Graded (UTC)': r.get('graded_at', ''),
+             'Overall Result': db.result(r)} for r in rows]
 
 if hasattr(st, 'dialog'):
     @st.dialog('Email delivery status')

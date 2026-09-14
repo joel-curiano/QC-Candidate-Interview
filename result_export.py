@@ -6,16 +6,16 @@ from datetime import datetime
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+import database as db
 
 ILLEGAL_EXCEL_CHARS = re.compile(r'[\x00-\x08\x0B\x0C\x0E-\x1F]')
 
 
 RESULT_HEADERS = [
-    'Reference', 'Candidate', 'Candidate Email', 'Username', 'Designation', 'Iqama No',
-    'Employee No', 'Discipline', 'Project Location', 'Project Assignment', 'Scheduled Test Date', 'Exam Date',
-    'Submitted (UTC)', 'Status', 'Multiple Choice Points', 'Essay Points',
-    'Oral Points', 'Practical Points', 'Maximum Points',
-    'Result', 'Reviewer Comments', 'Graded (UTC)',
+    'Reference', 'Candidate', 'Job Title', 'Employee No', 'Discipline', 'Project Location', 'Project Assignment', 'Scheduled Test Date', 'Exam Date',
+    'Submitted (UTC)', 'Status', 'Multiple Choice Points', 'Multiple Choice Grade', 'Essay Points', 'Essay Grade',
+    'Oral Points', 'Oral Grade', 'Practical Points', 'Practical Grade', 'Maximum Points',
+    'Reviewer Comments', 'Graded (UTC)', 'Overall Result',
 ]
 
 
@@ -31,15 +31,15 @@ def _safe_cell(value):
 
 def _row_values(row):
     return [
-        row.get('id'), row.get('candidate_name'), row.get('email', ''), row.get('username', ''),
-        row.get('designation', ''), row.get('iqama_no', ''), row.get('employee_no', ''),
+        row.get('id'), row.get('candidate_name'), row.get('designation', ''), row.get('employee_no', ''),
         row.get('discipline', ''), row.get('project_location', ''), row.get('project_assignment', row.get('project_location', '')), row.get('scheduled_test_date', ''),
         row.get('exam_date', ''), row.get('created_at') or 'Legacy record', row.get('status', ''),
-        row.get('mcq_score', 0), row.get('essay_only_score', 0) if row.get('status') == 'Graded' else None,
-        row.get('oral_score', 0) if row.get('status') == 'Graded' else None,
-        row.get('practical_score', 0) if row.get('status') == 'Graded' else None,
-        row.get('max_possible_points', 0), row.get('result', ''), row.get('reviewer_comments', ''),
-        row.get('graded_at', ''),
+        row.get('mcq_score', 0), row.get('multiple_choice_grade', db.category_result(row, 'mcq')), row.get('essay_only_score', 0) if row.get('status') == 'Graded' else None,
+        row.get('essay_grade', db.category_result(row, 'essay')), row.get('oral_score', 0) if row.get('status') == 'Graded' else None,
+        row.get('oral_grade', db.category_result(row, 'oral')), row.get('practical_score', 0) if row.get('status') == 'Graded' else None,
+        row.get('practical_grade', db.category_result(row, 'practical')),
+        row.get('max_possible_points', 0), row.get('reviewer_comments', ''), row.get('graded_at', ''),
+        row.get('result', db.result(row)),
     ]
 
 

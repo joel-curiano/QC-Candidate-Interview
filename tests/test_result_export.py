@@ -18,7 +18,7 @@ def test_results_export_contains_extended_log_columns():
     workbook = load_workbook(BytesIO(excel_bytes(rows)))
     sheet = workbook['CTA Record Log']
     assert [cell.value for cell in sheet[1]] == RESULT_HEADERS
-    assert sheet['C2'].value == 'candidate@example.com'
-    assert sheet['F2'].value == '123'
+    assert sheet['C2'].value == 'Inspector'
+    assert sheet['D2'].value == 'EMP-7'
     assert sheet.freeze_panes == 'A2'
     assert sheet.auto_filter.ref == sheet.dimensions
