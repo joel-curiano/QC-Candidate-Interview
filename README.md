@@ -1,4 +1,8 @@
-# QC Candidate Interview Portal
+# QC Competency Technical Assessment (CTA) Portal
+
+## Introduction
+
+The QC Competency Technical Assessment (CTA) Portal is a Streamlit-based interview and competency assessment system for quality control candidates. It gives candidates a scheduled assessment experience while allowing Reviewers and Admins to manage question banks, invitations, grading, feedback, and exported results from one portal. Assessment data, user accounts, submissions, and grades are stored in a private Supabase PostgreSQL database.
 
 Streamlit assessment app backed by persistent Supabase PostgreSQL storage. Candidate, Reviewer, and Admin accounts use the portal's existing login system; Supabase Auth is not required. Only Admin and Reviewer users can create Candidate accounts.
 

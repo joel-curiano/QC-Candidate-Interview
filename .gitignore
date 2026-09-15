@@ -9,3 +9,5 @@ __pycache__/
 *.db-shm
 *.db-wal
 *.sqlite3
+# Local user presentation outputs and screenshots
+local-presentations/
