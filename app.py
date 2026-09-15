@@ -57,6 +57,7 @@ st.markdown(
 )
 
 
+@st.cache_data(show_spinner=False)
 def cat_icon_data_url(filename):
     path = Path('img') / filename
     encoded = base64.b64encode(path.read_bytes()).decode('ascii')
@@ -121,10 +122,35 @@ def cached_assessment_settings(actor_id):
     return db.assessment_settings(actor_id)
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_projects(actor_id):
+    return db.get_projects(actor_id)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_candidate_accounts(actor_id):
+    return db.candidate_accounts(actor_id)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_submissions(actor_id):
+    return db.submissions(actor_id)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_candidate_result_pdf(sub_json_str):
+    sub = json.loads(sub_json_str)
+    return candidate_result_pdf(sub)
+
+
 def clear_read_caches():
     cached_disciplines.clear()
     cached_questions.clear()
     cached_assessment_settings.clear()
+    cached_projects.clear()
+    cached_candidate_accounts.clear()
+    cached_submissions.clear()
+    cached_candidate_result_pdf.clear()
 
 
 def question_options(question):
@@ -206,6 +232,7 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
                         st.warning(f'Account created, but the credentials email could not be sent: {exc}')
                 else:
                     st.session_state.pop(generated_key, None)
+                    clear_read_caches()
                     st.success('Account created.')
                     if is_candidate:
                         st.session_state[f'{key}_reset'] = st.session_state.get(f'{key}_reset', 0) + 1
@@ -387,13 +414,13 @@ if not login_token:
     st.session_state.clear()
     st.error('Your login session is invalid. Please sign in again.')
     st.stop()
-if not db.refresh_login(user['id'], login_token):
+refreshed_user = db.refresh_login(user['id'], login_token)
+if not refreshed_user:
     st.session_state.clear()
     st.error('You were signed out after 15 minutes of inactivity. Please sign in again.')
     st.stop()
-with st.spinner('Refreshing your session...'):
-    with db.connection() as conn:
-        user = db.require(conn, user['id'], ('Candidate', 'Reviewer', 'Admin'))
+user = refreshed_user
+st.session_state.user = user
 st.sidebar.write(f"**{user['name']}**")
 st.sidebar.caption(user['role'])
 if user['role'] == 'Candidate':
@@ -505,6 +532,7 @@ if user['role'] == 'Candidate':
                                 st.session_state.assessment_mcq_ids + st.session_state.assessment_essay_ids + st.session_state.assessment_reviewer_ids,
                                 point_settings={kind: settings[f'{kind}_points'] for kind in ('mcq', 'essay', 'oral', 'practical')},
                                 expected_counts=st.session_state.get('assessment_counts'))
+                            clear_read_caches()
                             db.release_login(user['id'], st.session_state.login_token)
                             st.session_state.clear()
                             st.session_state.assessment_submitted = True
@@ -597,6 +625,7 @@ else:
                 if st.button('Delete Selected Assessment', type='secondary', disabled=not confirm_delete):
                     try:
                         db.delete_assessment(user['id'], delete_id)
+                        clear_read_caches()
                         st.success('Assessment deleted permanently.')
                         st.rerun()
                     except ValueError as exc:
@@ -608,7 +637,7 @@ else:
         account_form('candidate_account', actor=user['id'], allowed_roles=['Candidate'])
     elif page == 'Create Candidate Schedules':
         st.subheader('Create Candidate Schedules')
-        candidates = db.candidate_accounts(user['id'])
+        candidates = cached_candidate_accounts(user['id'])
         
         col1, col2, col3 = st.columns(3)
         with col1: search_name = st.selectbox('Filter by Name', ['All'] + sorted({c['name'] for c in candidates}), key='schedule_filter_name')
@@ -644,13 +673,14 @@ else:
                     )
                     disciplines = cached_disciplines()
                     scheduled_discipline = st.selectbox('Candidate Discipline', disciplines, index=(disciplines.index(candidate.get('scheduled_discipline') or candidate.get('discipline')) if (candidate.get('scheduled_discipline') or candidate.get('discipline')) in disciplines else None))
-                    projects = db.get_projects(user['id'])
+                    projects = cached_projects(user['id'])
                     project_assignment = st.selectbox('Project Assignment', projects, index=(projects.index(candidate.get('project_assignment')) if candidate.get('project_assignment') in projects else None)) if projects else st.text_input('Project Assignment', value=candidate.get('project_assignment', ''))
                     if st.form_submit_button('Save Schedule', type='primary'):
                         try:
                             if schedule_date < date.today():
                                 raise ValueError('Test date must be today or a future date.')
                             db.update_candidate_schedule(user['id'], candidate['id'], schedule_date, project_assignment, scheduled_discipline)
+                            clear_read_caches()
                             st.success('Schedule saved successfully.')
                             st.rerun()
                         except ValueError as exc:
@@ -658,7 +688,7 @@ else:
                             
     elif page == 'Upcoming Candidate Schedules':
         st.subheader('Upcoming Candidate Schedules')
-        candidates = db.candidate_accounts(user['id'])
+        candidates = cached_candidate_accounts(user['id'])
         
         today = date.today()
         upcoming = [c for c in candidates if c['test_date'] and c['test_date'] >= today]
@@ -712,6 +742,7 @@ else:
                             if st.button('Remove Schedule', key=f"remove_schedule_{candidate['id']}"):
                                 try:
                                     db.remove_candidate_schedule(user['id'], candidate['id'])
+                                    clear_read_caches()
                                     st.success('Schedule removed. Candidate account was kept.')
                                     st.rerun()
                                 except ValueError as exc:
@@ -735,13 +766,14 @@ else:
                     except (EmailDeliveryError, OSError, ValueError) as exc:
                         st.error(str(exc))
         st.divider()
-        projects = db.get_projects(user['id'])
+        projects = cached_projects(user['id'])
         
         with st.form('add_project_form'):
             new_project = st.text_input('Project entry input box')
             if st.form_submit_button('Add Project'):
                 try:
                     db.add_project(user['id'], new_project)
+                    clear_read_caches()
                     st.success('Project added.')
                     st.rerun()
                 except ValueError as exc:
@@ -755,12 +787,13 @@ else:
             with col2:
                 if st.button('Delete', key=f'del_proj_{p}'):
                     db.delete_project(user['id'], p)
+                    clear_read_caches()
                     st.rerun()
         
         st.divider()
     elif page == 'Accounts':
         st.subheader('Accounts')
-        projects = db.get_projects(user['id'])
+        projects = cached_projects(user['id'])
         st.subheader('Create account')
         account_form('staff', actor=user['id'], allowed_roles=['Reviewer', 'Admin'])
         
@@ -830,6 +863,7 @@ else:
                     if st.button('Delete Account', key=f"del_staff_{staff['id']}", type='primary'):
                         try:
                             db.delete_user(user['id'], staff['id'])
+                            clear_read_caches()
                             st.success('Staff account deleted.')
                             st.rerun()
                         except ValueError as exc:
@@ -967,44 +1001,56 @@ else:
         
         if not filtered_questions:
             st.info('No questions match the selected filters.')
-        
-        for q in filtered_questions:
-            with st.expander(f"#{q['id']} · {q['discipline']} · {type_options.get(q['q_type'], q['q_type'])} · {'Active' if q['active'] else 'Archived'}"):
-                st.write(q['question_text'])
-                if q['q_type'] == 'mcq':
-                    options_list = json.loads(q['options']) if q.get('options') else []
-                    for opt in options_list:
-                        if opt == q['correct_answer']:
-                            st.markdown(f"- ✅ **{opt}**")
-                        else:
-                            st.markdown(f"- ⬜ {opt}")
-                else:
-                    st.write(q['rubric'])
-                if q.get('is_used'):
-                    col_btn1, col_btn2 = st.columns([1, 4])
-                    with col_btn1:
-                        if st.button('Archive' if q['active'] else 'Restore', key=f"active_{q['id']}"):
-                            db.set_active(user['id'], q['id'], not q['active'])
-                            clear_read_caches()
-                            st.rerun()
-                    with col_btn2:
-                        if not q['active']:
-                            if st.button('Delete entirely (Removes candidate records)', key=f"hard_delete_{q['id']}", type='primary'):
-                                try:
-                                    db.delete_question(user['id'], q['id'], force=True)
-                                    st.rerun()
-                                except ValueError as exc:
-                                    st.error(str(exc))
-                else:
-                    if st.button('Delete', key=f"delete_{q['id']}"):
-                        try:
-                            db.delete_question(user['id'], q['id'])
-                            st.rerun()
-                        except ValueError as exc:
-                            st.error(str(exc))
+        else:
+            page_size = 20
+            total_pages = max(1, (len(filtered_questions) + page_size - 1) // page_size)
+            if total_pages > 1:
+                p_col1, p_col2 = st.columns([1, 3])
+                with p_col1:
+                    page_num = st.number_input('Page', min_value=1, max_value=total_pages, value=1, step=1, key='qb_page')
+                with p_col2:
+                    st.caption(f"Showing questions {(page_num-1)*page_size + 1} to {min(page_num*page_size, len(filtered_questions))} of {len(filtered_questions)}")
+                page_questions = filtered_questions[(page_num - 1) * page_size : page_num * page_size]
+            else:
+                page_questions = filtered_questions
+            
+            for q in page_questions:
+                with st.expander(f"#{q['id']} · {q['discipline']} · {type_options.get(q['q_type'], q['q_type'])} · {'Active' if q['active'] else 'Archived'}"):
+                    st.write(q['question_text'])
+                    if q['q_type'] == 'mcq':
+                        options_list = json.loads(q['options']) if q.get('options') else []
+                        for opt in options_list:
+                            if opt == q['correct_answer']:
+                                st.markdown(f"- ✅ **{opt}**")
+                            else:
+                                st.markdown(f"- ⬜ {opt}")
+                    else:
+                        st.write(q['rubric'])
+                    if q.get('is_used'):
+                        col_btn1, col_btn2 = st.columns([1, 4])
+                        with col_btn1:
+                            if st.button('Archive' if q['active'] else 'Restore', key=f"active_{q['id']}"):
+                                db.set_active(user['id'], q['id'], not q['active'])
+                                clear_read_caches()
+                                st.rerun()
+                        with col_btn2:
+                            if not q['active']:
+                                if st.button('Delete entirely (Removes candidate records)', key=f"hard_delete_{q['id']}", type='primary'):
+                                    try:
+                                        db.delete_question(user['id'], q['id'], force=True)
+                                        st.rerun()
+                                    except ValueError as exc:
+                                        st.error(str(exc))
+                    else:
+                        if st.button('Delete', key=f"delete_{q['id']}"):
+                            try:
+                                db.delete_question(user['id'], q['id'])
+                                st.rerun()
+                            except ValueError as exc:
+                                st.error(str(exc))
     else:
         st.subheader('Assessment review')
-        rows = db.submissions(user['id'])
+        rows = cached_submissions(user['id'])
         left, right = st.columns(2)
         left.metric('Pending review', sum(r['status'] == 'Pending Review' for r in rows))
         right.metric('Graded', sum(r['status'] == 'Graded' for r in rows))
@@ -1031,7 +1077,7 @@ else:
         sid = st.selectbox('Assessment', [r['id'] for r in rows], format_func=lambda value: next(f"#{r['id']} · {r['candidate_name']} · {r['discipline']}" for r in rows if r['id'] == value))
         sub = next(r for r in rows if r['id'] == sid)
         try:
-            result_pdf = candidate_result_pdf(sub)
+            result_pdf = cached_candidate_result_pdf(json.dumps(sub, default=str))
             action_col1, action_col2 = st.columns(2)
             with action_col1:
                 st.download_button('Download Candidate Result', result_pdf, 'candidate-result.pdf', 'application/pdf', use_container_width=True)
@@ -1087,6 +1133,7 @@ else:
             if st.form_submit_button('Finalize grade', disabled=sub['status'] == 'Graded', type='primary'):
                 try:
                     db.grade(user['id'], sid, scores, comments, observed_responses)
+                    clear_read_caches()
                     st.rerun()
                 except ValueError as exc:
                     st.error(str(exc))

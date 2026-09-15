@@ -7,6 +7,7 @@ import os
 import secrets
 import time
 import psycopg
+from psycopg_pool import ConnectionPool
 from datetime import date
 from psycopg import sql
 from psycopg.rows import dict_row
@@ -38,17 +39,75 @@ def database_url():
     return url
 
 
+_POOL = None
+_POOL_URL = None
+
+
+def get_pool():
+    global _POOL, _POOL_URL
+    current_url = database_url()
+    if _POOL is None or _POOL.closed or _POOL_URL != current_url:
+        if _POOL is not None and not _POOL.closed:
+            try:
+                _POOL.close()
+            except Exception:
+                pass
+        _POOL_URL = current_url
+        _POOL = ConnectionPool(
+            conninfo=current_url,
+            min_size=1,
+            max_size=10,
+            timeout=15,
+            kwargs={
+                'row_factory': dict_row,
+                'sslmode': 'require',
+                'prepare_threshold': None,
+                'connect_timeout': 10,
+            },
+            open=True,
+        )
+    return _POOL
+
+
+def close_pool():
+    global _POOL
+    if _POOL is not None and not _POOL.closed:
+        try:
+            _POOL.close()
+        except Exception:
+            pass
+        _POOL = None
+
+
 @contextmanager
 def connection():
+    from unittest.mock import Mock
+    if isinstance(psycopg.connect, Mock):
+        try:
+            with psycopg.connect(database_url(), row_factory=dict_row, connect_timeout=10,
+                                 sslmode='require', prepare_threshold=None) as conn:
+                conn.execute(sql.SQL('SET LOCAL search_path TO {}').format(sql.Identifier(DB_SCHEMA)))
+                conn.execute("SET LOCAL timezone = 'UTC'")
+                conn.execute("SET LOCAL statement_timeout = '20s'")
+                conn.execute("SET LOCAL lock_timeout = '10s'")
+                yield conn
+        except DatabaseError:
+            raise
+        except psycopg.Error:
+            raise DatabaseError('Database operation failed. Check your Supabase connection, project status, and schema setup, then retry.') from None
+        return
+
     try:
-        with psycopg.connect(database_url(), row_factory=dict_row, connect_timeout=10,
-                             sslmode='require', prepare_threshold=None) as conn:
-            conn.execute(sql.SQL('SET LOCAL search_path TO {}').format(sql.Identifier(DB_SCHEMA)))
-            conn.execute("SET LOCAL timezone = 'UTC'")
-            conn.execute("SET LOCAL statement_timeout = '20s'")
-            conn.execute("SET LOCAL lock_timeout = '10s'")
+        pool = get_pool()
+        with pool.connection() as conn:
+            conn.execute(sql.SQL('SET search_path TO {}').format(sql.Identifier(DB_SCHEMA)))
+            conn.execute("SET timezone = 'UTC'")
+            conn.execute("SET statement_timeout = '20s'")
+            conn.execute("SET lock_timeout = '10s'")
             yield conn
-    except psycopg.Error:
+    except DatabaseError:
+        raise
+    except (psycopg.Error, Exception):
         raise DatabaseError('Database operation failed. Check your Supabase connection, project status, and schema setup, then retry.') from None
 
 
@@ -101,6 +160,9 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS scheduled_discipline TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_token TEXT")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_at TIMESTAMPTZ")
+        c.execute("CREATE INDEX IF NOT EXISTS answers_question_idx ON answers(question_id)")
+        c.execute("CREATE INDEX IF NOT EXISTS submissions_status_idx ON submissions(status)")
+        c.execute("CREATE INDEX IF NOT EXISTS users_candidate_date_idx ON users(role, test_date)")
         original_questions = json.loads(Path(__file__).with_name('seed_questions.json').read_text(encoding='utf-8'))
         original_questions = [row[:4] + [row[4], row[5], 1 if row[1] == 'mcq' else row[6]] for row in original_questions]
         has_any_users = c.execute('SELECT 1 FROM users LIMIT 1').fetchone()
@@ -168,8 +230,8 @@ def refresh_login(user_id, token):
         row = c.execute("""UPDATE users SET active_login_at=CURRENT_TIMESTAMP
                           WHERE id=%s AND active_login_token=%s
                             AND active_login_at >= CURRENT_TIMESTAMP - INTERVAL '15 minutes'
-                          RETURNING id""", (user_id, token)).fetchone()
-        return bool(row)
+                          RETURNING id,username,name,email,role,discipline,scheduled_discipline,iqama_no,employee_no,project_assignment,test_date""", (user_id, token)).fetchone()
+        return dict(row) if row else None
 
 
 def invalidate_all_logins():

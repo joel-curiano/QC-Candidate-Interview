@@ -69,8 +69,11 @@ CREATE TABLE IF NOT EXISTS qc_portal.answers (
     UNIQUE (submission_id, question_id)
 );
 CREATE INDEX IF NOT EXISTS submissions_user_idx ON qc_portal.submissions(user_id);
+CREATE INDEX IF NOT EXISTS submissions_status_idx ON qc_portal.submissions(status);
 CREATE INDEX IF NOT EXISTS answers_submission_idx ON qc_portal.answers(submission_id);
+CREATE INDEX IF NOT EXISTS answers_question_idx ON qc_portal.answers(question_id);
 CREATE INDEX IF NOT EXISTS questions_discipline_idx ON qc_portal.questions(discipline);
+CREATE INDEX IF NOT EXISTS users_candidate_date_idx ON qc_portal.users(role, test_date);
 
 -- No client API policies: only the trusted server's database owner connection
 -- accesses these tables. App-level roles are checked in database.py.
