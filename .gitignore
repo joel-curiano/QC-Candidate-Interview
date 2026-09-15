@@ -11,3 +11,4 @@ __pycache__/
 *.sqlite3
 # Local user presentation outputs and screenshots
 local-presentations/
+.agents/
