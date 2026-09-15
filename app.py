@@ -236,10 +236,13 @@ def candidate_result_pdf(sub):
     styles = getSampleStyleSheet()
     styles.add(ParagraphStyle(name='CATTitle', parent=styles['Title'], textColor=colors.HexColor('#B51F2D'), fontSize=20, leading=24, spaceAfter=8))
     styles.add(ParagraphStyle(name='CATBody', parent=styles['BodyText'], fontSize=10, leading=14, spaceAfter=6))
-    story = [Image('img/CAT Icon White Background.png', width=28*mm, height=28*mm), Paragraph('Candidate Assessment Result', styles['CATTitle']),
-             Paragraph('<b>QUALITY DEPARTMENT | C.A.T. INTERNATIONAL L.L.C.</b><br/>C.A.T. Main Camp, Ash Shulah, Dammam 34266, Saudi Arabia', styles['CATBody']),
+    styles.add(ParagraphStyle(name='CATExplainHeading', parent=styles['BodyText'], textColor=colors.HexColor('#142735'), fontSize=10, leading=14, spaceBefore=4, spaceAfter=3))
+    styles.add(ParagraphStyle(name='CATCompany', parent=styles['CATBody'], alignment=1, textColor=colors.HexColor('#4B5563')))
+    story = [Image('img/C.A.T. Logo - Horizontal.jpg', width=72*mm, height=24*mm),
+             Paragraph('<b>QUALITY DEPARTMENT | C.A.T. INTERNATIONAL L.L.C.</b><br/>C.A.T. Main Camp, Ash Shulah, Dammam 34266, Saudi Arabia', styles['CATCompany']),
+             Paragraph('Candidate Assessment Result', styles['CATTitle']),
              Spacer(1, 4*mm)]
-    story.append(Paragraph(f"<b>Candidate:</b> {sub.get('candidate_name', '')}<br/><b>Discipline:</b> {sub.get('discipline', '')}<br/><b>Exam date:</b> {format_result_datetime(sub.get('exam_date', ''))}", styles['CATBody']))
+    story.append(Paragraph(f"<b>Candidate:</b> {sub.get('candidate_name', '')}<br/><b>Iqama No:</b> {sub.get('iqama_no', '')}<br/><b>Discipline:</b> {sub.get('discipline', '')}<br/><b>Exam date:</b> {format_result_datetime(sub.get('exam_date', ''))}", styles['CATBody']))
     if sub['status'] != 'Graded':
         story.append(Paragraph('<b>Overall result:</b> Pending Review', styles['CATBody']))
     else:
@@ -249,7 +252,7 @@ def candidate_result_pdf(sub):
             rows.append([label, f'{pct:.1f}%', 'PASS' if pct >= 50 else 'FAIL'])
         overall_pct = 100 * (sub['mcq_score'] + sub['essay_score'] + sub.get('oral_score', 0) + sub.get('practical_score', 0)) / sub['max_possible_points'] if sub['max_possible_points'] else 0
         story += [Paragraph('Results by question type', styles['Heading2']), Table(rows, colWidths=[78*mm, 38*mm, 32*mm], style=TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#B51F2D')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('GRID',(0,0),(-1,-1),0.4,colors.HexColor('#D9DCDE')),('PADDING',(0,0),(-1,-1),7)])), Spacer(1, 5*mm), Paragraph(f'<b>Overall result:</b> {overall_pct:.1f}% - {db.result(sub)}', styles['CATBody'])]
-    story += [Spacer(1, 6*mm), Paragraph('<b>How pass/fail is determined</b>', styles['Heading2']), Paragraph('The candidate must achieve at least 50% in every question type and at least 70% overall. The overall percentage is calculated from the points earned divided by the total possible points. A result remains Pending Review until the Reviewer scores all Essay, Oral Test, and Practical Test responses.', styles['CATBody'])]
+    story += [Spacer(1, 6*mm), Paragraph('<b>How pass/fail is determined</b>', styles['CATExplainHeading']), Paragraph('The candidate must achieve at least 50% in every question type and at least 70% overall. The overall percentage is calculated from the points earned divided by the total possible points. A result remains Pending Review until the Reviewer scores all Essay, Oral Test, and Practical Test responses.', styles['CATExplainHeading'])]
     doc.build(story)
     return output.getvalue()
 
@@ -315,14 +318,14 @@ if hasattr(st, 'dialog'):
             st.error(str(exc))
 
 st.image('img/C.A.T. Logo - Horizontal.jpg', width=300)
-st.title('Competency Technical Assessment (CTA) Portal')
-st.caption('Technical assessments · Multiple disciplines · Evidence-based grading')
 st.markdown('''
 <div class="company-details">
     <strong>QUALITY DEPARTMENT | C.A.T. INTERNATIONAL L.L.C.</strong><br>
     C.A.T. Main Camp, Ash Shulah, Dammam 34266, Saudi Arabia
 </div>
 ''', unsafe_allow_html=True)
+st.title('Competency Technical Assessment (CTA) Portal')
+st.caption('Technical assessments · Multiple disciplines · Evidence-based grading')
 if not db.has_users():
     st.subheader('Initial administrator setup')
     st.info('Create the first administrator on a trusted local connection before exposing this app to the network.')
