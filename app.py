@@ -82,6 +82,7 @@ def countdown_timer(label, deadline, key):
 @st.cache_resource(show_spinner=False)
 def initialize_database():
     db.init_db()
+    db.invalidate_all_logins()
     return True
 
 
@@ -366,7 +367,10 @@ if not login_token:
     st.session_state.clear()
     st.error('Your login session is invalid. Please sign in again.')
     st.stop()
-db.refresh_login(user['id'], login_token)
+if not db.refresh_login(user['id'], login_token):
+    st.session_state.clear()
+    st.error('You were signed out after 10 minutes of inactivity. Please sign in again.')
+    st.stop()
 with st.spinner('Refreshing your session...'):
     with db.connection() as conn:
         user = db.require(conn, user['id'], ('Candidate', 'Reviewer', 'Admin'))
