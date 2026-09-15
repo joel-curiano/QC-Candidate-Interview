@@ -29,7 +29,7 @@ st.markdown(
         position: fixed;
         top: 72px;
         right: 24px;
-        width: 300px;
+        width: 380px;
         z-index: 9999;
         background: #ffffff;
         border: 2px solid #b51f2d;
@@ -78,8 +78,8 @@ def countdown_timer(label, deadline, key):
     """Display a client-side countdown while keeping the deadline server-side."""
     remaining = max(0, int(deadline - time.time()))
     components.html(f"""
-        <div id="timer-{key}" style="font:600 18px sans-serif;color:#b51f2d;padding:8px 0">
-            {label}: <span id="value-{key}"></span>
+        <div id="timer-{key}" style="font:600 16px/1.25 sans-serif;color:#b51f2d;padding:8px 0;white-space:normal">
+            {label}: <strong id="value-{key}" style="font-size:22px;white-space:nowrap"></strong>
         </div>
         <script>
         (() => {{
@@ -96,7 +96,7 @@ def countdown_timer(label, deadline, key):
           setInterval(render, 1000);
         }})();
         </script>
-    """, height=48)
+    """, height=64)
 
 
 @st.cache_resource(show_spinner=False)
