@@ -10,7 +10,7 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 import database as db
-from email_service import EmailDeliveryError, send_candidate_invitation, send_reviewer_credentials, send_test_email
+from email_service import EmailDeliveryError, send_candidate_invitation, send_candidate_result, send_reviewer_credentials, send_test_email
 from question_import import QuestionImportError, parse_questions, template_bytes
 from result_export import excel_bytes
 
@@ -23,6 +23,8 @@ st.markdown(
     }
     .cat-theme-icon { display: block; width: 128px; height: 128px; object-fit: contain; margin: 0 0 18px 0; }
     .cat-theme-icon.dark { display: none; }
+    .company-details { color: #4B5563; font-size: 0.82rem; line-height: 1.45; margin: 0.35rem 0 1.2rem 0; }
+    .company-details strong { color: #b51f2d; }
     @media (prefers-color-scheme: dark) {
         .cat-theme-icon.light { display: none; }
         .cat-theme-icon.dark { display: block; }
@@ -197,16 +199,59 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
 
 
 def result_table(rows):
-    return [{'Reference': r['id'], 'Candidate': r['candidate_name'], 'Job Title': r.get('designation', ''),
+    return [{'Candidate': r['candidate_name'], 'Job Title': r.get('designation', ''),
              'Employee No': r.get('employee_no', ''),
              'Discipline': r['discipline'], 'Project Assignment': r.get('project_assignment', ''),
-             'Exam Date': r.get('exam_date', ''), 'Status': r['status'],
+             'Exam Date': format_result_datetime(r.get('exam_date', '')), 'Status': r['status'],
              'Multiple Choice Grade': db.category_result(r, 'mcq'),
              'Essay Grade': db.category_result(r, 'essay'),
              'Oral Grade': db.category_result(r, 'oral'),
              'Practical Grade': db.category_result(r, 'practical'),
-             'Reviewer Comments': r.get('reviewer_comments', ''), 'Graded (UTC)': r.get('graded_at', ''),
+             'Reviewer Comments': r.get('reviewer_comments', ''), 'Graded (UTC)': format_result_datetime(r.get('graded_at', '')),
              'Overall Result': db.result(r)} for r in rows]
+
+
+def format_result_datetime(value):
+    if not value:
+        return ''
+    text = str(value).replace('T', ' ').replace('Z', '')
+    if '.' in text:
+        text = text.split('.', 1)[0]
+    if '+' in text[10:]:
+        text = text.split('+', 1)[0]
+    if len(text) == 10:
+        return f'{text} 00:00'
+    return text[:16]
+
+
+def candidate_result_pdf(sub):
+    """Create a branded PDF result report in memory."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+    output = io.BytesIO()
+    doc = SimpleDocTemplate(output, pagesize=A4, rightMargin=18*mm, leftMargin=18*mm, topMargin=16*mm, bottomMargin=16*mm)
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name='CATTitle', parent=styles['Title'], textColor=colors.HexColor('#B51F2D'), fontSize=20, leading=24, spaceAfter=8))
+    styles.add(ParagraphStyle(name='CATBody', parent=styles['BodyText'], fontSize=10, leading=14, spaceAfter=6))
+    story = [Image('img/CAT Icon White Background.png', width=28*mm, height=28*mm), Paragraph('Candidate Assessment Result', styles['CATTitle']),
+             Paragraph('<b>QUALITY DEPARTMENT | C.A.T. INTERNATIONAL L.L.C.</b><br/>C.A.T. Main Camp, Ash Shulah, Dammam 34266, Saudi Arabia', styles['CATBody']),
+             Spacer(1, 4*mm)]
+    story.append(Paragraph(f"<b>Candidate:</b> {sub.get('candidate_name', '')}<br/><b>Discipline:</b> {sub.get('discipline', '')}<br/><b>Exam date:</b> {format_result_datetime(sub.get('exam_date', ''))}", styles['CATBody']))
+    if sub['status'] != 'Graded':
+        story.append(Paragraph('<b>Overall result:</b> Pending Review', styles['CATBody']))
+    else:
+        rows = [['Question type', 'Percentage', 'Status']]
+        for kind, label in (('mcq', 'Multiple Choice'), ('essay', 'Essay'), ('oral', 'Oral Test'), ('practical', 'Practical Test')):
+            pct = db.category_percentage(sub, kind)
+            rows.append([label, f'{pct:.1f}%', 'PASS' if pct >= 50 else 'FAIL'])
+        overall_pct = 100 * (sub['mcq_score'] + sub['essay_score'] + sub.get('oral_score', 0) + sub.get('practical_score', 0)) / sub['max_possible_points'] if sub['max_possible_points'] else 0
+        story += [Paragraph('Results by question type', styles['Heading2']), Table(rows, colWidths=[78*mm, 38*mm, 32*mm], style=TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#B51F2D')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('GRID',(0,0),(-1,-1),0.4,colors.HexColor('#D9DCDE')),('PADDING',(0,0),(-1,-1),7)])), Spacer(1, 5*mm), Paragraph(f'<b>Overall result:</b> {overall_pct:.1f}% - {db.result(sub)}', styles['CATBody'])]
+    story += [Spacer(1, 6*mm), Paragraph('<b>How pass/fail is determined</b>', styles['Heading2']), Paragraph('The candidate must achieve at least 50% in every question type and at least 70% overall. The overall percentage is calculated from the points earned divided by the total possible points. A result remains Pending Review until the Reviewer scores all Essay, Oral Test, and Practical Test responses.', styles['CATBody'])]
+    doc.build(story)
+    return output.getvalue()
 
 if hasattr(st, 'dialog'):
     @st.dialog('Email delivery status')
@@ -272,6 +317,12 @@ if hasattr(st, 'dialog'):
 st.image('img/C.A.T. Logo - Horizontal.jpg', width=300)
 st.title('Competency Technical Assessment (CTA) Portal')
 st.caption('Technical assessments · Multiple disciplines · Evidence-based grading')
+st.markdown('''
+<div class="company-details">
+    <strong>QUALITY DEPARTMENT | C.A.T. INTERNATIONAL L.L.C.</strong><br>
+    C.A.T. Main Camp, Ash Shulah, Dammam 34266, Saudi Arabia
+</div>
+''', unsafe_allow_html=True)
 if not db.has_users():
     st.subheader('Initial administrator setup')
     st.info('Create the first administrator on a trusted local connection before exposing this app to the network.')
@@ -933,17 +984,39 @@ else:
             st.info('No assessments match this view.')
             st.stop()
         table = result_table(rows)
-        st.dataframe(table, hide_index=True, use_container_width=True)
-        output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=table[0].keys())
-        writer.writeheader()
-        writer.writerows({k: "'" + v if isinstance(v, str) and v.lstrip().startswith(('=', '+', '-', '@')) else v for k, v in r.items()} for r in table)
-        st.download_button('Download Individual Test Result (CSV)', output.getvalue(), 'individual-test-result.csv', 'text/csv')
-        excel_data = excel_bytes([dict(row, result=db.result(row)) for row in rows])
-        st.download_button('Download CTA Record Log (Excel)', excel_data, 'CTA Record Log.xlsx',
-                   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        st.markdown('''
+        <style>
+        [data-testid="stExpander"] details summary p { font-size: 1rem; }
+        @media (max-width: 640px) {
+            [data-testid="stExpander"] details summary p { font-size: .92rem; }
+            [data-testid="stMarkdownContainer"] p { overflow-wrap: anywhere; }
+        }
+        </style>
+        ''', unsafe_allow_html=True)
+        for index, result_row in enumerate(table):
+            summary = f"{result_row['Candidate']} · {result_row['Discipline']} · {result_row['Status']}"
+            with st.expander(summary, expanded=False):
+                for label, value in result_row.items():
+                    st.markdown(f'**{label}:** {value if value != "" else "—"}')
         sid = st.selectbox('Assessment', [r['id'] for r in rows], format_func=lambda value: next(f"#{r['id']} · {r['candidate_name']} · {r['discipline']}" for r in rows if r['id'] == value))
         sub = next(r for r in rows if r['id'] == sid)
+        try:
+            result_pdf = candidate_result_pdf(sub)
+            action_col1, action_col2 = st.columns(2)
+            with action_col1:
+                st.download_button('Download Candidate Result', result_pdf, 'candidate-result.pdf', 'application/pdf', use_container_width=True)
+            with action_col2:
+                if st.button('Email Result to Candidate', type='primary', use_container_width=True):
+                    if not sub.get('email'):
+                        st.error('This candidate does not have an email address.')
+                    else:
+                        try:
+                            send_candidate_result(sub['email'], sub.get('candidate_name', 'Candidate'), result_pdf)
+                            st.success(f'Result emailed to {sub["email"]}.')
+                        except (EmailDeliveryError, OSError, ValueError) as exc:
+                            st.error(str(exc))
+        except (ImportError, OSError, ValueError) as exc:
+            st.error(f'Unable to create the candidate result PDF. Install the reportlab package and retry. Details: {exc}')
         answers = db.answer_details(user['id'], sid)
         questionnaire = st.expander('Questionnaire', expanded=sub['status'] != 'Graded')
         questionnaire.__enter__()

@@ -120,3 +120,21 @@ def send_test_email(email, name='Administrator'):
         'Regards,\nCompetency Technical Assessment (CTA)\n'
     )
     _deliver(message, host)
+
+
+def send_candidate_result(email, name, pdf_bytes):
+    """Email a generated candidate result PDF as an attachment."""
+    host, sender, app_url = _email_settings()
+    message = EmailMessage()
+    message['Subject'] = 'QC Candidate Assessment Result'
+    message['From'] = sender
+    message['To'] = email
+    message.set_content(
+        f'Dear {name},\n\n'
+        'Please find attached your Competency Technical Assessment (CTA) result. '
+        'The report includes your result by question type, overall result, and the pass/fail rules used by the portal.\n\n'
+        f'Assessment portal: {app_url}\n\n'
+        'Regards,\nQUALITY DEPARTMENT | C.A.T. INTERNATIONAL L.L.C.\n'
+    )
+    message.add_attachment(pdf_bytes, maintype='application', subtype='pdf', filename='candidate-result.pdf')
+    _deliver(message, host)
