@@ -1,10 +1,12 @@
 """Run with: streamlit run app.py"""
 import csv
+import base64
 import io
 import json
 import secrets
 import time
 from datetime import date
+from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 import database as db
@@ -12,17 +14,37 @@ from email_service import EmailDeliveryError, send_candidate_invitation, send_re
 from question_import import QuestionImportError, parse_questions, template_bytes
 from result_export import excel_bytes
 
-st.set_page_config(page_title='Competency Technical Assessment (CTA)', page_icon='img/C.A.T. Emblem.jpg', layout='centered')
-st.logo('img/C.A.T. Emblem.jpg')
+st.set_page_config(page_title='Competency Technical Assessment (CTA) Portal', page_icon='img/CAT Icon White Background.png', layout='centered')
+st.logo('img/CAT Icon White Background.png')
 st.markdown(
     '''<style>
     [data-testid="stSidebar"] {
         background-color: #d9dcde;
     }
+    .cat-theme-icon { display: block; width: 128px; height: 128px; object-fit: contain; margin: 0 0 18px 0; }
+    .cat-theme-icon.dark { display: none; }
+    @media (prefers-color-scheme: dark) {
+        .cat-theme-icon.light { display: none; }
+        .cat-theme-icon.dark { display: block; }
+    }
     [data-testid="stMarkdownContainer"] h3 {
         color: #b51f2d !important;
     }
     </style>''',
+    unsafe_allow_html=True,
+)
+
+
+def cat_icon_data_url(filename):
+    path = Path('img') / filename
+    encoded = base64.b64encode(path.read_bytes()).decode('ascii')
+    content_type = 'image/png' if path.suffix.lower() == '.png' else 'image/jpeg'
+    return f'data:{content_type};base64,{encoded}'
+
+
+st.markdown(
+    f'''<img class="cat-theme-icon light" alt="CAT icon" src="{cat_icon_data_url('CAT Icon White Background.png')}">
+    <img class="cat-theme-icon dark" alt="CAT icon" src="{cat_icon_data_url('CAT Icon Dark Background.png')}">''',
     unsafe_allow_html=True,
 )
 
@@ -55,6 +77,33 @@ def countdown_timer(label, deadline, key):
     """, height=48)
 
 
+@st.cache_resource(show_spinner=False)
+def initialize_database():
+    db.init_db()
+    return True
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_disciplines():
+    return db.disciplines()
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_questions(discipline=None, include_inactive=False):
+    return db.questions(discipline, include_inactive=include_inactive)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_assessment_settings(actor_id):
+    return db.assessment_settings(actor_id)
+
+
+def clear_read_caches():
+    cached_disciplines.clear()
+    cached_questions.clear()
+    cached_assessment_settings.clear()
+
+
 def question_options(question):
     """Return MCQ options regardless of whether the database driver decoded JSON."""
     raw_options = question.get('options')
@@ -66,8 +115,8 @@ def question_options(question):
 
 
 try:
-    with st.spinner('Loading Competency Technical Assessment (CTA)...'):
-        db.init_db()
+    with st.spinner('Loading Competency Technical Assessment (CTA) Portal...'):
+        initialize_database()
 except db.DatabaseError as exc:
     st.error(str(exc))
     st.stop()
@@ -181,6 +230,7 @@ if hasattr(st, 'dialog'):
             def import_progress(current, total):
                 progress_bar.progress(current / total if total > 0 else 1.0, text=f'Importing question {current} of {total}...')
             final_results = db.add_questions(uid, parsed_results, progress_callback=import_progress)
+            clear_read_caches()
             progress_bar.empty()
             success_count = sum(1 for r in final_results if r['success'])
             fail_count = len(final_results) - success_count
@@ -210,6 +260,7 @@ if hasattr(st, 'dialog'):
             progress_bar.progress(current / total if total > 0 else 1.0, text=f'Deleting question {current} of {total}...')
         try:
             db.wipe_archived_questions(uid, progress_callback=wipe_progress)
+            clear_read_caches()
             progress_bar.empty()
             st.success('Archived questions and their related candidate records have been deleted.')
             if st.button('Close'):
@@ -219,7 +270,7 @@ if hasattr(st, 'dialog'):
             st.error(str(exc))
 
 st.image('img/C.A.T. Logo - Horizontal.jpg', width=300)
-st.title('Competency Technical Assessment (CTA)')
+st.title('Competency Technical Assessment (CTA) Portal')
 st.caption('Technical assessments · Multiple disciplines · Evidence-based grading')
 if not db.has_users():
     st.subheader('Initial administrator setup')
@@ -274,11 +325,11 @@ if user['role'] == 'Candidate':
         if not discipline:
             st.info('No discipline is assigned to this candidate.')
             st.stop()
-        if discipline not in db.disciplines():
+        if discipline not in cached_disciplines():
             st.info('No assessments are currently available.')
             st.stop()
-        bank = db.questions(discipline)
-        settings = db.assessment_settings(user['id'])
+        bank = cached_questions(discipline)
+        settings = cached_assessment_settings(user['id'])
         mcq_bank = [q for q in bank if q['q_type'] == 'mcq']
         reviewer_pools = {kind: [q for q in bank if q['q_type'] == kind] for kind in ('essay', 'oral', 'practical')}
         if len(mcq_bank) < settings['mcq'] or any(len(reviewer_pools[kind]) < settings[kind] for kind in reviewer_pools):
@@ -437,7 +488,7 @@ else:
     if page == 'Assessment Settings':
         st.subheader('Assessment Settings')
         st.caption('Set how many questions of each type are included in each candidate assessment. Changes apply to new assessments.')
-        current = db.assessment_settings(user['id'])
+        current = cached_assessment_settings(user['id'])
         with st.form('assessment_settings'):
             counts = {kind: st.number_input(label, min_value=1, max_value=100, value=current[kind], step=1) for kind, label in {
                 'mcq': 'Multiple Choice Questions', 'essay': 'Essay Questions', 'oral': 'Oral Test Questions', 'practical': 'Practical Test Questions'
@@ -445,6 +496,7 @@ else:
             if st.form_submit_button('Save Assessment Settings', type='primary'):
                 try:
                     db.update_assessment_settings(user['id'], {kind: int(value) for kind, value in counts.items()})
+                    clear_read_caches()
                     st.success('Assessment Settings saved.')
                     st.rerun()
                 except ValueError as exc:
@@ -505,7 +557,7 @@ else:
                         value=current_test_date,
                         min_value=min(current_test_date, date.today()),
                     )
-                    disciplines = db.disciplines()
+                    disciplines = cached_disciplines()
                     scheduled_discipline = st.selectbox('Candidate Discipline', disciplines, index=(disciplines.index(candidate.get('scheduled_discipline') or candidate.get('discipline')) if (candidate.get('scheduled_discipline') or candidate.get('discipline')) in disciplines else None))
                     projects = db.get_projects(user['id'])
                     project_assignment = st.selectbox('Project Assignment', projects, index=(projects.index(candidate.get('project_assignment')) if candidate.get('project_assignment') in projects else None)) if projects else st.text_input('Project Assignment', value=candidate.get('project_assignment', ''))
@@ -707,6 +759,7 @@ else:
                 if st.button('Wipe Question Bank', type='primary'):
                     try:
                         db.wipe_questions(user['id'])
+                        clear_read_caches()
                         st.success('Question Bank wiped.')
                         st.rerun()
                     except ValueError as exc:
@@ -722,6 +775,7 @@ else:
                             progress_bar.progress(current / total if total > 0 else 1.0, text=f'Deleting question {current} of {total}...')
                         try:
                             db.wipe_archived_questions(user['id'], progress_callback=wipe_progress)
+                            clear_read_caches()
                             progress_bar.empty()
                             st.success('Archived questions and their related candidate records have been deleted.')
                             st.rerun()
@@ -743,6 +797,7 @@ else:
                         def import_progress(current, total):
                             progress_bar.progress(current / total if total > 0 else 1.0, text=f'Importing question {current} of {total}...')
                         final_results = db.add_questions(user['id'], parsed_results, progress_callback=import_progress)
+                        clear_read_caches()
                         progress_bar.empty()
                         success_count = sum(1 for r in final_results if r['success'])
                         fail_count = len(final_results) - success_count
@@ -768,7 +823,7 @@ else:
                 'oral': 'Oral Test', 'practical': 'Practical Test'
             }[value])
             with st.form('new_question'):
-                discipline = st.selectbox('Discipline', db.disciplines())
+                discipline = st.selectbox('Discipline', cached_disciplines())
                 prompt = st.text_area('Question')
                 options = st.text_area('Multiple Choice options (one per line)') if kind == 'mcq' else ''
                 correct = st.text_input('Correct answer (exact option text)') if kind == 'mcq' else ''
@@ -777,6 +832,7 @@ else:
                 if st.form_submit_button('Add question'):
                     try:
                         db.add_question(user['id'], discipline, kind, prompt, options.splitlines(), correct.strip(), rubric, points)
+                        clear_read_caches()
                         st.success('Question added.')
                     except ValueError as exc:
                         st.error(str(exc))
@@ -795,6 +851,7 @@ else:
                             progress_bar.progress(current / total if total > 0 else 1.0, text=f'Generating question {current} of {total}...')
                         try:
                             db.autogenerate_questions(user['id'], auto_discipline, auto_kind, int(auto_count), progress_callback=gen_progress)
+                            clear_read_caches()
                             progress_bar.empty()
                             st.success(f'{auto_count} placeholder questions generated.')
                             # Use a short delay or just let the user see the success message
@@ -805,7 +862,7 @@ else:
         st.subheader('Browse questions')
         
         show_archived = st.checkbox('Show archived questions', value=False)
-        all_questions = db.questions(include_inactive=show_archived)
+        all_questions = cached_questions(include_inactive=show_archived)
         all_disciplines = sorted(list(set(q['discipline'] for q in all_questions)))
         all_types = sorted(list(set(q['q_type'] for q in all_questions)))
         
@@ -843,6 +900,7 @@ else:
                     with col_btn1:
                         if st.button('Archive' if q['active'] else 'Restore', key=f"active_{q['id']}"):
                             db.set_active(user['id'], q['id'], not q['active'])
+                            clear_read_caches()
                             st.rerun()
                     with col_btn2:
                         if not q['active']:

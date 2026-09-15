@@ -88,7 +88,7 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMPTZ")
         c.execute("CREATE TABLE IF NOT EXISTS projects (name TEXT PRIMARY KEY)")
         c.execute("CREATE TABLE IF NOT EXISTS assessment_settings (question_type TEXT PRIMARY KEY, question_count INTEGER NOT NULL CHECK (question_count > 0))")
-        c.cursor().executemany("INSERT INTO assessment_settings(question_type, question_count) VALUES (%s,%s) ON CONFLICT (question_type) DO NOTHING", [('mcq', 20), ('essay', 5), ('oral', 5), ('practical', 5)])
+        c.cursor().executemany("INSERT INTO assessment_settings(question_type, question_count) VALUES (%s,%s) ON CONFLICT (question_type) DO NOTHING", [('mcq', 20), ('essay', 5), ('oral', 3), ('practical', 3)])
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_projects TEXT[] NOT NULL DEFAULT '{}'")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS discipline TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS iqama_no TEXT NOT NULL DEFAULT ''")
