@@ -57,7 +57,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-MCQ_TIME_LIMIT_SECONDS = 30 * 60
+MCQ_TIME_LIMIT_SECONDS = 40 * 60
 ESSAY_TIME_LIMIT_SECONDS = 6 * 60
 
 
@@ -465,7 +465,7 @@ if user['role'] == 'Candidate':
                         key=f"answer_{question['id']}" )
                 if st.form_submit_button('Continue to Essay Questions', type='primary'):
                     if time.time() > mcq_deadline:
-                        st.error('The 30-minute Multiple Choice time limit has expired.')
+                        st.error('The 40-minute Multiple Choice time limit has expired.')
                     elif any(not isinstance(answer, str) or not answer.strip() for answer in page_responses.values()):
                         st.error('Answer every Multiple Choice Question before continuing.')
                     else:
