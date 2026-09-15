@@ -35,7 +35,15 @@ st.markdown(
         border: 2px solid #b51f2d;
         border-radius: 10px;
         box-shadow: 0 4px 14px rgba(20, 39, 53, 0.22);
-        padding: 4px 12px;
+        padding: 6px 12px;
+        min-height: 82px;
+        overflow: visible;
+    }
+    [data-testid="stElementContainer"]:has(iframe[title="st.iframe"]) iframe {
+        width: 100% !important;
+        height: 82px !important;
+        min-height: 82px !important;
+        display: block;
     }
     @media (max-width: 640px) {
         [data-testid="stElementContainer"]:has(iframe[title="st.iframe"]) {
@@ -79,8 +87,9 @@ def countdown_timer(label, deadline, key):
     """Display a client-side countdown while keeping the deadline server-side."""
     remaining = max(0, int(deadline - time.time()))
     components.html(f"""
-        <div id="timer-{key}" style="font:600 16px/1.25 sans-serif;color:#b51f2d;padding:8px 0;white-space:normal">
-            {label}: <strong id="value-{key}" style="font-size:22px;white-space:nowrap"></strong>
+        <div id="timer-{key}" style="font-family:sans-serif;color:#b51f2d;padding:6px 0;text-align:center;min-height:70px;box-sizing:border-box">
+            <div style="font-size:14px;font-weight:600;line-height:18px;white-space:normal">{label}</div>
+            <div id="value-{key}" style="font-size:26px;font-weight:700;line-height:32px;white-space:nowrap"></div>
         </div>
         <script>
         (() => {{
@@ -97,7 +106,7 @@ def countdown_timer(label, deadline, key):
           setInterval(render, 1000);
         }})();
         </script>
-    """, height=64)
+    """, height=82)
 
 
 @st.cache_resource(show_spinner=False)
@@ -452,6 +461,7 @@ if user['role'] == 'Candidate':
         details = st.session_state.get('candidate_details')
         if not details:
             st.subheader('Candidate Details')
+            st.info('You have 20 minutes to answer all Multiple Choice Questions. The countdown begins when you press the Start Multiple Choice Questions button.')
             with st.form('candidate_details_form'):
                 st.text_input('Discipline', value=discipline, disabled=True, key='candidate_discipline_display')
                 designation = st.text_input('Job Title (Inspector, Supervisor, Technician...)', key='candidate_job_title')
@@ -503,6 +513,7 @@ if user['role'] == 'Candidate':
                     page_responses[question['id']] = st.radio(
                         f"{number}. {question['question_text']}", st.session_state.assessment_mcq_options[question['id']], index=None,
                         key=f"answer_{question['id']}" )
+                st.info('You have six minutes for each Essay question. The countdown begins when you press the Continue to Essay Questions button.')
                 if st.form_submit_button('Continue to Essay Questions', type='primary'):
                     if time.time() > mcq_deadline:
                         st.error('The 40-minute Multiple Choice time limit has expired.')
