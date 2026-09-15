@@ -87,8 +87,10 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS test_date DATE")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMPTZ")
         c.execute("CREATE TABLE IF NOT EXISTS projects (name TEXT PRIMARY KEY)")
-        c.execute("CREATE TABLE IF NOT EXISTS assessment_settings (question_type TEXT PRIMARY KEY, question_count INTEGER NOT NULL CHECK (question_count > 0))")
-        c.cursor().executemany("INSERT INTO assessment_settings(question_type, question_count) VALUES (%s,%s) ON CONFLICT (question_type) DO NOTHING", [('mcq', 20), ('essay', 5), ('oral', 3), ('practical', 3)])
+        c.execute("CREATE TABLE IF NOT EXISTS assessment_settings (question_type TEXT PRIMARY KEY, question_count INTEGER NOT NULL CHECK (question_count > 0), max_points DOUBLE PRECISION NOT NULL DEFAULT 1 CHECK (max_points > 0))")
+        c.execute("ALTER TABLE assessment_settings ADD COLUMN IF NOT EXISTS max_points DOUBLE PRECISION NOT NULL DEFAULT 1")
+        c.execute("UPDATE assessment_settings SET max_points=10 WHERE question_type IN ('essay', 'oral', 'practical') AND max_points=1")
+        c.cursor().executemany("INSERT INTO assessment_settings(question_type, question_count, max_points) VALUES (%s,%s,%s) ON CONFLICT (question_type) DO NOTHING", [('mcq', 20, 1), ('essay', 5, 10), ('oral', 3, 10), ('practical', 3, 10)])
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_projects TEXT[] NOT NULL DEFAULT '{}'")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS discipline TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS iqama_no TEXT NOT NULL DEFAULT ''")
@@ -264,14 +266,24 @@ def get_projects(actor):
 def assessment_settings(actor):
     with connection() as c:
         require(c, actor, ('Admin', 'Reviewer', 'Candidate'))
-        return {row['question_type']: row['question_count'] for row in c.execute('SELECT question_type, question_count FROM assessment_settings')}
+        settings = {}
+        for row in c.execute('SELECT question_type, question_count, max_points FROM assessment_settings'):
+            settings[row['question_type']] = row['question_count']
+            settings[f"{row['question_type']}_points"] = row['max_points']
+        return settings
 
 def update_assessment_settings(actor, settings):
     with connection() as c:
         require(c, actor, ('Admin', 'Reviewer'))
-        if set(settings) != {'mcq', 'essay', 'oral', 'practical'} or any(not isinstance(v, int) or not 1 <= v <= 100 for v in settings.values()):
+        kinds = {'mcq', 'essay', 'oral', 'practical'}
+        expected = kinds | {f'{kind}_points' for kind in kinds}
+        if set(settings) != expected:
+            raise ValueError('Assessment settings are incomplete.')
+        if any(not isinstance(settings[kind], int) or not 1 <= settings[kind] <= 100 for kind in kinds):
             raise ValueError('Each question count must be a whole number from 1 to 100.')
-        c.cursor().executemany('UPDATE assessment_settings SET question_count=%s WHERE question_type=%s', [(v, k) for k, v in settings.items()])
+        if any(not isinstance(settings[f'{kind}_points'], (int, float)) or not 1 <= settings[f'{kind}_points'] <= 10 for kind in kinds):
+            raise ValueError('Each point rubric must be between 1 and 10 points.')
+        c.cursor().executemany('UPDATE assessment_settings SET question_count=%s, max_points=%s WHERE question_type=%s', [(settings[kind], settings[f'{kind}_points'], kind) for kind in kinds])
 
 def add_project(actor, name):
     name = str(name).strip()
@@ -509,7 +521,7 @@ def wipe_archived_questions(actor, progress_callback=None):
                 progress_callback(i + 1, total)
             delete_question(actor, q['id'], force=True)
 
-def submit(actor, discipline, responses, token, candidate_details=None, question_ids=None):
+def submit(actor, discipline, responses, token, candidate_details=None, question_ids=None, point_settings=None):
     if not isinstance(token, str) or not token.strip():
         raise ValueError('A submission reference is required.')
     with connection() as c:
@@ -526,6 +538,8 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
             if len(question_ids) != len(set(question_ids)):
                 raise ValueError('The assessment contains duplicate questions.')
             qs = c.execute('SELECT * FROM questions WHERE discipline=%s AND active=1 AND id=ANY(%s) ORDER BY id FOR SHARE', (discipline, list(question_ids))).fetchall()
+        if point_settings:
+            qs = [dict(q, max_points=(1 if q['q_type'] == 'mcq' else point_settings.get(q['q_type'], q['max_points']))) for q in qs]
         candidate_question_ids = {q['id'] for q in qs if q['q_type'] not in ('oral', 'practical')}
         if not qs or set(responses) != candidate_question_ids:
             raise ValueError('The question set changed. Reload the assessment before submitting.')

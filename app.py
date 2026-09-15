@@ -422,7 +422,8 @@ if user['role'] == 'Candidate':
                             db.submit(
                                 user['id'], discipline, responses, st.session_state.attempt_token,
                                 st.session_state.candidate_details,
-                                st.session_state.assessment_mcq_ids + st.session_state.assessment_essay_ids + st.session_state.assessment_reviewer_ids)
+                                st.session_state.assessment_mcq_ids + st.session_state.assessment_essay_ids + st.session_state.assessment_reviewer_ids,
+                                point_settings={kind: settings[f'{kind}_points'] for kind in ('mcq', 'essay', 'oral', 'practical')})
                             db.release_login(user['id'], st.session_state.login_token)
                             st.session_state.clear()
                             st.session_state.assessment_submitted = True
@@ -487,15 +488,18 @@ else:
         st.rerun()
     if page == 'Assessment Settings':
         st.subheader('Assessment Settings')
-        st.caption('Set how many questions of each type are included in each candidate assessment. Changes apply to new assessments.')
+        st.caption('Set question counts and the maximum points awarded per question type. Changes apply to new assessments.')
         current = cached_assessment_settings(user['id'])
         with st.form('assessment_settings'):
             counts = {kind: st.number_input(label, min_value=1, max_value=100, value=current[kind], step=1) for kind, label in {
                 'mcq': 'Multiple Choice Questions', 'essay': 'Essay Questions', 'oral': 'Oral Test Questions', 'practical': 'Practical Test Questions'
             }.items()}
+            points = {kind: st.number_input(f'{label} maximum points per question', min_value=1.0, max_value=10.0, value=float(current[f'{kind}_points']), step=1.0) for kind, label in {
+                'mcq': 'Multiple Choice', 'essay': 'Essay', 'oral': 'Oral Test', 'practical': 'Practical Test'
+            }.items()}
             if st.form_submit_button('Save Assessment Settings', type='primary'):
                 try:
-                    db.update_assessment_settings(user['id'], {kind: int(value) for kind, value in counts.items()})
+                    db.update_assessment_settings(user['id'], {**{kind: int(value) for kind, value in counts.items()}, **{f'{kind}_points': float(value) for kind, value in points.items()}})
                     clear_read_caches()
                     st.success('Assessment Settings saved.')
                     st.rerun()
