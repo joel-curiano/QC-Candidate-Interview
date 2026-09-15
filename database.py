@@ -531,7 +531,7 @@ def wipe_archived_questions(actor, progress_callback=None):
                 progress_callback(i + 1, total)
             delete_question(actor, q['id'], force=True)
 
-def submit(actor, discipline, responses, token, candidate_details=None, question_ids=None, point_settings=None):
+def submit(actor, discipline, responses, token, candidate_details=None, question_ids=None, point_settings=None, expected_counts=None):
     if not isinstance(token, str) or not token.strip():
         raise ValueError('A submission reference is required.')
     with connection() as c:
@@ -554,10 +554,10 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         if not qs or set(responses) != candidate_question_ids:
             raise ValueError('The question set changed. Reload the assessment before submitting.')
         if question_ids is not None:
-            settings = assessment_settings(actor)
-            counts = {kind: sum(q['q_type'] == kind for q in qs) for kind in settings}
-            if counts != settings:
-                raise ValueError('The assessment question counts do not match the current Assessment Settings.')
+            settings = expected_counts
+            counts = {kind: sum(q['q_type'] == kind for q in qs) for kind in ('mcq', 'essay', 'oral', 'practical')}
+            if settings is not None and counts != settings:
+                raise ValueError('The assessment question counts do not match the settings used when this assessment started.')
         for q in qs:
             answer = responses.get(q['id'], '')
             if q['q_type'] in ('oral', 'practical'):

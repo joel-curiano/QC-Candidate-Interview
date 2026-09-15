@@ -12,3 +12,4 @@ __pycache__/
 # Local user presentation outputs and screenshots
 local-presentations/
 .agents/
+permissions.md

@@ -25,6 +25,13 @@ st.markdown(
     .cat-theme-icon.dark { display: none; }
     .company-details { color: #4B5563; font-size: 0.82rem; line-height: 1.45; margin: 0.35rem 0 1.2rem 0; }
     .company-details strong { color: #b51f2d; }
+    [data-testid="stElementContainer"]:has(iframe[title="st.iframe"]) {
+        position: sticky;
+        top: 0;
+        z-index: 999;
+        background: #f8fafc;
+        padding: 4px 0;
+    }
     @media (prefers-color-scheme: dark) {
         .cat-theme-icon.light { display: none; }
         .cat-theme-icon.dark { display: block; }
@@ -431,6 +438,7 @@ if user['role'] == 'Candidate':
                             st.session_state.assessment_mcq_deadline = started_at + MCQ_TIME_LIMIT_SECONDS
                             st.session_state.assessment_essay_started_at = {}
                             st.session_state.assessment_essay_index = 0
+                            st.session_state.assessment_counts = {kind: settings[kind] for kind in ('mcq', 'essay', 'oral', 'practical')}
                             st.session_state.assessment_phase = 'mcq'
                             st.rerun()
                         except (TypeError, ValueError, json.JSONDecodeError) as exc:
@@ -482,7 +490,8 @@ if user['role'] == 'Candidate':
                                 user['id'], discipline, responses, st.session_state.attempt_token,
                                 st.session_state.candidate_details,
                                 st.session_state.assessment_mcq_ids + st.session_state.assessment_essay_ids + st.session_state.assessment_reviewer_ids,
-                                point_settings={kind: settings[f'{kind}_points'] for kind in ('mcq', 'essay', 'oral', 'practical')})
+                                point_settings={kind: settings[f'{kind}_points'] for kind in ('mcq', 'essay', 'oral', 'practical')},
+                                expected_counts=st.session_state.get('assessment_counts'))
                             db.release_login(user['id'], st.session_state.login_token)
                             st.session_state.clear()
                             st.session_state.assessment_submitted = True
