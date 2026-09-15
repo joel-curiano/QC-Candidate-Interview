@@ -26,11 +26,24 @@ st.markdown(
     .company-details { color: #4B5563; font-size: 0.82rem; line-height: 1.45; margin: 0.35rem 0 1.2rem 0; }
     .company-details strong { color: #b51f2d; }
     [data-testid="stElementContainer"]:has(iframe[title="st.iframe"]) {
-        position: sticky;
-        top: 0;
-        z-index: 999;
-        background: #f8fafc;
-        padding: 4px 0;
+        position: fixed;
+        top: 72px;
+        right: 24px;
+        width: 300px;
+        z-index: 9999;
+        background: #ffffff;
+        border: 2px solid #b51f2d;
+        border-radius: 10px;
+        box-shadow: 0 4px 14px rgba(20, 39, 53, 0.22);
+        padding: 4px 12px;
+    }
+    @media (max-width: 640px) {
+        [data-testid="stElementContainer"]:has(iframe[title="st.iframe"]) {
+            top: 56px;
+            right: 10px;
+            left: 10px;
+            width: auto;
+        }
     }
     @media (prefers-color-scheme: dark) {
         .cat-theme-icon.light { display: none; }
@@ -376,7 +389,7 @@ if not login_token:
     st.stop()
 if not db.refresh_login(user['id'], login_token):
     st.session_state.clear()
-    st.error('You were signed out after 10 minutes of inactivity. Please sign in again.')
+    st.error('You were signed out after 15 minutes of inactivity. Please sign in again.')
     st.stop()
 with st.spinner('Refreshing your session...'):
     with db.connection() as conn:

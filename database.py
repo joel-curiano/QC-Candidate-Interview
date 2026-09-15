@@ -159,7 +159,7 @@ def has_users():
 def claim_login(user_id, token):
     with connection() as c:
         row = c.execute("""UPDATE users SET active_login_token=%s, active_login_at=CURRENT_TIMESTAMP
-                          WHERE id=%s AND (active_login_token IS NULL OR active_login_at < CURRENT_TIMESTAMP - INTERVAL '10 minutes')
+                          WHERE id=%s AND (active_login_token IS NULL OR active_login_at < CURRENT_TIMESTAMP - INTERVAL '15 minutes')
                           RETURNING id""", (token, user_id)).fetchone()
         return bool(row)
 
@@ -167,7 +167,7 @@ def refresh_login(user_id, token):
     with connection() as c:
         row = c.execute("""UPDATE users SET active_login_at=CURRENT_TIMESTAMP
                           WHERE id=%s AND active_login_token=%s
-                            AND active_login_at >= CURRENT_TIMESTAMP - INTERVAL '10 minutes'
+                            AND active_login_at >= CURRENT_TIMESTAMP - INTERVAL '15 minutes'
                           RETURNING id""", (user_id, token)).fetchone()
         return bool(row)
 
