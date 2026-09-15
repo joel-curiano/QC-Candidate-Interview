@@ -6,6 +6,7 @@ import secrets
 import time
 from datetime import date
 import streamlit as st
+import streamlit.components.v1 as components
 import database as db
 from email_service import EmailDeliveryError, send_candidate_invitation, send_reviewer_credentials, send_test_email
 from question_import import QuestionImportError, parse_questions, template_bytes
@@ -24,6 +25,34 @@ st.markdown(
     </style>''',
     unsafe_allow_html=True,
 )
+
+MCQ_TIME_LIMIT_SECONDS = 30 * 60
+ESSAY_TIME_LIMIT_SECONDS = 6 * 60
+
+
+def countdown_timer(label, deadline, key):
+    """Display a client-side countdown while keeping the deadline server-side."""
+    remaining = max(0, int(deadline - time.time()))
+    components.html(f"""
+        <div id="timer-{key}" style="font:600 18px sans-serif;color:#b51f2d;padding:8px 0">
+            {label}: <span id="value-{key}"></span>
+        </div>
+        <script>
+        (() => {{
+          let seconds = {remaining};
+          const value = document.getElementById('value-{key}');
+          const render = () => {{
+            const m = Math.floor(seconds / 60);
+            const s = String(seconds % 60).padStart(2, '0');
+            value.textContent = `${{m}}:${{s}}`;
+            if (seconds <= 0) value.textContent = 'Time expired';
+            seconds = Math.max(0, seconds - 1);
+          }};
+          render();
+          setInterval(render, 1000);
+        }})();
+        </script>
+    """, height=48)
 
 
 def question_options(question):
@@ -288,6 +317,10 @@ if user['role'] == 'Candidate':
                                 q['id']: rng.sample(question_options(q), len(question_options(q)))
                                 for q in selected_mcqs
                             }
+                            started_at = time.time()
+                            st.session_state.assessment_mcq_deadline = started_at + MCQ_TIME_LIMIT_SECONDS
+                            st.session_state.assessment_essay_started_at = {}
+                            st.session_state.assessment_essay_index = 0
                             st.session_state.assessment_phase = 'mcq'
                             st.rerun()
                         except (TypeError, ValueError, json.JSONDecodeError) as exc:
@@ -303,6 +336,9 @@ if user['role'] == 'Candidate':
             section = st.expander('Multiple Choice Questions', expanded=True)
             section.__enter__()
             st.subheader('Multiple Choice Questions')
+            mcq_deadline = st.session_state.get('assessment_mcq_deadline', time.time() + MCQ_TIME_LIMIT_SECONDS)
+            st.session_state.assessment_mcq_deadline = mcq_deadline
+            countdown_timer('Time remaining for all Multiple Choice Questions', mcq_deadline, 'mcq')
             with st.form('multiple_choice_questions'):
                 page_responses = {}
                 for number, question in enumerate(mcq_questions, 1):
@@ -310,7 +346,9 @@ if user['role'] == 'Candidate':
                         f"{number}. {question['question_text']}", st.session_state.assessment_mcq_options[question['id']], index=None,
                         key=f"answer_{question['id']}" )
                 if st.form_submit_button('Continue to Essay Questions', type='primary'):
-                    if any(not isinstance(answer, str) or not answer.strip() for answer in page_responses.values()):
+                    if time.time() > mcq_deadline:
+                        st.error('The 30-minute Multiple Choice time limit has expired.')
+                    elif any(not isinstance(answer, str) or not answer.strip() for answer in page_responses.values()):
                         st.error('Answer every Multiple Choice Question before continuing.')
                     else:
                         responses.update(page_responses)
@@ -321,22 +359,14 @@ if user['role'] == 'Candidate':
             section = st.expander('Essay Questions', expanded=True)
             section.__enter__()
             st.subheader('Essay Questions')
-            st.info('Read each question and type your answer in the response box. Oral and Practical Tests are completed and graded by a Reviewer.')
-            with st.form('reviewer_scored_questions'):
-                page_responses = {}
-                for number, question in enumerate(essay_questions, 1):
-                    question_type = {
-                        'essay': 'Essay', 'oral': 'Oral Test', 'practical': 'Practical Test'
-                    }.get(question['q_type'], 'Question')
-                    page_responses[question['id']] = st.text_area(
-                        f"{number}. {question_type}: {question['question_text']}",
-                        placeholder='Type your answer here...', height=180, max_chars=20000,
-                        key=f"answer_{question['id']}" )
-                if st.form_submit_button('Submit assessment', type='primary'):
-                    if any(not isinstance(answer, str) or not answer.strip() for answer in page_responses.values()):
+            st.info('Each Essay question has six minutes. Oral and Practical Tests are completed and graded by a Reviewer.')
+            essay_index = st.session_state.setdefault('assessment_essay_index', 0)
+            if essay_index >= len(essay_questions):
+                st.success('All Essay questions are complete. Submit the assessment when ready.')
+                if st.button('Submit assessment', type='primary'):
+                    if any(not isinstance(responses.get(question['id']), str) or not responses.get(question['id'], '').strip() for question in essay_questions):
                         st.error('Answer every Essay question before submitting.')
                     else:
-                        responses.update(page_responses)
                         try:
                             db.submit(
                                 user['id'], discipline, responses, st.session_state.attempt_token,
@@ -348,6 +378,23 @@ if user['role'] == 'Candidate':
                             st.rerun()
                         except ValueError as exc:
                             st.error(str(exc))
+            else:
+                question = essay_questions[essay_index]
+                started_at = st.session_state.setdefault('assessment_essay_started_at', {}).setdefault(question['id'], time.time())
+                deadline = started_at + ESSAY_TIME_LIMIT_SECONDS
+                expired = time.time() >= deadline
+                countdown_timer(f'Time remaining for Essay question {essay_index + 1} of {len(essay_questions)}', deadline, f'essay-{question["id"]}')
+                if expired:
+                    st.warning('Essay time expired. Your answer has been submitted and the answer box is disabled.')
+                with st.form(f'reviewer_scored_question_{question["id"]}'):
+                    answer = st.text_area(
+                        f"{essay_index + 1}. Essay: {question['question_text']}",
+                        placeholder='Type your answer here...', height=220, max_chars=20000,
+                        key=f"answer_{question['id']}", disabled=expired)
+                    if st.form_submit_button('Save answer and go to next question', type='primary'):
+                        responses[question['id']] = answer.strip()
+                        st.session_state.assessment_essay_index = essay_index + 1
+                        st.rerun()
             section.__exit__(None, None, None)
 else:
     pages = ['Review Assessments', 'Create Candidate Account', 'Create Candidate Schedules', 'Upcoming Candidate Schedules']
