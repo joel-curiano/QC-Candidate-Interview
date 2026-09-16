@@ -297,8 +297,8 @@ def candidate_result_pdf(sub):
     styles.add(ParagraphStyle(name='CATBody', parent=styles['BodyText'], fontSize=10, leading=14, spaceAfter=6))
     styles.add(ParagraphStyle(name='CATExplainHeading', parent=styles['BodyText'], textColor=colors.HexColor('#142735'), fontSize=10, leading=14, spaceBefore=4, spaceAfter=3))
     styles.add(ParagraphStyle(name='CATCompany', parent=styles['CATBody'], alignment=1, textColor=colors.HexColor('#4B5563')))
-    story = [Image('img/C.A.T. Logo - Horizontal.jpg', width=72*mm, height=24*mm),
-             Paragraph('<b>QUALITY DEPARTMENT | C.A.T. INTERNATIONAL L.L.C.</b><br/>C.A.T. Main Camp, Ash Shulah, Dammam 34266, Saudi Arabia', styles['CATCompany']),
+    story = [Image('img/C.A.T. Logo - Horizontal.jpg', width=54*mm, height=18*mm),
+             Paragraph('<b>QUALITY DEPARTMENT | C.A.T. INTERNATIONAL L.L.C.</b><br/>Ash Shulah, Dammam 34266, Saudi Arabia', styles['CATCompany']),
              Paragraph('Candidate Assessment Result', styles['CATTitle']),
              Spacer(1, 4*mm)]
     story.append(Paragraph(f"<b>Candidate:</b> {sub.get('candidate_name', '')}<br/><b>Iqama No:</b> {sub.get('iqama_no', '')}<br/><b>Discipline:</b> {sub.get('discipline', '')}<br/><b>Exam date:</b> {format_result_datetime(sub.get('exam_date', ''))}", styles['CATBody']))
@@ -381,7 +381,7 @@ st.image('img/C.A.T. Logo - Horizontal.jpg', width=300)
 st.markdown('''
 <div class="company-details">
     <strong>QUALITY DEPARTMENT | C.A.T. INTERNATIONAL L.L.C.</strong><br>
-    C.A.T. Main Camp, Ash Shulah, Dammam 34266, Saudi Arabia
+    Ash Shulah, Dammam 34266, Saudi Arabia
 </div>
 ''', unsafe_allow_html=True)
 st.title('Competency Technical Assessment (CTA) Portal')
