@@ -297,9 +297,9 @@ def candidate_result_pdf(sub):
     styles.add(ParagraphStyle(name='CATTitle', parent=styles['Title'], textColor=colors.HexColor('#B51F2D'), fontSize=20, leading=24, spaceAfter=8))
     styles.add(ParagraphStyle(name='CATBody', parent=styles['BodyText'], fontSize=10, leading=14, spaceAfter=6))
     styles.add(ParagraphStyle(name='CATExplainHeading', parent=styles['BodyText'], textColor=colors.HexColor('#142735'), fontSize=10, leading=14, spaceBefore=4, spaceAfter=3))
-    styles.add(ParagraphStyle(name='CATCompany', parent=styles['CATBody'], alignment=1, fontSize=8, leading=10, textColor=colors.HexColor('#4B5563')))
+    styles.add(ParagraphStyle(name='CATCompany', parent=styles['CATBody'], alignment=1, fontSize=7, leading=9, textColor=colors.HexColor('#4B5563')))
     logo_path = 'img/C.A.T. Logo - Horizontal.jpg'
-    logo_width = 54 * mm
+    logo_width = 35.1 * mm
     logo_source_width, logo_source_height = ImageReader(logo_path).getSize()
     logo_height = logo_width * logo_source_height / logo_source_width
     story = [Image(logo_path, width=logo_width, height=logo_height),
