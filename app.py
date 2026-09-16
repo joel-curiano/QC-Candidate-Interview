@@ -61,6 +61,18 @@ st.markdown(
     [data-testid="stMarkdownContainer"] h3 {
         color: #b51f2d !important;
     }
+    [data-testid="stImage"] {
+        display: flex;
+        justify-content: flex-start;
+    }
+    @media (orientation: portrait) {
+        [data-testid="stImage"] {
+            max-width: 70% !important;
+        }
+        h1 {
+            font-size: 1.5rem !important;
+        }
+    }
     </style>''',
     unsafe_allow_html=True,
 )
