@@ -584,8 +584,8 @@ if user['role'] == 'Candidate':
                         st.rerun()
             section.__exit__(None, None, None)
 else:
-    pages = ['Review Assessments', 'Create Candidate Account', 'Create Candidate Schedules', 'Upcoming Candidate Schedules']
-    pages += ['Assessment Settings']
+    pages = ['Create Candidate Account', 'Create Candidate Schedules', 'Upcoming Candidate Schedules']
+    pages += ['Assessment Settings', 'Review Assessments']
     if user['role'] == 'Admin':
         pages += ['Projects', 'Accounts']
     pages += ['Question Bank']
