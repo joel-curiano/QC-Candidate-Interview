@@ -409,26 +409,29 @@ if 'user' not in st.session_state:
         st.success('Password changed. Sign in with your new password.')
     if st.session_state.pop('assessment_submitted', False):
         st.success('Assessment submitted successfully. You have been logged out.')
-    with st.form('login'):
-        username = st.text_input('Username')
-        password = st.text_input('Password', type='password')
-        if st.form_submit_button('Sign in', type='primary'):
-            if time.time() < st.session_state.get('retry_after', 0):
-                st.error('Please wait a few seconds before trying again.')
-            else:
-                user = db.authenticate(username, password)
-                if user:
-                    login_token = secrets.token_urlsafe(32)
-                    if not db.claim_login(user['id'], login_token):
-                        st.error('This account is already logged in on another session.')
-                        st.stop()
-                    st.session_state.clear()
-                    st.session_state.user = user
-                    st.session_state.login_token = login_token
-                    st.rerun()
+    login_container = st.empty()
+    with login_container.container():
+        with st.form('login'):
+            username = st.text_input('Username')
+            password = st.text_input('Password', type='password')
+            if st.form_submit_button('Sign in', type='primary'):
+                if time.time() < st.session_state.get('retry_after', 0):
+                    st.error('Please wait a few seconds before trying again.')
                 else:
-                    st.session_state.retry_after = time.time() + 3
-                    st.error('Invalid username or password.')
+                    user = db.authenticate(username, password)
+                    if user:
+                        login_token = secrets.token_urlsafe(32)
+                        if not db.claim_login(user['id'], login_token):
+                            st.error('This account is already logged in on another session.')
+                            st.stop()
+                        login_container.empty()
+                        st.session_state.clear()
+                        st.session_state.user = user
+                        st.session_state.login_token = login_token
+                        st.rerun()
+                    else:
+                        st.session_state.retry_after = time.time() + 3
+                        st.error('Invalid username or password.')
     st.stop()
 
 user = st.session_state.user
@@ -1203,9 +1206,11 @@ else:
                     st.error(str(exc))
         questionnaire.__exit__(None, None, None)
         if sub['status'] == 'Graded':
-            st.subheader('Final Grades')
-            for kind, label in (('mcq', 'Multiple Choice'), ('essay', 'Essay'), ('oral', 'Oral Test'), ('practical', 'Practical Test')):
-                grade = db.category_result(sub, kind)
-                (st.success if grade.startswith('PASS') else st.error)(f'{label}: {grade}')
-            final_grade = db.result(sub)
-            (st.success if final_grade.startswith('PASS') else st.error)(f'Final Grade: {final_grade}')
+            st.subheader('CTA Results')
+            with st.expander('Results by Question Type', expanded=True):
+                for kind, label in (('mcq', 'Multiple Choice'), ('essay', 'Essay'), ('oral', 'Oral Test'), ('practical', 'Practical Test')):
+                    grade = db.category_result(sub, kind)
+                    (st.success if grade.startswith('PASS') else st.error)(f'{label}: {grade}')
+            with st.expander('Final Result', expanded=True):
+                final_grade = db.result(sub)
+                (st.success if final_grade.startswith('PASS') else st.error)(f'Final Grade: {final_grade}')
