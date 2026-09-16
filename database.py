@@ -122,13 +122,13 @@ def init_db():
         c.execute("UPDATE questions SET max_points=1 WHERE q_type='mcq' AND max_points <> 1")
         c.execute("UPDATE questions SET max_points=10 WHERE q_type IN ('essay', 'oral', 'practical') AND max_points > 10")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS designation TEXT NOT NULL DEFAULT ''")
-        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS iqama_no TEXT NOT NULL DEFAULT ''")
-        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS employee_no TEXT NOT NULL DEFAULT ''")
-        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS exam_date DATE NOT NULL DEFAULT CURRENT_DATE")
-        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS project_location TEXT NOT NULL DEFAULT ''")
-        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS project_assignment TEXT NOT NULL DEFAULT ''")
-        c.execute("UPDATE submissions SET project_assignment=project_location WHERE COALESCE(project_assignment, '')='' AND project_location<>''")
+        c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS candidate_name")
+        c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS iqama_no")
+        c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS employee_no")
+        c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS exam_date")
         c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS project_location")
+        c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS project_assignment")
+        c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS discipline")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS oral_score DOUBLE PRECISION NOT NULL DEFAULT 0")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS practical_score DOUBLE PRECISION NOT NULL DEFAULT 0")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS mcq_max DOUBLE PRECISION NOT NULL DEFAULT 0")
@@ -650,10 +650,8 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         project_assignment = str(details.get('project_assignment', '')).strip()
         max_points = sum(1 if q['q_type'] == 'mcq' else min(q['max_points'], 10) for q in qs)
         maxima = {kind: sum(1 if q['q_type'] == 'mcq' else min(q['max_points'], 10) for q in qs if q['q_type'] == kind) for kind in ('mcq', 'essay', 'oral', 'practical')}
-        sid = c.execute("INSERT INTO submissions(candidate_name,designation,iqama_no,employee_no,exam_date,project_assignment,discipline,mcq_score,max_possible_points,mcq_max,essay_max,oral_max,practical_max,status,user_id,token,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP) RETURNING id",
-                        (candidate_name, str(details.get('designation', '')).strip(), str(details.get('iqama_no', '')).strip(),
-                         str(details.get('employee_no', '')).strip(), details.get('exam_date'), project_assignment,
-                         discipline, mcq_score, max_points, maxima['mcq'], maxima['essay'], maxima['oral'], maxima['practical'], status, actor, token)).fetchone()['id']
+        sid = c.execute("INSERT INTO submissions(designation,mcq_score,max_possible_points,mcq_max,essay_max,oral_max,practical_max,status,user_id,token,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP) RETURNING id",
+                        (str(details.get('designation', '')).strip(), mcq_score, max_points, maxima['mcq'], maxima['essay'], maxima['oral'], maxima['practical'], status, actor, token)).fetchone()['id']
         for q in qs:
             score = q['max_points'] if q['q_type'] == 'mcq' and responses[q['id']] == q['correct_answer'] else 0
             c.execute('INSERT INTO answers(submission_id,question_id,submitted_answer,awarded_score,snapshot) VALUES (%s,%s,%s,%s,%s)',
@@ -666,10 +664,13 @@ def submissions(actor):
         user = require(c, actor, ('Candidate', 'Reviewer', 'Admin'))
         assigned_projects = c.execute("SELECT assigned_projects FROM users WHERE id=%s", (actor,)).fetchone()['assigned_projects']
         return [dict(r) for r in c.execute("""
-            SELECT s.*, u.email, u.username, u.test_date AS scheduled_test_date,
+            SELECT s.*, u.name AS candidate_name, u.email, u.username, u.iqama_no, u.employee_no,
+                   COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline) AS discipline,
+                   u.project_assignment, u.test_date AS scheduled_test_date,
+                   s.created_at::date AS exam_date,
                    s.essay_score AS essay_only_score, s.oral_score, s.practical_score
             FROM submissions s LEFT JOIN users u ON u.id=s.user_id
-            WHERE s.user_id=%s OR %s = 'Admin' OR (%s = 'Reviewer' AND s.project_assignment = ANY(%s))
+            WHERE s.user_id=%s OR %s = 'Admin' OR (%s = 'Reviewer' AND u.project_assignment = ANY(%s))
             ORDER BY s.id DESC
         """, (actor, user['role'], user['role'], assigned_projects))]
 

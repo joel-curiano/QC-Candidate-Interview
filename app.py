@@ -586,7 +586,7 @@ else:
     pages = ['Review Assessments', 'Create Candidate Account', 'Create Candidate Schedules', 'Upcoming Candidate Schedules']
     pages += ['Assessment Settings']
     if user['role'] == 'Admin':
-        pages += ['Candidate Accounts', 'Projects', 'Accounts']
+        pages += ['Projects', 'Accounts']
     pages += ['Question Bank']
     page = st.sidebar.radio('Navigation', pages)
     if user['role'] in ('Admin', 'Reviewer'):
@@ -660,46 +660,6 @@ else:
     elif page == 'Create Candidate Account':
         st.subheader('Create a candidate account')
         account_form('candidate_account', actor=user['id'], allowed_roles=['Candidate'])
-    elif page == 'Candidate Accounts':
-        st.subheader('Candidate Accounts')
-        with st.expander('Manage Candidate Accounts', expanded=True):
-            candidates = cached_candidate_accounts(user['id'])
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                filter_name = st.selectbox('Filter by Name', ['All'] + sorted({c['name'] for c in candidates}), key='accounts_filter_name')
-            with col2:
-                filter_discipline = st.selectbox('Filter by Discipline', ['All'] + sorted({c.get('scheduled_discipline') or c.get('discipline', '') for c in candidates if c.get('scheduled_discipline') or c.get('discipline')}), key='accounts_filter_discipline')
-            with col3:
-                filter_iqama = st.selectbox('Filter by Iqama', ['All'] + sorted({c['iqama_no'] for c in candidates if c.get('iqama_no')}), key='accounts_filter_iqama')
-            filtered = candidates
-            if filter_name != 'All':
-                filtered = [c for c in filtered if c['name'] == filter_name]
-            if filter_discipline != 'All':
-                filtered = [c for c in filtered if (c.get('scheduled_discipline') or c.get('discipline', '')) == filter_discipline]
-            if filter_iqama != 'All':
-                filtered = [c for c in filtered if c['iqama_no'] == filter_iqama]
-            if not filtered:
-                st.info('No candidate accounts match the filters.')
-            else:
-                options = {c['id']: f"{c['name']} - {c['iqama_no']}" for c in filtered}
-                selected_id = st.selectbox('Select Candidate Account', list(options), format_func=lambda value: options[value], key='candidate_account_selection')
-                candidate = next(c for c in filtered if c['id'] == selected_id)
-                with st.form('edit_candidate_account'):
-                    name = st.text_input('Full name *', value=candidate.get('name', ''))
-                    email = st.text_input('Email *', value=candidate.get('email', ''))
-                    iqama_no = st.text_input('Iqama No *', value=candidate.get('iqama_no', ''))
-                    employee_no = st.text_input('Employee No', value=candidate.get('employee_no', ''))
-                    mobile_no = st.text_input('Mobile No', value=candidate.get('mobile_no', ''))
-                    if st.form_submit_button('Save Candidate Details', type='primary'):
-                        try:
-                            if not all(value.strip() for value in (name, email, iqama_no)):
-                                raise ValueError('Name, email, and Iqama No are required.')
-                            db.update_candidate_details(user['id'], selected_id, name, email, iqama_no, employee_no, mobile_no)
-                            clear_read_caches()
-                            st.success('Candidate details updated successfully.')
-                            st.rerun()
-                        except ValueError as exc:
-                            st.error(str(exc))
     elif page == 'Create Candidate Schedules':
         st.subheader('Create Candidate Schedules')
         candidates = cached_candidate_accounts(user['id'])
@@ -861,6 +821,42 @@ else:
         st.divider()
     elif page == 'Accounts':
         st.subheader('Accounts')
+        if user['role'] == 'Admin':
+            with st.expander('Manage Candidate Accounts'):
+                candidates = cached_candidate_accounts(user['id'])
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    filter_name = st.selectbox('Filter by Name', ['All'] + sorted({c['name'] for c in candidates}), key='accounts_filter_name')
+                with col2:
+                    filter_discipline = st.selectbox('Filter by Discipline', ['All'] + sorted({c.get('scheduled_discipline') or c.get('discipline', '') for c in candidates if c.get('scheduled_discipline') or c.get('discipline')}), key='accounts_filter_discipline')
+                with col3:
+                    filter_iqama = st.selectbox('Filter by Iqama', ['All'] + sorted({c['iqama_no'] for c in candidates if c.get('iqama_no')}), key='accounts_filter_iqama')
+                filtered = candidates
+                if filter_name != 'All': filtered = [c for c in filtered if c['name'] == filter_name]
+                if filter_discipline != 'All': filtered = [c for c in filtered if (c.get('scheduled_discipline') or c.get('discipline', '')) == filter_discipline]
+                if filter_iqama != 'All': filtered = [c for c in filtered if c['iqama_no'] == filter_iqama]
+                if not filtered:
+                    st.info('No candidate accounts match the filters.')
+                else:
+                    options = {c['id']: f"{c['name']} - {c['iqama_no']}" for c in filtered}
+                    selected_id = st.selectbox('Select Candidate Account', list(options), format_func=lambda value: options[value], key='candidate_account_selection')
+                    candidate = next(c for c in filtered if c['id'] == selected_id)
+                    with st.form('edit_candidate_account'):
+                        name = st.text_input('Full name *', value=candidate.get('name', ''))
+                        email = st.text_input('Email *', value=candidate.get('email', ''))
+                        iqama_no = st.text_input('Iqama No *', value=candidate.get('iqama_no', ''))
+                        employee_no = st.text_input('Employee No', value=candidate.get('employee_no', ''))
+                        mobile_no = st.text_input('Mobile No', value=candidate.get('mobile_no', ''))
+                        if st.form_submit_button('Save Candidate Details', type='primary'):
+                            try:
+                                if not all(value.strip() for value in (name, email, iqama_no)): raise ValueError('Name, email, and Iqama No are required.')
+                                db.update_candidate_details(user['id'], selected_id, name, email, iqama_no, employee_no, mobile_no)
+                                clear_read_caches()
+                                st.success('Candidate details updated successfully.')
+                                st.rerun()
+                            except ValueError as exc:
+                                st.error(str(exc))
+            st.divider()
         projects = cached_projects(user['id'])
         st.subheader('Create account')
         account_form('staff', actor=user['id'], allowed_roles=['Reviewer', 'Admin'])
