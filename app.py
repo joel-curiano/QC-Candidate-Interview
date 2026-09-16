@@ -21,9 +21,10 @@ st.markdown(
     [data-testid="stSidebar"] {
         background-color: #d9dcde;
     }
-    .cat-theme-icon { display: block; width: 128px; height: 128px; object-fit: contain; margin: 0 0 18px 0; }
+    .cat-theme-icon { display: block; width: 128px; height: 128px; object-fit: contain; margin: 0 0 4px 0; }
     .cat-theme-icon.dark { display: none; }
-    .company-details { color: #4B5563; font-size: 0.82rem; line-height: 1.45; margin: 0.35rem 0 1.2rem 0; }
+    [data-testid="stMainBlockContainer"] { padding-top: 3rem; }
+    .company-details { color: #4B5563; font-size: 0.82rem; line-height: 1.45; margin: 0.1rem 0 1.2rem 0; }
     .company-details strong { color: #b51f2d; }
     [data-testid="stElementContainer"]:has(iframe[title="st.iframe"]) {
         position: fixed;
@@ -73,11 +74,7 @@ def cat_icon_data_url(filename):
     return f'data:{content_type};base64,{encoded}'
 
 
-st.markdown(
-    f'''<img class="cat-theme-icon light" alt="CAT icon" src="{cat_icon_data_url('CAT Icon White Background.png')}">
-    <img class="cat-theme-icon dark" alt="CAT icon" src="{cat_icon_data_url('CAT Icon Dark Background.png')}">''',
-    unsafe_allow_html=True,
-)
+
 
 MCQ_TIME_LIMIT_SECONDS = 40 * 60
 ESSAY_TIME_LIMIT_SECONDS = 6 * 60
@@ -476,7 +473,7 @@ if user['role'] == 'Candidate':
         details = st.session_state.get('candidate_details')
         if not details:
             st.subheader('Candidate Details')
-            st.info('You have 20 minutes to answer all Multiple Choice Questions. The countdown begins when you press the Start Multiple Choice Questions button.')
+            st.info('You have 40 minutes to answer all Multiple Choice Questions. The countdown begins when you press the Start Multiple Choice Questions button.')
             with st.form('candidate_details_form'):
                 st.text_input('Discipline', value=discipline, disabled=True, key='candidate_discipline_display')
                 designation = st.text_input('Job Title (Inspector, Supervisor, Technician...)', key='candidate_job_title')
