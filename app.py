@@ -738,11 +738,14 @@ else:
         st.subheader('Create Candidate Schedules')
         candidates = cached_candidate_accounts(user['id'])
         
-        col1, col2, col3, col4 = st.columns(4)
-        with col1: search_name = st.selectbox('Filter by Name', ['All'] + sorted({c['name'] for c in candidates}), key='schedule_filter_name')
-        with col2: search_discipline = st.selectbox('Filter by Discipline', ['All'] + sorted({c.get('scheduled_discipline') or c.get('discipline', '') for c in candidates if c.get('scheduled_discipline') or c.get('discipline')}), key='schedule_filter_discipline')
-        with col3: search_iqama = st.selectbox('Filter by Iqama', ['All'] + sorted({c['iqama_no'] for c in candidates if c.get('iqama_no')}), key='schedule_filter_iqama')
-        with col4: search_completion = st.selectbox('Assessment Completion Status', ['All', 'Complete', 'Incomplete'], key='schedule_filter_completion')
+        # Keep the filter controls to two per row so labels remain readable
+        # on centered and narrower layouts.
+        row1_col1, row1_col2 = st.columns(2)
+        row2_col1, row2_col2 = st.columns(2)
+        with row1_col1: search_name = st.selectbox('Filter by Name', ['All'] + sorted({c['name'] for c in candidates}), key='schedule_filter_name')
+        with row1_col2: search_discipline = st.selectbox('Filter by Discipline', ['All'] + sorted({c.get('scheduled_discipline') or c.get('discipline', '') for c in candidates if c.get('scheduled_discipline') or c.get('discipline')}), key='schedule_filter_discipline')
+        with row2_col1: search_iqama = st.selectbox('Filter by Iqama', ['All'] + sorted({c['iqama_no'] for c in candidates if c.get('iqama_no')}), key='schedule_filter_iqama')
+        with row2_col2: search_completion = st.selectbox('Assessment Completion Status', ['All', 'Complete', 'Incomplete'], key='schedule_filter_completion')
         
         filtered = candidates
         if search_name != 'All':
