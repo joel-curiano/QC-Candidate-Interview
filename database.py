@@ -332,6 +332,17 @@ def candidate_accounts(actor):
             "FROM users WHERE role='Candidate' ORDER BY test_date NULLS LAST, name"
         )]
 
+def update_candidate_details(actor, candidate_id, name, email, iqama_no, employee_no, mobile_no):
+    with connection() as c:
+        require(c, actor, ('Admin',))
+        updated = c.execute(
+            "UPDATE users SET name=%s, email=%s, iqama_no=%s, employee_no=%s, mobile_no=%s "
+            "WHERE id=%s AND role='Candidate' RETURNING id",
+            (name.strip(), email.strip().lower(), iqama_no.strip(), employee_no.strip(), mobile_no.strip(), candidate_id),
+        ).fetchone()
+        if not updated:
+            raise ValueError('Candidate account not found.')
+
 def get_projects(actor):
     with connection() as c:
         require(c, actor, ('Admin', 'Reviewer', 'Candidate'))
