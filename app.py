@@ -14,10 +14,8 @@ from email_service import EmailDeliveryError, send_candidate_invitation, send_ca
 from question_import import QuestionImportError, parse_questions, template_bytes
 from result_export import excel_bytes
 
-CAT_ICON_PATH = 'img/CAT Icon White Background.png'
 CAT_TAB_ICON_PATH = 'img/CAT Icon Neutral Backgound.jpg'
 st.set_page_config(page_title='Competency Technical Assessment (CTA) Portal', page_icon=CAT_TAB_ICON_PATH, layout='centered')
-st.logo(CAT_ICON_PATH)
 st.markdown(
     '''<style>
     [data-testid="stSidebar"] {
