@@ -658,10 +658,11 @@ else:
         st.subheader('Create Candidate Schedules')
         candidates = cached_candidate_accounts(user['id'])
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1: search_name = st.selectbox('Filter by Name', ['All'] + sorted({c['name'] for c in candidates}), key='schedule_filter_name')
         with col2: search_discipline = st.selectbox('Filter by Discipline', ['All'] + sorted({c.get('scheduled_discipline') or c.get('discipline', '') for c in candidates if c.get('scheduled_discipline') or c.get('discipline')}), key='schedule_filter_discipline')
         with col3: search_iqama = st.selectbox('Filter by Iqama', ['All'] + sorted({c['iqama_no'] for c in candidates if c.get('iqama_no')}), key='schedule_filter_iqama')
+        with col4: search_completion = st.selectbox('Assessment Completion Status', ['All', 'Complete', 'Incomplete'], key='schedule_filter_completion')
         
         filtered = candidates
         if search_name != 'All':
@@ -670,11 +671,13 @@ else:
             filtered = [c for c in filtered if (c.get('scheduled_discipline') or c.get('discipline', '')) == search_discipline]
         if search_iqama != 'All':
             filtered = [c for c in filtered if c['iqama_no'] == search_iqama]
+        if search_completion != 'All':
+            filtered = [c for c in filtered if c.get('assessment_completion_status') == search_completion]
             
         if not filtered:
             st.info('No candidates found matching the filters.')
         else:
-            options = {c['id']: f"{c['name']} - {c['discipline']} - {c['iqama_no']}" for c in filtered}
+            options = {c['id']: f"{c['name']} - {c['discipline']} - {c['iqama_no']} - {c.get('assessment_completion_status', 'Incomplete')}" for c in filtered}
             selected_id = st.selectbox('Select Candidate', options=list(options.keys()), format_func=lambda x: options[x])
             
             if selected_id:

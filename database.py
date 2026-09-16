@@ -327,7 +327,9 @@ def candidate_accounts(actor):
     with connection() as c:
         require(c, actor, ('Admin', 'Reviewer'))
         return [dict(row) for row in c.execute(
-            "SELECT id,username,name,email,test_date,project_assignment,scheduled_discipline,invitation_sent_at,discipline,iqama_no,employee_no,mobile_no,previous_schedules FROM users WHERE role='Candidate' ORDER BY test_date NULLS LAST, name"
+            "SELECT id,username,name,email,test_date,project_assignment,scheduled_discipline,invitation_sent_at,discipline,iqama_no,employee_no,mobile_no,previous_schedules, "
+            "CASE WHEN EXISTS (SELECT 1 FROM submissions s WHERE s.user_id=users.id) THEN 'Complete' ELSE 'Incomplete' END AS assessment_completion_status "
+            "FROM users WHERE role='Candidate' ORDER BY test_date NULLS LAST, name"
         )]
 
 def get_projects(actor):
