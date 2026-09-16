@@ -292,11 +292,14 @@ def candidate_result_pdf(sub):
     from reportlab.lib.utils import ImageReader
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
     output = io.BytesIO()
-    doc = SimpleDocTemplate(output, pagesize=A4, rightMargin=18*mm, leftMargin=18*mm, topMargin=16*mm, bottomMargin=16*mm)
+    doc = SimpleDocTemplate(output, pagesize=A4, rightMargin=27*mm, leftMargin=27*mm, topMargin=16*mm, bottomMargin=16*mm)
     styles = getSampleStyleSheet()
     styles.add(ParagraphStyle(name='CATTitle', parent=styles['Title'], textColor=colors.HexColor('#B51F2D'), fontSize=20, leading=24, spaceAfter=8))
     styles.add(ParagraphStyle(name='CATBody', parent=styles['BodyText'], fontSize=10, leading=14, spaceAfter=6))
-    styles.add(ParagraphStyle(name='CATExplainHeading', parent=styles['BodyText'], textColor=colors.HexColor('#142735'), fontSize=10, leading=14, spaceBefore=4, spaceAfter=3))
+    styles.add(ParagraphStyle(name='CATResultHeading', parent=styles['Heading2'], textColor=colors.HexColor('#142735'), fontSize=11, leading=14, alignment=1, spaceBefore=8, spaceAfter=5))
+    styles.add(ParagraphStyle(name='CATOverallResult', parent=styles['CATResultHeading'], alignment=1, spaceBefore=0, spaceAfter=0))
+    styles.add(ParagraphStyle(name='CATExplainHeading', parent=styles['BodyText'], textColor=colors.HexColor('#142735'), fontSize=8, leading=10, spaceBefore=4, spaceAfter=2))
+    styles.add(ParagraphStyle(name='CATExplainBody', parent=styles['BodyText'], textColor=colors.HexColor('#4B5563'), fontSize=8, leading=10, spaceAfter=0))
     styles.add(ParagraphStyle(name='CATCompany', parent=styles['CATBody'], alignment=1, fontSize=7, leading=9, textColor=colors.HexColor('#4B5563')))
     logo_path = 'img/C.A.T. Logo - Horizontal.jpg'
     logo_width = 35.1 * mm
@@ -309,7 +312,7 @@ def candidate_result_pdf(sub):
              Spacer(1, 4*mm)]
     story.append(Paragraph(f"<b>Candidate:</b> {sub.get('candidate_name', '')}<br/><b>Iqama No:</b> {sub.get('iqama_no', '')}<br/><b>Discipline:</b> {sub.get('discipline', '')}<br/><b>Exam date:</b> {format_result_datetime(sub.get('exam_date', ''))}", styles['CATBody']))
     if sub['status'] != 'Graded':
-        story.append(Paragraph('<b>Overall result:</b> Pending Review', styles['CATBody']))
+        story.append(Paragraph('<b>Overall result:</b> Pending Review', styles['CATOverallResult']))
     else:
         rows = [['Question type', 'Percentage', 'Status']]
         for kind, label in (('mcq', 'Multiple Choice'), ('essay', 'Essay'), ('oral', 'Oral Test'), ('practical', 'Practical Test')):
@@ -317,8 +320,9 @@ def candidate_result_pdf(sub):
             rows.append([label, f'{pct:.1f}%', 'PASS' if pct >= 50 else 'FAIL'])
         overall_pct = 100 * (sub['mcq_score'] + sub['essay_score'] + sub.get('oral_score', 0) + sub.get('practical_score', 0)) / sub['max_possible_points'] if sub['max_possible_points'] else 0
         overall_status = 'PASS' if overall_pct >= 70 and all(db.category_percentage(sub, kind) >= 50 for kind in ('mcq', 'essay', 'oral', 'practical')) else 'FAIL'
-        story += [Paragraph('Results by question type', styles['Heading2']), Table(rows, colWidths=[78*mm, 38*mm, 32*mm], style=TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#B51F2D')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('GRID',(0,0),(-1,-1),0.4,colors.HexColor('#D9DCDE')),('PADDING',(0,0),(-1,-1),7)])), Spacer(1, 5*mm), Paragraph(f'<b>Overall result:</b> {overall_pct:.1f}% - {overall_status}', styles['CATBody'])]
-    story += [Spacer(1, 6*mm), Paragraph('<b>How pass/fail is determined</b>', styles['CATExplainHeading']), Paragraph('The candidate must achieve at least 50% in every question type and at least 70% overall. The overall percentage is calculated from the accumulated points earned divided by the total possible points. Failing any one question type results in an overall FAIL, even when the overall percentage is 70% or higher. A result remains Pending Review until the Reviewer scores all Essay, Oral Test, and Practical Test responses.', styles['CATExplainHeading'])]
+        overall_color = '#188038' if overall_status == 'PASS' else '#B51F2D'
+        story += [Spacer(1, 4*mm), Paragraph('Results by question type', styles['CATResultHeading']), Table(rows, colWidths=[39*mm, 26.6*mm, 22.4*mm], style=TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#B51F2D')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('GRID',(0,0),(-1,-1),0.4,colors.HexColor('#D9DCDE')),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),8),('LEADING',(0,0),(-1,-1),10),('PADDING',(0,0),(-1,-1),4)])), Spacer(1, 5*mm), Paragraph(f'<b>Overall result:</b> {overall_pct:.1f}% - <font color="{overall_color}"><b>{overall_status}</b></font>', styles['CATOverallResult'])]
+    story += [Spacer(1, 6*mm), Paragraph('<b>How pass/fail is determined</b>', styles['CATExplainHeading']), Paragraph('The candidate must achieve at least 50% in every question type and at least 70% overall. The overall percentage is calculated from the accumulated points earned divided by the total possible points. Failing any one question type results in an overall FAIL, even when the overall percentage is 70% or higher. A result remains Pending Review until the Reviewer scores all Essay, Oral Test, and Practical Test responses.', styles['CATExplainBody'])]
     doc.build(story)
     return output.getvalue()
 
@@ -399,6 +403,8 @@ if not db.has_users():
     st.stop()
 
 if 'user' not in st.session_state:
+    if timeout_message := st.session_state.pop('timeout_message', None):
+        st.error(timeout_message)
     if st.session_state.pop('password_changed', False):
         st.success('Password changed. Sign in with your new password.')
     if st.session_state.pop('assessment_submitted', False):
@@ -434,8 +440,8 @@ if not login_token:
 refreshed_user = db.refresh_login(user['id'], login_token)
 if not refreshed_user:
     st.session_state.clear()
-    st.error('You were signed out after 15 minutes of inactivity. Please sign in again.')
-    st.stop()
+    st.session_state.timeout_message = 'You were signed out after 15 minutes of inactivity. Please sign in again.'
+    st.rerun()
 user = refreshed_user
 st.session_state.user = user
 st.sidebar.write(f"**{user['name']}**")
