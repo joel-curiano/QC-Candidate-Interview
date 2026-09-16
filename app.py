@@ -289,6 +289,7 @@ def candidate_result_pdf(sub):
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import mm
+    from reportlab.lib.utils import ImageReader
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
     output = io.BytesIO()
     doc = SimpleDocTemplate(output, pagesize=A4, rightMargin=18*mm, leftMargin=18*mm, topMargin=16*mm, bottomMargin=16*mm)
@@ -296,9 +297,14 @@ def candidate_result_pdf(sub):
     styles.add(ParagraphStyle(name='CATTitle', parent=styles['Title'], textColor=colors.HexColor('#B51F2D'), fontSize=20, leading=24, spaceAfter=8))
     styles.add(ParagraphStyle(name='CATBody', parent=styles['BodyText'], fontSize=10, leading=14, spaceAfter=6))
     styles.add(ParagraphStyle(name='CATExplainHeading', parent=styles['BodyText'], textColor=colors.HexColor('#142735'), fontSize=10, leading=14, spaceBefore=4, spaceAfter=3))
-    styles.add(ParagraphStyle(name='CATCompany', parent=styles['CATBody'], alignment=1, textColor=colors.HexColor('#4B5563')))
-    story = [Image('img/C.A.T. Logo - Horizontal.jpg', width=54*mm, height=18*mm),
+    styles.add(ParagraphStyle(name='CATCompany', parent=styles['CATBody'], alignment=1, fontSize=8, leading=10, textColor=colors.HexColor('#4B5563')))
+    logo_path = 'img/C.A.T. Logo - Horizontal.jpg'
+    logo_width = 54 * mm
+    logo_source_width, logo_source_height = ImageReader(logo_path).getSize()
+    logo_height = logo_width * logo_source_height / logo_source_width
+    story = [Image(logo_path, width=logo_width, height=logo_height),
              Paragraph('<b>QUALITY DEPARTMENT | C.A.T. INTERNATIONAL L.L.C.</b><br/>Ash Shulah, Dammam 34266, Saudi Arabia', styles['CATCompany']),
+             Spacer(1, 2*mm),
              Paragraph('Candidate Assessment Result', styles['CATTitle']),
              Spacer(1, 4*mm)]
     story.append(Paragraph(f"<b>Candidate:</b> {sub.get('candidate_name', '')}<br/><b>Iqama No:</b> {sub.get('iqama_no', '')}<br/><b>Discipline:</b> {sub.get('discipline', '')}<br/><b>Exam date:</b> {format_result_datetime(sub.get('exam_date', ''))}", styles['CATBody']))
