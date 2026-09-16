@@ -43,6 +43,14 @@ _POOL = None
 _POOL_URL = None
 
 
+def _configure_connection(conn):
+    conn.execute(sql.SQL("SET search_path TO {}; SET timezone = 'UTC'; SET statement_timeout = '20s'; SET lock_timeout = '10s'").format(sql.Identifier(DB_SCHEMA)))
+    # psycopg starts a transaction for the multi-statement SET above.  Pool
+    # configuration callbacks must return an idle connection; otherwise
+    # psycopg_pool discards every connection as INTRANS.
+    conn.commit()
+
+
 def get_pool():
     global _POOL, _POOL_URL
     current_url = database_url()
@@ -58,6 +66,7 @@ def get_pool():
             min_size=1,
             max_size=10,
             timeout=15,
+            configure=_configure_connection,
             kwargs={
                 'row_factory': dict_row,
                 'sslmode': 'require',
@@ -86,10 +95,7 @@ def connection():
         try:
             with psycopg.connect(database_url(), row_factory=dict_row, connect_timeout=10,
                                  sslmode='require', prepare_threshold=None) as conn:
-                conn.execute(sql.SQL('SET LOCAL search_path TO {}').format(sql.Identifier(DB_SCHEMA)))
-                conn.execute("SET LOCAL timezone = 'UTC'")
-                conn.execute("SET LOCAL statement_timeout = '20s'")
-                conn.execute("SET LOCAL lock_timeout = '10s'")
+                conn.execute(sql.SQL("SET LOCAL search_path TO {}; SET LOCAL timezone = 'UTC'; SET LOCAL statement_timeout = '20s'; SET LOCAL lock_timeout = '10s'").format(sql.Identifier(DB_SCHEMA)))
                 yield conn
         except DatabaseError:
             raise
@@ -100,10 +106,6 @@ def connection():
     try:
         pool = get_pool()
         with pool.connection() as conn:
-            conn.execute(sql.SQL('SET search_path TO {}').format(sql.Identifier(DB_SCHEMA)))
-            conn.execute("SET timezone = 'UTC'")
-            conn.execute("SET statement_timeout = '20s'")
-            conn.execute("SET lock_timeout = '10s'")
             yield conn
     except DatabaseError:
         raise
@@ -141,7 +143,6 @@ def init_db():
             oral_max=COALESCE((SELECT SUM(LEAST((snapshot::json->>'max_points')::numeric, 10)) FROM answers a WHERE a.submission_id=s.id AND snapshot::json->>'q_type'='oral'), 0),
             practical_max=COALESCE((SELECT SUM(LEAST((snapshot::json->>'max_points')::numeric, 10)) FROM answers a WHERE a.submission_id=s.id AND snapshot::json->>'q_type'='practical'), 0)
             WHERE s.mcq_max=0 AND s.essay_max=0 AND s.oral_max=0 AND s.practical_max=0""")
-        c.execute("DELETE FROM answers WHERE submission_id IN (SELECT id FROM submissions WHERE created_at < CURRENT_TIMESTAMP - INTERVAL '7 days')")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS test_date DATE")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMPTZ")
@@ -161,7 +162,10 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_token TEXT")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_at TIMESTAMPTZ")
         c.execute("CREATE INDEX IF NOT EXISTS answers_question_idx ON answers(question_id)")
+        c.execute("CREATE INDEX IF NOT EXISTS answers_submission_idx ON answers(submission_id)")
         c.execute("CREATE INDEX IF NOT EXISTS submissions_status_idx ON submissions(status)")
+        c.execute("CREATE INDEX IF NOT EXISTS submissions_user_idx ON submissions(user_id)")
+        c.execute("CREATE INDEX IF NOT EXISTS questions_disc_active_idx ON questions(discipline, active)")
         c.execute("CREATE INDEX IF NOT EXISTS users_candidate_date_idx ON users(role, test_date)")
         original_questions = json.loads(Path(__file__).with_name('seed_questions.json').read_text(encoding='utf-8'))
         original_questions = [row[:4] + [row[4], row[5], 1 if row[1] == 'mcq' else row[6]] for row in original_questions]
@@ -209,7 +213,7 @@ def generate_password(length=12):
 
 
 def require(c, user_id, roles):
-    user = c.execute('SELECT id,username,name,email,role,discipline,scheduled_discipline,iqama_no,employee_no,project_assignment,test_date FROM users WHERE id=%s', (user_id,)).fetchone()
+    user = c.execute('SELECT id,username,name,email,role,discipline,scheduled_discipline,iqama_no,employee_no,project_assignment,test_date,assigned_projects FROM users WHERE id=%s', (user_id,)).fetchone()
     if not user or user['role'] not in roles:
         raise ValueError('You do not have permission for this action.')
     return dict(user)
@@ -633,13 +637,16 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
             counts = {kind: sum(q['q_type'] == kind for q in qs) for kind in ('mcq', 'essay', 'oral', 'practical')}
             if settings is not None and counts != settings:
                 raise ValueError('The assessment question counts do not match the settings used when this assessment started.')
+        candidate_qs = [q for q in qs if q['q_type'] not in ('oral', 'practical')]
+        if not any(isinstance(responses.get(q['id']), str) and responses.get(q['id'], '').strip() for q in candidate_qs):
+            raise ValueError('Answer every question (maximum 20,000 characters per answer).')
         for q in qs:
             answer = responses.get(q['id'], '')
             if q['q_type'] in ('oral', 'practical'):
                 continue
-            if not isinstance(answer, str) or not answer.strip() or len(answer) > 20000:
+            if not isinstance(answer, str) or len(answer) > 20000:
                 raise ValueError('Answer every question (maximum 20,000 characters per answer).')
-            if q['q_type'] == 'mcq' and answer not in json.loads(q['options']):
+            if q['q_type'] == 'mcq' and answer and not answer.startswith('[') and answer not in json.loads(q['options']):
                 raise ValueError('Choose a valid option for every MCQ.')
         details = candidate_details or {}
         candidate_name = str(details.get('name', user['name'])).strip()
@@ -662,7 +669,7 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
 def submissions(actor):
     with connection() as c:
         user = require(c, actor, ('Candidate', 'Reviewer', 'Admin'))
-        assigned_projects = c.execute("SELECT assigned_projects FROM users WHERE id=%s", (actor,)).fetchone()['assigned_projects']
+        assigned_projects = user.get('assigned_projects') or []
         return [dict(r) for r in c.execute("""
             SELECT s.*, u.name AS candidate_name, u.email, u.username, u.iqama_no, u.employee_no,
                    COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline) AS discipline,

@@ -22,3 +22,5 @@ def test_results_export_contains_extended_log_columns():
     assert sheet['D2'].value == 'EMP-7'
     assert sheet.freeze_panes == 'A2'
     assert sheet.auto_filter.ref == sheet.dimensions
+    assert len(RESULT_HEADERS) == 15
+    assert len(sheet.column_dimensions) == 15

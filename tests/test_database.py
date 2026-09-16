@@ -179,3 +179,18 @@ def test_civil_qc_seed_is_idempotent(postgres_db, existing_bank):
     assert {q['id'] for q in db.questions('Civil QC', include_inactive=True)} == ids
     if existing_bank:
         assert len(db.questions('Other QC')) == 1
+
+
+def test_submission_with_timed_out_essay(accounts):
+    qs = db.questions('Welding QC')
+    mcq = next(q for q in qs if q['q_type'] == 'mcq')
+    essay = next(q for q in qs if q['q_type'] == 'essay')
+    responses = {
+        mcq['id']: 'Shielding gas and clean bevel',
+        essay['id']: '[No response submitted - time expired]',
+    }
+    sid = db.submit(accounts['alice'], 'Welding QC', responses, 'timeout-attempt')
+    assert sid > 0
+    answers = db.answer_details(accounts['admin'], sid)
+    essay_ans = next(a for a in answers if a['question_id'] == essay['id'])
+    assert essay_ans['submitted_answer'] == '[No response submitted - time expired]'

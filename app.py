@@ -20,6 +20,14 @@ st.markdown(
     '''<style>
     [data-testid="stSidebar"] {
         background-color: #d9dcde;
+        width: 285px !important;
+        min-width: 285px !important;
+        max-width: 285px !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stExpander"] {
+        width: 85% !important;
+        margin-left: auto;
+        margin-right: auto;
     }
     .cat-theme-icon { display: block; width: 128px; height: 128px; object-fit: contain; margin: 0 0 4px 0; }
     .cat-theme-icon.dark { display: none; }
@@ -61,12 +69,17 @@ st.markdown(
     [data-testid="stMarkdownContainer"] h3 {
         color: #b51f2d !important;
     }
-    [data-testid="stImage"] {
-        display: flex;
-        justify-content: flex-start;
+    .logo-container {
+        text-align: left;
+        margin-bottom: 0.5rem;
+    }
+    .logo-container img {
+        width: 240px;
+        max-width: 100%;
+        margin-left: 0;
     }
     @media (orientation: portrait) {
-        [data-testid="stImage"] {
+        .logo-container img {
             max-width: 70% !important;
         }
         h1 {
@@ -80,10 +93,15 @@ st.markdown(
 
 @st.cache_data(show_spinner=False)
 def cat_icon_data_url(filename):
-    path = Path('img') / filename
+    path = Path(__file__).resolve().parent / 'img' / filename
+    if not path.exists():
+        path = Path('img') / filename
+    if not path.exists():
+        return ''
     encoded = base64.b64encode(path.read_bytes()).decode('ascii')
     content_type = 'image/png' if path.suffix.lower() == '.png' else 'image/jpeg'
     return f'data:{content_type};base64,{encoded}'
+
 
 
 
@@ -161,7 +179,13 @@ def cached_candidate_result_pdf(sub_json_str):
     return candidate_result_pdf(sub)
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def cached_has_users():
+    return db.has_users()
+
+
 def clear_read_caches():
+    cached_has_users.clear()
     cached_disciplines.clear()
     cached_questions.clear()
     cached_assessment_settings.clear()
@@ -245,6 +269,7 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
                     try:
                         send_reviewer_credentials(account_email.strip().lower(), name.strip(), username.strip().lower(), password)
                         st.session_state.pop(generated_key, None)
+                        clear_read_caches()
                         st.success('Reviewer account created and login credentials emailed.')
                     except (EmailDeliveryError, OSError, ValueError) as exc:
                         st.warning(f'Account created, but the credentials email could not be sent: {exc}')
@@ -256,6 +281,7 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
                         st.session_state[f'{key}_reset'] = st.session_state.get(f'{key}_reset', 0) + 1
                         st.rerun()
                 if bootstrap:
+                    clear_read_caches()
                     st.rerun()
             except ValueError as exc:
                 st.error(str(exc))
@@ -394,8 +420,10 @@ if hasattr(st, 'dialog'):
             progress_bar.empty()
             st.error(str(exc))
 
-st.image('img/C.A.T. Logo - Horizontal.jpg', width=300)
-st.markdown('''
+st.markdown(f'''
+<div class="logo-container">
+    <img src="{cat_icon_data_url('C.A.T. Logo - Horizontal.jpg')}" alt="C.A.T. Logo">
+</div>
 <div class="company-details">
     <strong>QUALITY DEPARTMENT | C.A.T. INTERNATIONAL L.L.C.</strong><br>
     Ash Shulah, Dammam 34266, Saudi Arabia
@@ -403,7 +431,7 @@ st.markdown('''
 ''', unsafe_allow_html=True)
 st.title('Competency Technical Assessment (CTA) Portal')
 st.caption('Technical assessments · Multiple disciplines · Evidence-based grading')
-if not db.has_users():
+if not cached_has_users():
     st.subheader('Initial administrator setup')
     st.info('Create the first administrator on a trusted local connection before exposing this app to the network.')
     account_form('bootstrap', bootstrap=True)
@@ -447,13 +475,17 @@ if not login_token:
     st.session_state.clear()
     st.error('Your login session is invalid. Please sign in again.')
     st.stop()
-refreshed_user = db.refresh_login(user['id'], login_token)
-if not refreshed_user:
-    st.session_state.clear()
-    st.session_state.timeout_message = 'You were signed out after 15 minutes of inactivity. Please sign in again.'
-    st.rerun()
-user = refreshed_user
-st.session_state.user = user
+now = time.time()
+last_refresh = st.session_state.get('last_login_refresh', 0)
+if now - last_refresh > 60:
+    refreshed_user = db.refresh_login(user['id'], login_token)
+    if not refreshed_user:
+        st.session_state.clear()
+        st.session_state.timeout_message = 'You were signed out after 15 minutes of inactivity. Please sign in again.'
+        st.rerun()
+    user = refreshed_user
+    st.session_state.user = user
+    st.session_state.last_login_refresh = now
 st.sidebar.write(f"**{user['name']}**")
 st.sidebar.caption(user['role'])
 if user['role'] == 'Candidate':
@@ -531,16 +563,24 @@ if user['role'] == 'Candidate':
             mcq_deadline = st.session_state.get('assessment_mcq_deadline', time.time() + MCQ_TIME_LIMIT_SECONDS)
             st.session_state.assessment_mcq_deadline = mcq_deadline
             countdown_timer('Time remaining for all Multiple Choice Questions', mcq_deadline, 'mcq')
+            is_mcq_expired = time.time() > mcq_deadline
+            if is_mcq_expired:
+                st.warning('The 40-minute Multiple Choice time limit has expired. Selected answers will be saved as you continue.')
             with st.form('multiple_choice_questions'):
                 page_responses = {}
                 for number, question in enumerate(mcq_questions, 1):
                     page_responses[question['id']] = st.radio(
                         f"{number}. {question['question_text']}", st.session_state.assessment_mcq_options[question['id']], index=None,
-                        key=f"answer_{question['id']}" )
+                        key=f"answer_{question['id']}", disabled=is_mcq_expired)
                 st.info('You have six minutes for each Essay question. The countdown begins when you press the Continue to Essay Questions button.')
-                if st.form_submit_button('Continue to Essay Questions', type='primary'):
-                    if time.time() > mcq_deadline:
-                        st.error('The 40-minute Multiple Choice time limit has expired.')
+                submit_label = 'Time expired: Proceed to Essay Questions' if is_mcq_expired else 'Continue to Essay Questions'
+                if st.form_submit_button(submit_label, type='primary'):
+                    if is_mcq_expired:
+                        for q in mcq_questions:
+                            ans = page_responses.get(q['id'])
+                            responses[q['id']] = ans if isinstance(ans, str) and ans.strip() else '[Unanswered - time expired]'
+                        st.session_state.assessment_phase = 'essay'
+                        st.rerun()
                     elif any(not isinstance(answer, str) or not answer.strip() for answer in page_responses.values()):
                         st.error('Answer every Multiple Choice Question before continuing.')
                     else:
@@ -557,38 +597,45 @@ if user['role'] == 'Candidate':
             if essay_index >= len(essay_questions):
                 st.success('All Essay questions are complete. Submit the assessment when ready.')
                 if st.button('Submit assessment', type='primary'):
-                    if any(not isinstance(responses.get(question['id']), str) or not responses.get(question['id'], '').strip() for question in essay_questions):
-                        st.error('Answer every Essay question before submitting.')
-                    else:
-                        try:
-                            db.submit(
-                                user['id'], discipline, responses, st.session_state.attempt_token,
-                                st.session_state.candidate_details,
-                                st.session_state.assessment_mcq_ids + st.session_state.assessment_essay_ids + st.session_state.assessment_reviewer_ids,
-                                point_settings={kind: settings[f'{kind}_points'] for kind in ('mcq', 'essay', 'oral', 'practical')},
-                                expected_counts=st.session_state.get('assessment_counts'))
-                            clear_read_caches()
-                            db.release_login(user['id'], st.session_state.login_token)
-                            st.session_state.clear()
-                            st.session_state.assessment_submitted = True
-                            st.rerun()
-                        except ValueError as exc:
-                            st.error(str(exc))
+                    for q in essay_questions:
+                        if q['id'] not in responses or not responses[q['id']].strip():
+                            responses[q['id']] = '[No response submitted - time expired]'
+                    try:
+                        db.submit(
+                            user['id'], discipline, responses, st.session_state.attempt_token,
+                            st.session_state.candidate_details,
+                            st.session_state.assessment_mcq_ids + st.session_state.assessment_essay_ids + st.session_state.assessment_reviewer_ids,
+                            point_settings={kind: settings[f'{kind}_points'] for kind in ('mcq', 'essay', 'oral', 'practical')},
+                            expected_counts=st.session_state.get('assessment_counts'))
+                        clear_read_caches()
+                        db.release_login(user['id'], st.session_state.login_token)
+                        st.session_state.clear()
+                        st.session_state.assessment_submitted = True
+                        st.rerun()
+                    except ValueError as exc:
+                        st.error(str(exc))
             else:
                 question = essay_questions[essay_index]
                 started_at = st.session_state.setdefault('assessment_essay_started_at', {}).setdefault(question['id'], time.time())
                 deadline = started_at + ESSAY_TIME_LIMIT_SECONDS
                 expired = time.time() >= deadline
+                st.caption(f"Essay Question {essay_index + 1} of {len(essay_questions)}")
                 countdown_timer(f'Time remaining for Essay question {essay_index + 1} of {len(essay_questions)}', deadline, f'essay-{question["id"]}')
                 if expired:
-                    st.warning('Essay time expired. Your answer has been submitted and the answer box is disabled.')
+                    st.warning('Essay time expired. Click below to proceed to the next question.')
                 with st.form(f'reviewer_scored_question_{question["id"]}'):
+                    current_val = responses.get(question['id'], '')
                     answer = st.text_area(
                         f"{essay_index + 1}. Essay: {question['question_text']}",
+                        value=current_val,
                         placeholder='Type your answer here...', height=220, max_chars=20000,
                         key=f"answer_{question['id']}", disabled=expired)
-                    if st.form_submit_button('Save answer and go to next question', type='primary'):
-                        responses[question['id']] = answer.strip()
+                    btn_label = 'Time expired: Go to next question' if expired else 'Save answer and go to next question'
+                    if st.form_submit_button(btn_label, type='primary'):
+                        if expired and not answer.strip():
+                            responses[question['id']] = '[No response submitted - time expired]'
+                        else:
+                            responses[question['id']] = answer.strip()
                         st.session_state.assessment_essay_index = essay_index + 1
                         st.rerun()
             section.__exit__(None, None, None)
@@ -667,6 +714,23 @@ else:
                         st.error(str(exc))
             else:
                 st.info('No assessments are available to delete.')
+            st.divider()
+            with st.expander('Test email delivery'):
+                st.caption('Send a test message to confirm SMTP settings before inviting candidates or reviewers.')
+                test_email = st.text_input('Admin email address', value=user.get('email', ''), key='admin_test_email')
+                if st.button('Send test email', type='primary'):
+                    recipient = test_email.strip().lower()
+                    if not recipient:
+                        st.error('Enter an email address for the test message.')
+                    elif hasattr(st, 'dialog'):
+                        send_test_email_dialog(recipient, user.get('name') or 'Administrator')
+                    else:
+                        with st.status('Sending test email…'):
+                            try:
+                                send_test_email(recipient, user.get('name') or 'Administrator')
+                                st.success(f'Test email sent to {recipient}.')
+                            except (EmailDeliveryError, OSError, ValueError) as exc:
+                                st.error(str(exc))
     elif page == 'Create Candidate Account':
         st.subheader('Create a candidate account')
         account_form('candidate_account', actor=user['id'], allowed_roles=['Candidate'])
@@ -746,6 +810,32 @@ else:
         if not upcoming:
             st.info('No upcoming schedules match the filters.')
         else:
+            unsent_candidates = [c for c in upcoming if not c['invitation_sent_at'] and c.get('email')]
+            if unsent_candidates:
+                if st.button(f'Send Schedule & Credentials to All Pending ({len(unsent_candidates)})', type='primary', key='bulk_send_invites'):
+                    success_count = 0
+                    failed_count = 0
+                    progress_text = st.empty()
+                    for idx, c in enumerate(unsent_candidates, 1):
+                        progress_text.caption(f"Sending {idx} of {len(unsent_candidates)}: {c['name']}...")
+                        try:
+                            temp_pw = db.generate_password()
+                            db.set_candidate_temporary_password(user['id'], c['id'], temp_pw)
+                            send_candidate_invitation(
+                                c['email'], c['name'], c['username'],
+                                temp_pw, c['test_date'], c.get('scheduled_discipline') or c['discipline'],
+                            )
+                            db.mark_invitation_sent(user['id'], c['id'])
+                            success_count += 1
+                        except Exception:
+                            failed_count += 1
+                    clear_read_caches()
+                    progress_text.empty()
+                    if failed_count:
+                        st.warning(f"Sent {success_count} invitations; {failed_count} failed.")
+                    else:
+                        st.success(f"All {success_count} invitations sent successfully.")
+                    st.rerun()
             for candidate in upcoming:
                 with st.expander(f"{candidate['name']} - {candidate['discipline']} - {candidate['iqama_no']} - {candidate['test_date']}"):
                     st.write(f"**Email:** {candidate['email']}")
@@ -787,23 +877,6 @@ else:
                                     st.error(str(exc))
     elif page == 'Projects':
         st.subheader('Projects')
-        st.subheader('Test email delivery')
-        st.caption('Send a test message to confirm SMTP settings before inviting candidates or reviewers.')
-        test_email = st.text_input('Admin email address', value=user.get('email', ''), key='admin_test_email')
-        if st.button('Send test email', type='primary'):
-            recipient = test_email.strip().lower()
-            if not recipient:
-                st.error('Enter an email address for the test message.')
-            elif hasattr(st, 'dialog'):
-                send_test_email_dialog(recipient, user.get('name') or 'Administrator')
-            else:
-                with st.status('Sending test email…'):
-                    try:
-                        send_test_email(recipient, user.get('name') or 'Administrator')
-                        st.success(f'Test email sent to {recipient}.')
-                    except (EmailDeliveryError, OSError, ValueError) as exc:
-                        st.error(str(exc))
-        st.divider()
         projects = cached_projects(user['id'])
         
         with st.form('add_project_form'):
@@ -1059,18 +1132,20 @@ else:
         all_disciplines = sorted(list(set(q['discipline'] for q in all_questions)))
         all_types = sorted(list(set(q['q_type'] for q in all_questions)))
         
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns([1, 1, 1])
         filter_discipline = col1.selectbox('Filter by Discipline', ['All'] + all_disciplines)
         type_options = {
             'mcq': 'Multiple Choice Question', 'essay': 'Essay',
             'oral': 'Oral Test', 'practical': 'Practical Test'
         }
         filter_type = col2.selectbox('Filter by Question Type', ['All'] + all_types, format_func=lambda x: type_options.get(x, x))
+        search_kw = col3.text_input('Search Question / Rubric', placeholder='Keyword...').strip().lower()
         
         filtered_questions = [
             q for q in all_questions 
             if (filter_discipline == 'All' or q['discipline'] == filter_discipline) and 
-               (filter_type == 'All' or q['q_type'] == filter_type)
+               (filter_type == 'All' or q['q_type'] == filter_type) and
+               (not search_kw or search_kw in q['question_text'].lower() or search_kw in (q.get('rubric') or '').lower())
         ]
         
         if not filtered_questions:
@@ -1168,7 +1243,7 @@ else:
         except (ImportError, OSError, ValueError) as exc:
             st.error(f'Unable to create the candidate result PDF. Install the reportlab package and retry. Details: {exc}')
         answers = db.answer_details(user['id'], sid)
-        questionnaire = st.expander('Questionnaire', expanded=sub['status'] != 'Graded')
+        questionnaire = st.expander('Questionnaire', expanded=False)
         questionnaire.__enter__()
         with st.form(f'grading_{sid}'):
             scores = {}
@@ -1198,7 +1273,7 @@ else:
                                                                     key=f"observed_response_{a['id']}", disabled=sub['status'] == 'Graded')
                     st.info(f"Scoring guidance: {q['rubric']}")
                     score_max = min(q['max_points'], 10)
-                    scores[a['id']] = st.number_input(f"Points for answer #{a['id']} (max {score_max})", min_value=0, max_value=score_max, value=min(int(a['awarded_score']), score_max), step=1, disabled=sub['status'] == 'Graded')
+                    scores[a['id']] = st.number_input(f"Points for answer #{a['id']} (max {int(score_max)})", min_value=0, max_value=int(score_max), value=min(int(a['awarded_score']), int(score_max)), step=1, disabled=sub['status'] == 'Graded')
                 else:
                     st.caption(f"Correct answer: {q['correct_answer']} · Awarded: {a['awarded_score']:g}")
             if question_section is not None:

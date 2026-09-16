@@ -6,5 +6,4 @@ textColor = "#0F172A"
 
 [server]
 headless = true
-
-
+enableStaticServing = true

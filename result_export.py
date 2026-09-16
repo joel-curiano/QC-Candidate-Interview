@@ -56,9 +56,9 @@ def excel_bytes(rows):
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
     for row in sheet.iter_rows(min_row=2):
         for cell in row:
-            cell.alignment = Alignment(vertical='top', wrap_text=cell.column in (2, 3, 5, 8, 9, 21))
+            cell.alignment = Alignment(vertical='top', wrap_text=cell.column in (2, 3, 5, 6, 13))
 
-    widths = [12, 24, 30, 18, 20, 18, 18, 18, 24, 20, 16, 22, 18, 20, 16, 16, 16, 16, 18, 18, 42, 22]
+    widths = [12, 24, 25, 16, 22, 22, 14, 16, 22, 16, 16, 18, 35, 18, 18]
     for index, width in enumerate(widths, 1):
         sheet.column_dimensions[get_column_letter(index)].width = width
     sheet.freeze_panes = 'A2'

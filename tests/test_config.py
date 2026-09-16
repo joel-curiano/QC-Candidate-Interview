@@ -43,6 +43,12 @@ def test_connection_enforces_tls_and_transaction(monkeypatch):
     assert connect.return_value.__exit__.call_args.args[0] is ValueError
 
 
+def test_pool_configuration_commits_session_settings(monkeypatch):
+    connection = MagicMock()
+    db._configure_connection(connection)
+    connection.commit.assert_called_once_with()
+
+
 def test_database_errors_do_not_expose_credentials(monkeypatch):
     monkeypatch.setenv('SUPABASE_DB_URL', 'postgresql://secret-password')
     monkeypatch.setattr(db.psycopg, 'connect', MagicMock(side_effect=psycopg.OperationalError('secret-password')))
