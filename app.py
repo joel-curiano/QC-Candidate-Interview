@@ -864,6 +864,7 @@ else:
                                     temporary_password, candidate['test_date'], candidate.get('scheduled_discipline') or candidate['discipline'],
                                 )
                                 db.mark_invitation_sent(user['id'], candidate['id'])
+                                clear_read_caches()
                                 st.success('Schedule and login credentials sent. The temporary password is now active.')
                                 st.rerun()
                             except (EmailDeliveryError, OSError, ValueError) as exc:
