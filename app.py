@@ -195,6 +195,26 @@ def clear_read_caches():
     cached_candidate_result_pdf.clear()
 
 
+def filter_upcoming_candidates(candidates, name='All', discipline='All', iqama_no='All'):
+    """Return upcoming candidates matching the current schedule filters."""
+    def normalized(value):
+        return str(value or '').strip().casefold()
+
+    name_filter = normalized(name)
+    discipline_filter = normalized(discipline)
+    iqama_filter = normalized(iqama_no)
+
+    return [
+        candidate for candidate in candidates
+        if (name == 'All' or normalized(candidate.get('name')) == name_filter)
+        and (
+            discipline == 'All'
+            or normalized(candidate.get('scheduled_discipline') or candidate.get('discipline')) == discipline_filter
+        )
+        and (iqama_no == 'All' or normalized(candidate.get('iqama_no')) == iqama_filter)
+    ]
+
+
 def question_options(question):
     """Return MCQ options regardless of whether the database driver decoded JSON."""
     raw_options = question.get('options')
@@ -768,22 +788,39 @@ else:
                 st.write(f"**Email:** {candidate['email']} | **Current Test Date:** {candidate['test_date']}")
                 
                 with st.form(f"schedule_{candidate['id']}"):
-                    current_test_date = candidate['test_date'] or date.today()
-                    # Keep legacy/past dates valid as the initial value, while
-                    # requiring new selections to be today or later.
+                    current_test_date = candidate['test_date']
+                    # Leave an unscheduled candidate's date blank so a test
+                    # schedule must be selected before saving.
                     schedule_date = st.date_input(
-                        'Test date schedule',
+                        'Test date schedule *',
                         value=current_test_date,
-                        min_value=min(current_test_date, date.today()),
+                        min_value=min(current_test_date, date.today()) if current_test_date else date.today(),
                     )
                     disciplines = cached_disciplines()
-                    scheduled_discipline = st.selectbox('Candidate Discipline', disciplines, index=(disciplines.index(candidate.get('scheduled_discipline') or candidate.get('discipline')) if (candidate.get('scheduled_discipline') or candidate.get('discipline')) in disciplines else None))
+                    discipline_options = ['Select discipline'] + disciplines
+                    current_discipline = candidate.get('scheduled_discipline') or candidate.get('discipline')
+                    scheduled_discipline = st.selectbox(
+                        'Candidate Discipline *',
+                        discipline_options,
+                        index=discipline_options.index(current_discipline) if current_discipline in discipline_options else 0,
+                    )
                     projects = cached_projects(user['id'])
-                    project_assignment = st.selectbox('Project Assignment', projects, index=(projects.index(candidate.get('project_assignment')) if candidate.get('project_assignment') in projects else None)) if projects else st.text_input('Project Assignment', value=candidate.get('project_assignment', ''))
+                    project_options = ['Unassigned'] + [project for project in projects if project != 'Unassigned']
+                    current_project = candidate.get('project_assignment') or 'Unassigned'
+                    project_assignment = st.selectbox(
+                        'Project Assignment *',
+                        project_options,
+                        index=project_options.index(current_project) if current_project in project_options else 0,
+                        help='Use Unassigned for new applicants taking the CTA before a project is assigned.',
+                    )
                     if st.form_submit_button('Save Schedule', type='primary'):
                         try:
+                            if not schedule_date:
+                                raise ValueError('Candidate test date is required.')
                             if schedule_date < date.today():
                                 raise ValueError('Test date must be today or a future date.')
+                            if scheduled_discipline == 'Select discipline':
+                                raise ValueError('Candidate Discipline is required.')
                             db.update_candidate_schedule(user['id'], candidate['id'], schedule_date, project_assignment, scheduled_discipline)
                             clear_read_caches()
                             st.success('Schedule saved successfully.')
@@ -796,19 +833,15 @@ else:
         candidates = cached_candidate_accounts(user['id'])
         
         today = date.today()
-        upcoming = [c for c in candidates if c['test_date'] and c['test_date'] >= today]
+        scheduled_candidates = [c for c in candidates if c['test_date'] and c['test_date'] >= today]
         
         col1, col2, col3 = st.columns(3)
-        with col1: search_name = st.selectbox('Filter by Name', ['All'] + sorted({c['name'] for c in upcoming}), key='upc_name')
-        with col2: search_discipline = st.selectbox('Filter by Discipline', ['All'] + sorted({c.get('scheduled_discipline') or c.get('discipline', '') for c in upcoming}), key='upc_disc')
-        with col3: search_iqama = st.selectbox('Filter by Iqama', ['All'] + sorted({c['iqama_no'] for c in upcoming if c.get('iqama_no')}), key='upc_iqama')
+        with col1: search_name = st.selectbox('Filter by Name', ['All'] + sorted({str(c['name']).strip() for c in scheduled_candidates if c.get('name')}), key='upc_name')
+        with col2: search_discipline = st.selectbox('Filter by Discipline', ['All'] + sorted({str(c.get('scheduled_discipline') or c.get('discipline', '')).strip() for c in scheduled_candidates if c.get('scheduled_discipline') or c.get('discipline')}), key='upc_disc')
+        with col3: search_iqama = st.selectbox('Filter by Iqama', ['All'] + sorted({str(c['iqama_no']).strip() for c in scheduled_candidates if c.get('iqama_no')}), key='upc_iqama')
         
-        if search_name != 'All':
-            upcoming = [c for c in upcoming if c['name'] == search_name]
-        if search_discipline != 'All':
-            upcoming = [c for c in upcoming if (c.get('scheduled_discipline') or c.get('discipline', '')) == search_discipline]
-        if search_iqama != 'All':
-            upcoming = [c for c in upcoming if c['iqama_no'] == search_iqama]
+        upcoming = filter_upcoming_candidates(scheduled_candidates, search_name, search_discipline, search_iqama)
+        st.caption(f'Showing {len(upcoming)} of {len(scheduled_candidates)} upcoming candidate(s).')
             
         if not upcoming:
             st.info('No upcoming schedules match the filters.')
