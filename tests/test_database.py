@@ -34,7 +34,7 @@ def test_auth_and_roles(accounts):
         db.create_user('staff', 'Staff', PASSWORD, 'Reviewer', actor=accounts['reviewer'])
     with db.connection() as c:
         assert c.execute("SELECT password FROM users WHERE username='alice'").fetchone()['password'] != PASSWORD
-    db.add_question(accounts['reviewer'], 'E&I QC', 'mcq', 'Choose E&I evidence', ['A', 'B'], 'A', '', 5)
+    db.add_question(accounts['reviewer'], 'E&I QC', 'mcq', 'Choose E&I evidence', ['A', 'B'], 'A', '')
     assert 'E&I QC' in db.disciplines()
     assert 'Mechanical QC' in db.disciplines()
     assert 'Communications QC' in db.disciplines()
@@ -117,7 +117,7 @@ def test_validation_and_snapshots(accounts):
     assert json.loads(db.answer_details(accounts['admin'], sid)[0]['snapshot'])['max_points'] == 10
 
 def test_mcq_only_and_wrong_answer(accounts):
-    db.add_question(accounts['admin'], 'Test', 'mcq', 'Choose A', ['A', 'B'], 'A', '', 5)
+    db.add_question(accounts['admin'], 'Test', 'mcq', 'Choose A', ['A', 'B'], 'A', '')
     q = db.questions('Test')[0]
     sid = db.submit(accounts['alice'], 'Test', {q['id']: 'B'}, 'wrong')
     assert db.result(db.submissions(accounts['alice'])[0]) == 'FAIL (0.0%)'
@@ -151,7 +151,7 @@ def test_concurrent_review_and_transaction_rollback(accounts):
         futures = [pool.submit(finalize) for _ in range(2)]
         assert sorted(f.result() for f in futures) == ['already graded', 'saved']
 
-    db.add_question(accounts['admin'], 'Welding QC', 'essay', 'Second essay', [], '', 'Rubric', 10)
+    db.add_question(accounts['admin'], 'Welding QC', 'essay', 'Second essay', [], '', 'Rubric')
     sid, _ = attempt(accounts, 'rollback')
     essays = [a for a in db.answer_details(accounts['admin'], sid) if json.loads(a['snapshot'])['q_type'] == 'essay']
     with pytest.raises(ValueError):

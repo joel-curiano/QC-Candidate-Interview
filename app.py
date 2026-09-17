@@ -69,6 +69,42 @@ st.markdown(
     [data-testid="stMarkdownContainer"] h3 {
         color: #b51f2d !important;
     }
+    .stButton > button,
+    .stDownloadButton > button {
+        background-color: #ffffff;
+        border: 1px solid #b51f2d;
+        color: #8f1824;
+        font-weight: 600;
+    }
+    .stButton > button:hover,
+    .stDownloadButton > button:hover {
+        background-color: #fce8eb;
+        border-color: #8f1824;
+        color: #8f1824;
+    }
+    .stButton > button[kind="primary"],
+    .stDownloadButton > button[kind="primary"] {
+        background-color: #b51f2d;
+        border-color: #b51f2d;
+        color: #ffffff;
+    }
+    .stButton > button[kind="primary"]:hover,
+    .stDownloadButton > button[kind="primary"]:hover {
+        background-color: #8f1824;
+        border-color: #8f1824;
+        color: #ffffff;
+    }
+    .stButton > button:focus-visible,
+    .stDownloadButton > button:focus-visible {
+        box-shadow: 0 0 0 3px rgba(181, 31, 45, 0.25);
+        outline: none;
+    }
+    .stButton > button:disabled,
+    .stDownloadButton > button:disabled {
+        background-color: #e2e8f0;
+        border-color: #cbd5e1;
+        color: #64748b;
+    }
     .logo-container {
         text-align: left;
         margin-bottom: 0.5rem;
@@ -440,6 +476,21 @@ if hasattr(st, 'dialog'):
             progress_bar.empty()
             st.error(str(exc))
 
+    @st.dialog('Confirm Question Bank Wipe')
+    def wipe_question_bank_dialog(uid):
+        st.warning(
+            'This removes all unanswered questions and archives every question that has already been used in a candidate assessment.'
+        )
+        confirmed = st.checkbox('I understand that this action will clear the active Question Bank.')
+        if st.button('Confirm Wipe Question Bank', type='primary', disabled=not confirmed):
+            try:
+                db.wipe_questions(uid)
+                clear_read_caches()
+                st.session_state['question_bank_wiped'] = True
+                st.rerun()
+            except ValueError as exc:
+                st.error(str(exc))
+
 st.markdown(f'''
 <div class="logo-container">
     <img src="{cat_icon_data_url('C.A.T. Logo - Horizontal.jpg')}" alt="C.A.T. Logo">
@@ -798,15 +849,15 @@ else:
                     )
                     disciplines = cached_disciplines()
                     discipline_options = ['Select discipline'] + disciplines
-                    current_discipline = candidate.get('scheduled_discipline') or candidate.get('discipline')
+                    current_discipline = candidate.get('scheduled_discipline')
                     scheduled_discipline = st.selectbox(
                         'Candidate Discipline *',
                         discipline_options,
                         index=discipline_options.index(current_discipline) if current_discipline in discipline_options else 0,
                     )
                     projects = cached_projects(user['id'])
-                    project_options = ['Unassigned'] + [project for project in projects if project != 'Unassigned']
-                    current_project = candidate.get('project_assignment') or 'Unassigned'
+                    project_options = ['Select project assignment', 'Unassigned'] + [project for project in projects if project != 'Unassigned']
+                    current_project = candidate.get('project_assignment')
                     project_assignment = st.selectbox(
                         'Project Assignment *',
                         project_options,
@@ -821,6 +872,8 @@ else:
                                 raise ValueError('Test date must be today or a future date.')
                             if scheduled_discipline == 'Select discipline':
                                 raise ValueError('Candidate Discipline is required.')
+                            if project_assignment == 'Select project assignment':
+                                raise ValueError('Project Assignment is required.')
                             db.update_candidate_schedule(user['id'], candidate['id'], schedule_date, project_assignment, scheduled_discipline)
                             clear_read_caches()
                             st.success('Schedule saved successfully.')
@@ -1055,18 +1108,31 @@ else:
     elif page == 'Question Bank':
         st.subheader('Question Bank')
         st.caption('Add project-specific technical questions and rubrics before using this for hiring.')
+        if st.session_state.pop('question_bank_wiped', False):
+            st.success('Question Bank wiped. Unanswered questions were removed and answered questions were archived.')
         
         if user['role'] == 'Admin':
             with st.expander('Wipe Question Bank'):
                 st.warning('This will delete all questions. Questions that have already been answered by candidates will be deactivated instead of deleted to preserve assessment records.')
                 if st.button('Wipe Question Bank', type='primary'):
-                    try:
-                        db.wipe_questions(user['id'])
-                        clear_read_caches()
-                        st.success('Question Bank wiped.')
-                        st.rerun()
-                    except ValueError as exc:
-                        st.error(str(exc))
+                    if hasattr(st, 'dialog'):
+                        wipe_question_bank_dialog(user['id'])
+                    else:
+                        st.session_state['confirm_wipe_question_bank'] = True
+                if st.session_state.get('confirm_wipe_question_bank'):
+                    confirmed = st.checkbox(
+                        'I understand that this action will clear the active Question Bank.',
+                        key='confirm_wipe_question_bank_acknowledged',
+                    )
+                    if st.button('Confirm Wipe Question Bank', type='primary', disabled=not confirmed):
+                        try:
+                            db.wipe_questions(user['id'])
+                            clear_read_caches()
+                            st.session_state.pop('confirm_wipe_question_bank', None)
+                            st.session_state['question_bank_wiped'] = True
+                            st.rerun()
+                        except ValueError as exc:
+                            st.error(str(exc))
                         
                 st.error('The following option is destructive. It will completely remove archived questions and delete the assessment records of any candidates who answered them.')
                 if st.button('Wipe archived questions and candidate records'):
@@ -1131,10 +1197,9 @@ else:
                 options = st.text_area('Multiple Choice options (one per line)') if kind == 'mcq' else ''
                 correct = st.text_input('Correct answer (exact option text)') if kind == 'mcq' else ''
                 rubric = st.text_area('Scoring rubric') if kind in ('essay', 'oral', 'practical') else ''
-                points = st.number_input('Maximum points', 1, 1 if kind == 'mcq' else 10, 1 if kind == 'mcq' else 10, disabled=kind == 'mcq')
                 if st.form_submit_button('Add question'):
                     try:
-                        db.add_question(user['id'], discipline, kind, prompt, options.splitlines(), correct.strip(), rubric, points)
+                        db.add_question(user['id'], discipline, kind, prompt, options.splitlines(), correct.strip(), rubric)
                         clear_read_caches()
                         st.success('Question added.')
                     except ValueError as exc:

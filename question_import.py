@@ -12,7 +12,6 @@ HEADERS = [
     'Multiple Choice options',
     'Correct answer',
     'Scoring rubric',
-    'Maximum points',
 ]
 
 
@@ -36,7 +35,9 @@ def parse_questions(workbook_bytes):
     header = next(rows, None)
     normalized_header = [_text(value) for value in header[:len(HEADERS)]] if header is not None else []
     legacy_headers = HEADERS[:3] + ['MCQ options'] + HEADERS[4:]
-    if normalized_header not in (HEADERS, legacy_headers):
+    legacy_headers_with_points = HEADERS + ['Maximum points']
+    legacy_headers_with_points_and_mcq_options = legacy_headers + ['Maximum points']
+    if normalized_header not in (HEADERS, legacy_headers, legacy_headers_with_points, legacy_headers_with_points_and_mcq_options):
         raise QuestionImportError('The first row must contain the template headers in the expected order.')
 
     questions = []
@@ -46,7 +47,7 @@ def parse_questions(workbook_bytes):
             continue
         if len(values) < len(HEADERS):
             values.extend([''] * (len(HEADERS) - len(values)))
-        discipline, kind, prompt, options, correct, rubric, points = map(_text, values)
+        discipline, kind, prompt, options, correct, rubric = map(_text, values)
         
         row_result = {'row_number': row_number, 'success': True, 'error': None, 'question': None, 'prompt': prompt}
         try:
@@ -54,18 +55,10 @@ def parse_questions(workbook_bytes):
                 raise QuestionImportError('Discipline and question are required.')
             if kind not in ('mcq', 'essay', 'oral', 'practical'):
                 raise QuestionImportError('Question type must be mcq, essay, oral, or practical.')
-            try:
-                max_points = int(float(points))
-            except ValueError as exc:
-                raise QuestionImportError('MCQ maximum points must be 1; other question types must be between 1 and 100.') from exc
-            if kind != 'mcq' and not 1 <= max_points <= 100:
-                raise QuestionImportError('MCQ maximum points must be 1; other question types must be between 1 and 100.')
             option_values = [value.strip() for value in options.replace(';', '\n').splitlines() if value.strip()]
             if kind == 'mcq':
                 if len(option_values) < 2 or len(set(option_values)) != len(option_values) or correct not in option_values:
                     raise QuestionImportError('Multiple Choice questions need unique options and an exact correct answer.')
-                if max_points != 1:
-                    raise QuestionImportError('Multiple Choice questions must have Maximum points set to 1.')
             elif not rubric:
                 raise QuestionImportError('Essay, oral, and practical questions require a scoring rubric.')
             row_result['question'] = {
@@ -75,7 +68,6 @@ def parse_questions(workbook_bytes):
                 'options': option_values,
                 'correct': correct,
                 'rubric': rubric,
-                'points': max_points,
             }
         except QuestionImportError as e:
             row_result['success'] = False
@@ -107,7 +99,7 @@ def template_bytes():
     instructions.append(['Question bank import instructions'])
     instructions.append(['Fill the Questions sheet and leave no completely blank rows between questions.'])
     instructions.append(['Question type must be mcq, essay, oral, or practical. For Multiple Choice questions, put one option per line in Multiple Choice options.'])
-    instructions.append(['MCQ rows must use Maximum points = 1. Essay, oral, and practical rows may use a whole number from 1 to 100. Keep the headers unchanged.'])
+    instructions.append(['Assessment Settings determines the maximum points for each question type. Keep the headers unchanged.'])
     instructions.column_dimensions['A'].width = 110
     output = BytesIO()
     workbook.save(output)

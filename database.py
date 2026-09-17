@@ -501,24 +501,23 @@ def disciplines():
         rows = c.execute('SELECT DISTINCT discipline FROM questions ORDER BY discipline').fetchall()
     return sorted(set(STARTER_DISCIPLINES) | {row['discipline'] for row in rows})
 
-def add_question(actor, discipline, kind, prompt, options, correct, rubric, points):
-    question = _validate_question(discipline, kind, prompt, options, correct, rubric, points)
+def add_question(actor, discipline, kind, prompt, options, correct, rubric):
+    question = _validate_question(discipline, kind, prompt, options, correct, rubric)
     with connection() as c:
         require(c, actor, ('Admin', 'Reviewer'))
         _insert_question(c, question)
 
-def _validate_question(discipline, kind, prompt, options, correct, rubric, points):
+def _validate_question(discipline, kind, prompt, options, correct, rubric):
     options = [v.strip() for v in options if v.strip()]
-    if not discipline.strip() or not prompt.strip() or not 1 <= points <= (1 if kind == 'mcq' else 10):
-        raise ValueError('Discipline and question are required. MCQ points must be 1; other question types must be 1-10.')
+    if not discipline.strip() or not prompt.strip():
+        raise ValueError('Discipline and question are required.')
     if kind not in ('mcq', 'essay', 'oral', 'practical'):
         raise ValueError('Invalid question type.')
-    if kind == 'mcq' and points != 1:
-        raise ValueError('Multiple Choice questions must be worth exactly 1 point.')
     if kind == 'mcq' and (len(options) < 2 or len(set(options)) != len(options) or correct not in options):
         raise ValueError('Provide unique options and an exact matching correct answer.')
     if kind in ('essay', 'oral', 'practical') and not rubric.strip():
         raise ValueError('Essay, oral, and practical questions require a scoring rubric.')
+    points = 1 if kind == 'mcq' else 10
     return (discipline.strip(), kind, prompt.strip(), options, correct.strip(), rubric.strip(), points)
 
 def _insert_question(connection, question):
@@ -541,7 +540,7 @@ def add_questions(actor, parse_results, progress_callback=None):
                 continue
             q = result['question']
             try:
-                validated = _validate_question(q['discipline'], q['kind'], q['prompt'], q['options'], q['correct'], q['rubric'], q['points'])
+                validated = _validate_question(q['discipline'], q['kind'], q['prompt'], q['options'], q['correct'], q['rubric'])
                 _insert_question(c, validated)
             except ValueError as e:
                 result['success'] = False

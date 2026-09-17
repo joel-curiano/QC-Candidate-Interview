@@ -23,12 +23,12 @@ def test_candidate_and_reviewer_flow(postgres_db):
     admin = db.authenticate('admin', PASSWORD)
     db.create_user('candidate', 'Candidate', PASSWORD, actor=admin['id'], email='candidate@example.com', test_date=date.today(), discipline='Welding QC', iqama_no='1234567890', employee_no='EMP-1')
     for index in range(39):
-        db.add_question(admin['id'], 'Welding QC', 'mcq', f'Additional choice {index}', ['A', 'B'], 'A', '', 10)
+        db.add_question(admin['id'], 'Welding QC', 'mcq', f'Additional choice {index}', ['A', 'B'], 'A', '')
     for index in range(4):
-        db.add_question(admin['id'], 'Welding QC', 'essay', f'Additional essay {index}', [], '', 'Award for evidence.', 20)
+        db.add_question(admin['id'], 'Welding QC', 'essay', f'Additional essay {index}', [], '', 'Award for evidence.')
     for kind in ('oral', 'practicum'):
         for index in range(5):
-            db.add_question(admin['id'], 'Welding QC', kind, f'Additional {kind} {index}', [], '', 'Award for evidence.', 20)
+            db.add_question(admin['id'], 'Welding QC', kind, f'Additional {kind} {index}', [], '', 'Award for evidence.')
     candidate = db.authenticate('candidate', PASSWORD)
     at = AppTest.from_file(APP, default_timeout=15).run()
     at.text_input[0].input('candidate')
