@@ -55,6 +55,7 @@ def test_invitation_contains_schedule_and_credentials(monkeypatch):
     assert 'candidate.user' in body
     assert 'Temp!Pass123' in body
     assert 'valid only on Thursday, 10 September 2026' in body
+    assert 'presentable and maintain a professional appearance' in body
     assert 'https://qc.example.com' in body
     assert sent['tls'] is True
 

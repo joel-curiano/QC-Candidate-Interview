@@ -16,3 +16,10 @@ outputs/
 local-presentations/
 .agents/
 permissions.md
+.cache/
+pytest-cache-files-*/
+.coverage
+.coverage.*
+.mypy_cache/
+.ruff_cache/
+*.py[cod]

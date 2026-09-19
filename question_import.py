@@ -1,6 +1,7 @@
 """Excel question-bank import and template helpers."""
 from io import BytesIO
 from copy import copy
+import json
 
 from openpyxl import Workbook, load_workbook
 
@@ -101,6 +102,33 @@ def template_bytes():
     instructions.append(['Question type must be mcq, essay, oral, or practical. For Multiple Choice questions, put one option per line in Multiple Choice options.'])
     instructions.append(['Assessment Settings determines the maximum points for each question type. Keep the headers unchanged.'])
     instructions.column_dimensions['A'].width = 110
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+def export_questions_bytes(questions):
+    """Return active question-bank rows in the re-importable template format."""
+    workbook = load_workbook(BytesIO(template_bytes()))
+    sheet = workbook['Questions']
+    for question in questions:
+        options = question.get('options') or []
+        if isinstance(options, str):
+            try:
+                options = json.loads(options)
+            except (TypeError, ValueError):
+                options = options.splitlines()
+        sheet.append([
+            question.get('discipline', ''),
+            question.get('q_type', ''),
+            question.get('question_text', ''),
+            '\n'.join(str(option) for option in options),
+            question.get('correct_answer', '') or '',
+            question.get('rubric', '') or '',
+        ])
+        for cell in sheet[sheet.max_row]:
+            if isinstance(cell.value, str):
+                cell.data_type = 's'
+    sheet.auto_filter.ref = sheet.dimensions
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()

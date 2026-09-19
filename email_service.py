@@ -71,6 +71,8 @@ def send_candidate_invitation(email, name, username, temporary_password, test_da
         f'Temporary password: {temporary_password}\n\n'
         f'Your login is valid only on {display_date}. The portal will not accept your candidate '
         'login before or after this scheduled date.\n\n'
+        'Please be presentable and maintain a professional appearance and conduct throughout the '
+        'assessment, including the oral and practical portions.\n\n'
         'On the scheduled date, open the assessment portal, enter the credentials above, and '
         'follow the on-screen instructions. Please keep these credentials confidential and do '
         'not forward this email.\n\n'

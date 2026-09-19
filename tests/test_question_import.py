@@ -3,7 +3,7 @@ from io import BytesIO
 import pytest
 from openpyxl import load_workbook
 
-from question_import import QuestionImportError, parse_questions, template_bytes
+from question_import import QuestionImportError, export_questions_bytes, parse_questions, template_bytes
 
 
 def test_template_is_a_parseable_blank_workbook():
@@ -34,3 +34,30 @@ def test_import_rejects_invalid_rows():
     assert len(results) == 1
     assert results[0]['success'] is False
     assert 'unique options' in results[0]['error']
+
+def test_existing_questions_export_is_reimportable():
+    questions = [
+        {
+            'discipline': 'Welding QC',
+            'q_type': 'mcq',
+            'question_text': 'Choose one',
+            'options': '["A", "B"]',
+            'correct_answer': 'A',
+            'rubric': '',
+        },
+        {
+            'discipline': 'Civil QC',
+            'q_type': 'essay',
+            'question_text': 'Explain the inspection',
+            'options': None,
+            'correct_answer': None,
+            'rubric': 'Award for evidence.',
+        },
+    ]
+
+    exported = export_questions_bytes(questions)
+    parsed = parse_questions(exported)
+
+    assert [result['success'] for result in parsed] == [True, True]
+    assert parsed[0]['question']['options'] == ['A', 'B']
+    assert parsed[1]['question']['rubric'] == 'Award for evidence.'

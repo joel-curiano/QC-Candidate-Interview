@@ -11,10 +11,10 @@ import streamlit as st
 import streamlit.components.v1 as components
 import database as db
 from email_service import EmailDeliveryError, send_candidate_invitation, send_candidate_result, send_reviewer_credentials, send_test_email
-from question_import import QuestionImportError, parse_questions, template_bytes
+from question_import import QuestionImportError, export_questions_bytes, parse_questions, template_bytes
 from result_export import excel_bytes
 
-CAT_TAB_ICON_PATH = 'img/CAT Icon Neutral Backgound.jpg'
+CAT_TAB_ICON_PATH = 'img/Icon/CAT Icon Neutral Backgound.jpg'
 st.set_page_config(page_title='Competency Technical Assessment (CTA) Portal', page_icon=CAT_TAB_ICON_PATH, layout='centered')
 st.markdown(
     '''<style>
@@ -431,14 +431,30 @@ if hasattr(st, 'dialog'):
 
     @st.dialog('Importing Questions', width='large')
     def import_dialog(file_bytes, uid):
-        progress_bar = st.progress(0, text='Parsing Excel file...')
+        stage = st.empty()
+        stage.info('Step 1 of 2: Validating the Excel workbook. No questions are being added yet.')
+        progress_bar = st.progress(0, text='Validating Excel workbook...')
+        phase = 1
         try:
             parsed_results = parse_questions(file_bytes)
+            valid_count = sum(1 for result in parsed_results if result['success'])
+            invalid_count = len(parsed_results) - valid_count
+            progress_bar.empty()
+            stage.info(
+                f'Step 2 of 2: Importing {valid_count} validated question(s) into the question bank. '
+                f'{invalid_count} row(s) will be reported as invalid.'
+            )
+            progress_bar = st.progress(0, text='Importing validated questions...')
+            phase = 2
             def import_progress(current, total):
-                progress_bar.progress(current / total if total > 0 else 1.0, text=f'Importing question {current} of {total}...')
+                progress_bar.progress(
+                    current / total if total > 0 else 1.0,
+                    text=f'Step 2 of 2: Importing question {current} of {total}...',
+                )
             final_results = db.add_questions(uid, parsed_results, progress_callback=import_progress)
             clear_read_caches()
             progress_bar.empty()
+            stage.success('Step 2 of 2 complete: Import finished.')
             success_count = sum(1 for r in final_results if r['success'])
             fail_count = len(final_results) - success_count
             if fail_count == 0:
@@ -458,6 +474,10 @@ if hasattr(st, 'dialog'):
                 st.rerun()
         except (QuestionImportError, ValueError) as exc:
             progress_bar.empty()
+            if phase == 1:
+                stage.error('Step 1 of 2: Validation failed. No questions were imported.')
+            else:
+                stage.error('Step 2 of 2: Import failed after validation completed.')
             st.error(str(exc))
 
     @st.dialog('Deleting Archived Questions')
@@ -588,7 +608,13 @@ if user['role'] == 'Candidate':
         details = st.session_state.get('candidate_details')
         if not details:
             st.subheader('Candidate Details')
-            st.info('You have 40 minutes to answer all Multiple Choice Questions. The countdown begins when you press the Start Multiple Choice Questions button.')
+            st.info(
+                '**Candidate instructions**\n\n'
+                '- Be presentable and maintain a professional appearance and conduct throughout the assessment, '
+                'including the oral and practical portions.\n'
+                '- You have 40 minutes to answer all Multiple Choice Questions. The countdown begins when you '
+                'press the Start Multiple Choice Questions button.'
+            )
             with st.form('candidate_details_form'):
                 st.text_input('Discipline', value=discipline, disabled=True, key='candidate_discipline_display')
                 designation = st.text_input('Job Title (Inspector, Supervisor, Technician...)', key='candidate_job_title')
@@ -1152,22 +1178,50 @@ else:
                             progress_bar.empty()
                             st.error(str(exc))
 
-        st.download_button('Download Excel template', template_bytes(), 'qc-question-template.xlsx',
-                           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        active_questions = cached_questions()
+        template_column, export_column = st.columns(2)
+        template_column.download_button(
+            'Download Excel template', template_bytes(), 'qc-question-template.xlsx',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', use_container_width=True,
+        )
+        export_column.download_button(
+            f'Export existing questions ({len(active_questions)})',
+            export_questions_bytes(active_questions),
+            'qc-existing-questions.xlsx',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            use_container_width=True,
+            disabled=not active_questions,
+        )
         with st.expander('Import questions from Excel'):
             upload = st.file_uploader('Excel workbook', type=['xlsx'], help='Use the downloaded template. Existing questions are not changed.')
             if upload is not None and st.button('Import questions', type='primary'):
                 if hasattr(st, 'dialog'):
                     import_dialog(upload.getvalue(), user['id'])
                 else:
-                    progress_bar = st.progress(0, text='Parsing Excel file...')
+                    stage = st.empty()
+                    stage.info('Step 1 of 2: Validating the Excel workbook. No questions are being added yet.')
+                    progress_bar = st.progress(0, text='Validating Excel workbook...')
+                    phase = 1
                     try:
                         parsed_results = parse_questions(upload.getvalue())
+                        valid_count = sum(1 for result in parsed_results if result['success'])
+                        invalid_count = len(parsed_results) - valid_count
+                        progress_bar.empty()
+                        stage.info(
+                            f'Step 2 of 2: Importing {valid_count} validated question(s) into the question bank. '
+                            f'{invalid_count} row(s) will be reported as invalid.'
+                        )
+                        progress_bar = st.progress(0, text='Importing validated questions...')
+                        phase = 2
                         def import_progress(current, total):
-                            progress_bar.progress(current / total if total > 0 else 1.0, text=f'Importing question {current} of {total}...')
+                            progress_bar.progress(
+                                current / total if total > 0 else 1.0,
+                                text=f'Step 2 of 2: Importing question {current} of {total}...',
+                            )
                         final_results = db.add_questions(user['id'], parsed_results, progress_callback=import_progress)
                         clear_read_caches()
                         progress_bar.empty()
+                        stage.success('Step 2 of 2 complete: Import finished.')
                         success_count = sum(1 for r in final_results if r['success'])
                         fail_count = len(final_results) - success_count
                         if fail_count == 0:
@@ -1185,6 +1239,10 @@ else:
                         st.dataframe(df_data, use_container_width=True)
                     except (QuestionImportError, ValueError) as exc:
                         progress_bar.empty()
+                        if phase == 1:
+                            stage.error('Step 1 of 2: Validation failed. No questions were imported.')
+                        else:
+                            stage.error('Step 2 of 2: Import failed after validation completed.')
                         st.error(str(exc))
         with st.expander('Add a question', expanded=True):
             kind = st.selectbox('Question type', ['mcq', 'essay', 'oral', 'practical'], format_func=lambda value: {
