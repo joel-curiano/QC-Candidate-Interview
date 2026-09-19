@@ -7,6 +7,7 @@ import secrets
 import time
 from datetime import date
 from pathlib import Path
+from PIL import Image as PILImage
 import streamlit as st
 import streamlit.components.v1 as components
 import database as db
@@ -14,8 +15,75 @@ from email_service import EmailDeliveryError, send_candidate_invitation, send_ca
 from question_import import QuestionImportError, export_questions_bytes, parse_questions, template_bytes
 from result_export import excel_bytes
 
-CAT_TAB_ICON_PATH = 'img/Icon/CAT Icon Neutral Backgound.jpg'
-st.set_page_config(page_title='Competency Technical Assessment (CTA) Portal', page_icon=CAT_TAB_ICON_PATH, layout='centered')
+
+def _load_tab_icon():
+    base_dir = Path(__file__).resolve().parent
+    icon_png_path = base_dir / 'img' / 'Icon' / 'CAT-Tab-Icon.png'
+    static_favicon_path = base_dir / 'static' / 'favicon.png'
+
+    if icon_png_path.exists():
+        try:
+            return PILImage.open(icon_png_path)
+        except Exception:
+            pass
+
+    scratch_icon = Path(r"C:\Users\joel.curiano\.gemini\antigravity-ide\brain\e3c918bb-4638-4bbe-ba61-44124b736fc1\scratch\var3_badge.png")
+    if scratch_icon.exists():
+        try:
+            import shutil
+            icon_png_path.parent.mkdir(parents=True, exist_ok=True)
+            static_favicon_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(scratch_icon, icon_png_path)
+            shutil.copy(scratch_icon, static_favicon_path)
+            return PILImage.open(icon_png_path)
+        except Exception:
+            pass
+
+    src_white = base_dir / 'img' / 'Icon' / 'CAT Icon White Background.png'
+    if src_white.exists():
+        try:
+            from PIL import ImageDraw
+            src = PILImage.open(src_white).convert('RGBA')
+            alpha = src.split()[3]
+            bbox = alpha.getbbox()
+            cropped = src.crop(bbox) if bbox else src
+
+            size = 512
+            badge = PILImage.new('RGBA', (size, size), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(badge)
+            margin = 20
+            radius = 112
+            border_w = 14
+            draw.rounded_rectangle([margin, margin, size - margin, size - margin], radius=radius, fill=(255, 255, 255, 255), outline=(181, 31, 45, 255), width=border_w)
+
+            inner_pad = 56
+            max_w, max_h = size - 2 * inner_pad, size - 2 * inner_pad
+            w, h = cropped.size
+            scale = min(max_w / w, max_h / h)
+            cat_resized = cropped.resize((int(w * scale), int(h * scale)), PILImage.Resampling.LANCZOS)
+            pos_x = (size - cat_resized.width) // 2
+            pos_y = (size - cat_resized.height) // 2
+            badge.paste(cat_resized, (pos_x, pos_y), cat_resized)
+
+            icon_png_path.parent.mkdir(parents=True, exist_ok=True)
+            static_favicon_path.parent.mkdir(parents=True, exist_ok=True)
+            badge.save(icon_png_path, format='PNG')
+            badge.save(static_favicon_path, format='PNG')
+            return badge
+        except Exception:
+            pass
+
+    return '🐱'
+
+
+CAT_TAB_ICON = _load_tab_icon()
+st.set_page_config(page_title='Competency Technical Assessment (CTA) Portal', page_icon=CAT_TAB_ICON, layout='centered')
+st.markdown(
+    '<link rel="icon" type="image/png" href="/app/static/favicon.png">'
+    '<link rel="shortcut icon" type="image/png" href="/app/static/favicon.png">'
+    '<link rel="apple-touch-icon" href="/app/static/favicon.png">',
+    unsafe_allow_html=True,
+)
 st.markdown(
     '''<style>
     [data-testid="stSidebar"] {
