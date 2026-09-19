@@ -833,6 +833,12 @@ else:
         account_form('candidate_account', actor=user['id'], allowed_roles=['Candidate'])
     elif page == 'Create Candidate Schedules':
         st.subheader('Create Candidate Schedules')
+        if saved_schedule := st.session_state.pop('candidate_schedule_saved', None):
+            st.success(
+                f"Schedule saved for {saved_schedule['candidate_name']}: "
+                f"{saved_schedule['test_date']} | {saved_schedule['discipline']} | "
+                f"Project: {saved_schedule['project_assignment']}"
+            )
         candidates = cached_candidate_accounts(user['id'])
         
         # Keep the filter controls to two per row so labels remain readable
@@ -902,7 +908,12 @@ else:
                                 raise ValueError('Project Assignment is required.')
                             db.update_candidate_schedule(user['id'], candidate['id'], schedule_date, project_assignment, scheduled_discipline)
                             clear_read_caches()
-                            st.success('Schedule saved successfully.')
+                            st.session_state.candidate_schedule_saved = {
+                                'candidate_name': candidate['name'],
+                                'test_date': schedule_date.strftime('%A, %d %B %Y'),
+                                'discipline': scheduled_discipline,
+                                'project_assignment': project_assignment,
+                            }
                             st.rerun()
                         except ValueError as exc:
                             st.error(str(exc))
@@ -963,7 +974,8 @@ else:
                     if past:
                         with st.popover("Past Schedules"):
                             for p in past:
-                                st.caption(f"Date: {p['test_date']} (Re-scheduled: {p['scheduled_at'][:10]})")
+                                rescheduled_on = str(p.get('scheduled_at') or '')[:10] or 'Unknown'
+                                st.caption(f"Date: {p.get('test_date', '')} (Re-scheduled: {rescheduled_on})")
                     
                     col1, col2 = st.columns(2)
                     with col1:
