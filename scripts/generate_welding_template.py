@@ -94,7 +94,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 01: Aramco Welding Hierarchy"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Using the provided Saudi Aramco standard portfolio binder, locate the governing welding standard for a cross-country crude oil pipeline. Verbally explain to the reviewer the document hierarchy, identify two key differences between pipeline and onshore piping standards, and record the exact standard number on the inspection log.",
         "options": "",
         "correct": "Candidate correctly selects SAES-W-012 for cross-country pipelines, explains precedence over API 1104, cites differences in NDT coverage (100% RT/UT) and essential variable limits, and records 'SAES-W-012' correctly.",
@@ -168,7 +168,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 02: ASME IX WPS/PQR"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Examine the provided WPS and supporting PQR test coupon documentation. Verify if the WPS parameters (current, voltage, travel speed, preheat) correctly support welding a 12mm thick P-No. 1 pipe joint requiring toughness testing at -29°C. Verbally explain your findings to the reviewer and record your verdict.",
         "options": "",
         "correct": "Candidate performs heat input calculation on PQR data, compares qualified thickness range (QW-451.1) and interpass limits against WPS parameters, identifies any discrepancy, and logs pass/fail verdict with clause citations.",
@@ -242,7 +242,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 03: Welder Qualification"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Review the provided Welder Qualification Test Record (WQR) card against a target production weld joint description (6-inch NPS, Schedule 80, P-No. 1, 6G position, GTAW root + SMAW fill). Verbally determine if the welder is qualified, check the continuity log for validity, and record your approval/rejection.",
         "options": "",
         "correct": "Candidate checks WQR parameters: process (GTAW/SMAW), F-No (F6/F4), thickness (t=9.5mm qualifies up to 19mm), diameter (NPS 6 qualifies NPS 2.875+), position (6G qualifies all), checks continuity date within 6 months, signs off report.",
@@ -316,7 +316,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 04: Base & Filler Metals"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Inspect the provided physical filler metal storage rack. Verify that the electrode boxes (E7018-1, E6010, ER70S-6, ER309L) match their Mill Test Certificates (MTC), identify their corresponding P-No, F-No, and A-No classifications, and record your material verification results.",
         "options": "",
         "correct": "Candidate matches heat numbers on wire/electrodes to MTCs, assigns E7018-1 (F4, A1), E6010 (F3, A1), ER70S-6 (F6, A1), ER309L (F5, A8), verifies chemical composition against AWS specs, and logs sign-off.",
@@ -390,7 +390,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 05: Consumable Handling"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Perform a physical audit of the jobsite electrode storage station. Inspect the baking oven temperature recorder, holding oven digital readout, welder portable quivers, and electrode issue log. Identify any non-conformances against SAES-W-011 and record your audit report.",
         "options": "",
         "correct": "Candidate checks baking oven chart (verifies 260-430°C cycle), holding oven temp (verifies >=120°C), quiver temperature (verifies plugged in / >=65°C), checks issue log for 4-hr return tracking, identifies any unheated quiver or missing log entry, logs findings.",
@@ -464,7 +464,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 06: Preheat & Thermal Control"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Using an infrared pyrometer and temp-stik chalks, perform a preheat and interpass temperature check on a production pipe weld joint. Calculate the heat input for the root pass based on observed voltmeter, ammeter, and stopwatch readings, compare against WPS requirements, and log your findings.",
         "options": "",
         "correct": "Candidate checks preheat temp at 75mm from joint, verifies pyrometer calibration, measures voltage (V), current (A), and travel speed (mm/min), calculates heat input H = (V*A*60)/(S*1000) in kJ/mm, checks against WPS limits, and records values.",
@@ -538,7 +538,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 07: PWHT & Hardness"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Review the provided PWHT chart recording and production hardness test report for a spool piece joint. Verify soak temperature, hold time, heating/cooling rates, thermocouple spread, and hardness readings against SAES-W-011. Verbally explain your audit evaluation and sign the inspection report.",
         "options": "",
         "correct": "Candidate checks chart: start/end soak times, min/max soak temp (600-650°C), calculates heating/cooling slopes, checks max temp differential between TCs (<25°C), reviews Telebrineller/Telebrinell hardness report (checks all points <=200 HV / 225 BHN), flags pass/fail.",
@@ -612,7 +612,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 08: Visual Inspection"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Using a Bridge Cam gauge, Hi-Lo gauge, fillet weld gauge, and flashlight, perform a complete visual inspection on the provided pipe coupon. Measure weld reinforcement height, undercut depth, internal misalignment, and fillet leg length. Log all readings on the VT report and declare pass/fail against ASME B31.3.",
         "options": "",
         "correct": "Candidate uses Hi-Lo gauge (reads internal alignment), Bridge Cam (reads reinforcement height and undercut depth), fillet gauge (reads leg size), records exact values, compares against ASME B31.3 Table 341.3.2, and fills VT report.",
@@ -686,7 +686,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 09: Radiographic Testing"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Using the provided viewer, densitometer, and calibrated step wedge, perform a complete RT film quality audit on three weld radiographic films. Measure density, check IQI wire visibility, inspect for backscatter 'B', identify indications (porosity, slag, crack, LOP), and log pass/fail against ASME B31.3.",
         "options": "",
         "correct": "Candidate calibrates densitometer on step wedge, measures weld and material density (1.8-4.0), verifies IQI wire, checks backscatter 'B', identifies defects (e.g. slag line > allowable length), records findings, and issues formal RT interpretation report.",
@@ -760,7 +760,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 10: Ultrasonic Testing"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Review the provided PAUT scan data file and calibration setup sheet for a 25mm thickness pipe weld joint. Identify the indication depth, height, and length from the S-scan and TOFD views. Evaluate against ASME Section VIII Div 1 Appendix 12 / SAES-W-011 and log your report verdict.",
         "options": "",
         "correct": "Candidate inspects PAUT scan data, verifies encoder calibration, measures flaw start/end depth via TOFD diffracted signals, calculates flaw length and height, compares against acceptance criteria, and issues UT evaluation report.",
@@ -834,7 +834,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 11: PT & MT NDT"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Perform a physical Magnetic Particle (MT) examination on the provided welded carbon steel plate coupon using an AC yoke and black dry particles. Verify yoke lifting power with a 4.5kg weight, check light intensity, demonstrate continuous magnetization, interpret indications, and complete the MT inspection report.",
         "options": "",
         "correct": "Candidate performs 4.5kg weight lift test, verifies light level (>=1000 lux), applies AC yoke at 90-degree overlapping positions, applies dry powder gently while energizing yoke, identifies linear indications (cracks), and logs MT report.",
@@ -908,7 +908,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 12: Structural Welding AWS D1.1"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Inspect the provided structural tubular/plate joint fit-up (AWS D1.1 joint detail C-UJ2a). Verify root opening, bevel angle, backing bar alignment, tack weld sound quality, and welder qualification badge. Log your fit-up inspection report.",
         "options": "",
         "correct": "Candidate checks joint detail dimensions (bevel 45 deg, root gap 6mm with backing), verifies backing bar steel grade, inspects tack welds for cracks/porosity, checks welder badge for AWS 3G/4G or 6GR qualification, logs pass/fail verdict.",
@@ -982,7 +982,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 13: Pipeline Welding API 1104"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Inspect the provided pipeline weld root pass coupon (downhill celluloses E6010 / E8010). Check for burn-through, hollow bead, internal undercut, and incomplete penetration. Verbally evaluate indications against API 1104 Section 9 and SAES-W-012, and complete the pipeline inspection report.",
         "options": "",
         "correct": "Candidate inspects internal root pass with borescope/mirror, measures depth and length of indications (e.g. hollow bead <=12.5mm length), checks against API 1104 and SAES-W-012 zero crack rule, logs pass/fail verdict.",
@@ -1056,7 +1056,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 14: Dissimilar Metal Welding"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Inspect the provided dissimilar metal weld joint coupon (P-No. 1 carbon steel to P-No. 8 316L stainless steel). Verify WPS filler metal (ER309L), check PMI test report (Positive Material Identification), inspect root pass for oxidation/purging quality, and log your inspection findings.",
         "options": "",
         "correct": "Candidate checks WPS for ER309L/ERNiCrMo-3 filler, reviews XRF/PMI analyzer report confirming Cr/Ni/Mo content, inspects internal root for sugaring/oxidation (verifies argon purge), logs pass/fail report.",
@@ -1130,7 +1130,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 15: Duplex & Alloy Welding"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Using a calibrated Feritscope, perform ferrite content measurements on a welded 2205 Duplex pipe coupon (weld cap, root, and HAZ). Evaluate readings against SAES-W-011 ferrite limits (35-65%), check oxygen purge meter reading from the welding log, and issue your inspection report.",
         "options": "",
         "correct": "Candidate calibrates Feritscope on standard block, takes 5 readings on weld cap, 5 on HAZ, calculates average ferrite percentage (verifies within 35-65%), audits purge log for <50 ppm O2 level, signs off report.",
@@ -1204,7 +1204,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 16: Bevel Prep & Fit-Up"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Using bevel protractor, root gap gauge, and Hi-Lo gauge, inspect an assembled 8-inch pipe fit-up joint prior to root welding. Measure bevel angle, land thickness, root gap, and internal misalignment. Identify any non-conformance, recommend corrective action, and log your fit-up release sign-off.",
         "options": "",
         "correct": "Candidate measures bevel angle with protractor, checks root gap with wedge gauge, measures internal hi-lo with Hi-Lo gauge, detects any excessive gap or misalignment, recommends 1:4 taper grinding if needed, and signs fit-up release form.",
@@ -1278,7 +1278,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 17: Shielding & Purging"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Set up an internal purge monitoring system on a stainless steel pipe spool test rig. Connect the portable oxygen analyzer, flush backing gas, verify oxygen level drops below 500 ppm, record purged gas flow rate, inspect the root pass sample coupon for sugaring, and issue your inspection report.",
         "options": "",
         "correct": "Candidate installs purge dam, connects Argon hose and O2 analyzer, monitors digital O2 readout down to <500 ppm, sets flow meter (10-15 L/min flush, 3-5 L/min bleed), inspects root pass coupon for clean golden/silver root contour, logs pass sign-off.",
@@ -1352,7 +1352,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 18: Equipment Calibration"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Perform a physical calibration audit on a jobsite SMAW/GTAW welding machine and portable pyrometer. Check calibration sticker validity, take live voltage and amperage readings using a calibrated clamp meter during welding, evaluate accuracy within ±5%, and complete the equipment audit report.",
         "options": "",
         "correct": "Candidate checks calibration tag date on welding machine, applies clamp meter to lead cable during active welding pass, compares clamp meter A/V readings against machine panel, verifies deviation <=5%, audits pyrometer tag, signs audit log.",
@@ -1426,7 +1426,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 19: Non-Conformance & Repairs"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Review the provided RT defect report showing a 50mm slag inclusion in a 16-inch pipe weld. Draft a formal repair procedure request, specify excavation boundaries (25mm beyond defect ends), inspect the excavated cavity with PT, witness the re-weld inspection, and complete the NCR disposition form.",
         "options": "",
         "correct": "Candidate reviews RT film location, marks excavation zone (defect length + 25mm each end), inspects ground cavity visually and with PT to confirm total defect removal, approves re-welding using qualified repair WPS, verifies post-repair RT film, signs NCR closure.",
@@ -1500,7 +1500,7 @@ QUESTIONS_DATA = [
         "topic": "Topic 20: Quality Plan & Traceability"
     },
     {
-        "type": "practical",
+        "type": "oral_practical",
         "question": "Audit a completed piping isometric test package folder containing the Weld Summary Log, NDT reports (RT/UT/PT), MTCs, and ITP sign-off sheet. Verify 100% joint traceability, confirm all Hold points are signed by authorized Aramco QC, flag any missing NDT report, and sign off the quality dossier.",
         "options": "",
         "correct": "Candidate cross-checks isometric drawing against Weld Log, verifies every joint has matching WPS, welder ID, VT sign-off, NDT report number, checks MTC heat numbers, verifies Aramco QC signatures on all Hold points, identifies any un-cleared joint, logs audit result.",
@@ -1516,7 +1516,7 @@ def main():
     print(f"Total questions loaded: {len(QUESTIONS_DATA)}")
     
     # Validate count and difficulty distribution
-    counts = {"mcq": 0, "essay": 0, "oral": 0, "practical": 0}
+    counts = {"mcq": 0, "essay": 0, "oral_practical": 0}
     diff_counts = {"easy": 0, "moderate": 0, "difficult": 0}
     
     for q in QUESTIONS_DATA:
@@ -1634,7 +1634,7 @@ def main():
     instructions = wb.create_sheet(title="Instructions")
     instructions.append(["Question bank import instructions"])
     instructions.append(["Fill the Questions sheet and leave no completely blank rows between questions."])
-    instructions.append(["Question type must be mcq, essay, oral, or practical. For Multiple Choice questions, put one option per line in Multiple Choice options."])
+    instructions.append(["Question type must be mcq, essay, or oral_practical. For Multiple Choice questions, put one option per line in Multiple Choice options."])
     instructions.append(["Assessment Settings determines the maximum points for each question type. Keep the headers unchanged."])
     instructions.column_dimensions['A'].width = 110
 

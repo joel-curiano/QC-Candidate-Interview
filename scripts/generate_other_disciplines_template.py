@@ -89,7 +89,7 @@ def create_discipline_questions(discipline_name, topics_data):
         p = topic['practical']
         questions.append({
             "discipline": discipline_name,
-            "type": "practical",
+            "type": "oral_practical",
             "question": p["q"],
             "options": [],
             "correct": p["ans"],
@@ -289,7 +289,7 @@ def main():
     instructions = wb.create_sheet(title="Instructions")
     instructions.append(["Question bank import instructions"])
     instructions.append(["Fill the Questions sheet and leave no completely blank rows between questions."])
-    instructions.append(["Question type must be mcq, essay, oral, or practical. For Multiple Choice questions, put one option per line in Multiple Choice options."])
+    instructions.append(["Question type must be mcq, essay, or oral_practical. For Multiple Choice questions, put one option per line in Multiple Choice options."])
     instructions.append(["Assessment Settings determines the maximum points for each question type. Keep the headers unchanged."])
     instructions.column_dimensions['A'].width = 110
 

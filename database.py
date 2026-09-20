@@ -2,9 +2,11 @@
 import hashlib
 import hmac
 import json
+import logging
 import math
 import os
 import secrets
+import threading
 import time
 import psycopg
 from psycopg_pool import ConnectionPool
@@ -15,7 +17,26 @@ from contextlib import contextmanager
 from pathlib import Path
 from question_types import QUESTION_TYPES, REVIEWER_SCORED_TYPES
 
-DB_SCHEMA = 'qc_portal'
+logger = logging.getLogger(__name__)
+
+
+def _get_env_or_secret(key, default):
+    val = os.environ.get(key, '').strip()
+    if not val:
+        try:
+            import streamlit as st
+            val = str(st.secrets.get(key, '')).strip()
+        except Exception:
+            pass
+    return val or default
+
+
+DB_SCHEMA = _get_env_or_secret('SUPABASE_DB_SCHEMA', 'qc_portal')
+try:
+    DB_ADVISORY_LOCK_ID = int(_get_env_or_secret('DB_ADVISORY_LOCK_ID', '74192001'))
+except (ValueError, TypeError):
+    DB_ADVISORY_LOCK_ID = 74192001
+
 STARTER_DISCIPLINES = (
     'Cathodic Protection QC', 'Civil QC', 'Coating QC', 'Telecom QC', 'Electrical QC', 'E&I QC', 'Instrumentation QC',
     'Mechanical QC', 'NDT QC', 'Piping QC', 'Welding QC',
@@ -44,6 +65,7 @@ def database_url():
 
 _POOL = None
 _POOL_URL = None
+_POOL_LOCK = threading.Lock()
 
 
 def _configure_connection(conn):
@@ -58,37 +80,40 @@ def get_pool():
     global _POOL, _POOL_URL
     current_url = database_url()
     if _POOL is None or _POOL.closed or _POOL_URL != current_url:
-        if _POOL is not None and not _POOL.closed:
-            try:
-                _POOL.close()
-            except Exception:
-                pass
-        _POOL_URL = current_url
-        _POOL = ConnectionPool(
-            conninfo=current_url,
-            min_size=1,
-            max_size=10,
-            timeout=15,
-            configure=_configure_connection,
-            kwargs={
-                'row_factory': dict_row,
-                'sslmode': 'require',
-                'prepare_threshold': None,
-                'connect_timeout': 10,
-            },
-            open=True,
-        )
+        with _POOL_LOCK:
+            if _POOL is None or _POOL.closed or _POOL_URL != current_url:
+                if _POOL is not None and not _POOL.closed:
+                    try:
+                        _POOL.close()
+                    except Exception:
+                        pass
+                _POOL_URL = current_url
+                _POOL = ConnectionPool(
+                    conninfo=current_url,
+                    min_size=1,
+                    max_size=10,
+                    timeout=15,
+                    configure=_configure_connection,
+                    kwargs={
+                        'row_factory': dict_row,
+                        'sslmode': 'require',
+                        'prepare_threshold': None,
+                        'connect_timeout': 10,
+                    },
+                    open=True,
+                )
     return _POOL
 
 
 def close_pool():
     global _POOL
-    if _POOL is not None and not _POOL.closed:
-        try:
-            _POOL.close()
-        except Exception:
-            pass
-        _POOL = None
+    with _POOL_LOCK:
+        if _POOL is not None and not _POOL.closed:
+            try:
+                _POOL.close()
+            except Exception:
+                pass
+            _POOL = None
 
 
 @contextmanager
@@ -119,11 +144,17 @@ def connection():
 def init_db():
     """Seed an empty question bank and add Civil QC when the discipline is missing."""
     with connection() as c:
-        c.execute('SELECT pg_advisory_xact_lock(74192001)')
+        c.execute(sql.SQL('SELECT pg_advisory_xact_lock({})').format(sql.Literal(DB_ADVISORY_LOCK_ID)))
         c.execute('CREATE TABLE IF NOT EXISTS schema_info (key TEXT PRIMARY KEY, value TEXT)')
-        initialized = c.execute("SELECT value FROM schema_info WHERE key='v2'").fetchone()
+        initialized = c.execute("SELECT value FROM schema_info WHERE key='question_template_v1'").fetchone()
         
         if not initialized:
+            c.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS subject TEXT NOT NULL DEFAULT 'General'")
+            c.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS sub_subject TEXT NOT NULL DEFAULT 'General'")
+            c.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS is_scored BOOLEAN NOT NULL DEFAULT TRUE")
+            c.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS difficulty TEXT NOT NULL DEFAULT 'moderate'")
+            c.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS topic_group TEXT NOT NULL DEFAULT 'General'")
+            c.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS delivery_stage TEXT NOT NULL DEFAULT 'standard'")
             c.execute('ALTER TABLE questions DROP CONSTRAINT IF EXISTS questions_q_type_check')
             c.execute("""DO $$ DECLARE constraint_name TEXT; BEGIN
                 FOR constraint_name IN SELECT conname FROM pg_constraint
@@ -131,8 +162,6 @@ def init_db():
                     AND pg_get_constraintdef(oid) LIKE '%delivery_stage%'
                 LOOP EXECUTE format('ALTER TABLE questions DROP CONSTRAINT %I', constraint_name); END LOOP;
             END $$""")
-            c.execute("UPDATE questions SET q_type='oral_practical' WHERE q_type IN ('oral', 'practical', 'practicum')")
-            c.execute("UPDATE answers SET snapshot=jsonb_set(snapshot::jsonb, '{q_type}', '\"oral_practical\"'::jsonb) WHERE snapshot::json->>'q_type' IN ('oral', 'practical', 'practicum')")
             c.execute(f"ALTER TABLE questions ADD CONSTRAINT questions_q_type_check CHECK (q_type IN {QUESTION_TYPES})")
             c.execute("ALTER TABLE questions ADD CONSTRAINT questions_delivery_stage_check CHECK (delivery_stage = 'standard' OR (q_type = 'oral_practical' AND is_scored = FALSE))")
             c.execute("UPDATE questions SET max_points=1 WHERE q_type='mcq' AND max_points <> 1")
@@ -149,35 +178,12 @@ def init_db():
             c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS mcq_max DOUBLE PRECISION NOT NULL DEFAULT 0")
             c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS essay_max DOUBLE PRECISION NOT NULL DEFAULT 0")
             c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS oral_practical_max DOUBLE PRECISION NOT NULL DEFAULT 0")
-            c.execute("""DO $$ BEGIN
-                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='submissions' AND column_name='oral_score')
-                   AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='submissions' AND column_name='practical_score') THEN
-                    UPDATE submissions SET oral_practical_score=oral_score + practical_score
-                    WHERE oral_practical_score=0;
-                END IF;
-                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='submissions' AND column_name='oral_max')
-                   AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='submissions' AND column_name='practical_max') THEN
-                    UPDATE submissions SET oral_practical_max=oral_max + practical_max
-                    WHERE oral_practical_max=0;
-                END IF;
-            END $$""")
-            c.execute("""UPDATE submissions s SET
-                mcq_max=COALESCE((SELECT SUM(CASE WHEN snapshot::json->>'q_type'='mcq' THEN 1 ELSE 0 END) FROM answers a WHERE a.submission_id=s.id), 0),
-                essay_max=COALESCE((SELECT SUM(LEAST((snapshot::json->>'max_points')::numeric, 10)) FROM answers a WHERE a.submission_id=s.id AND snapshot::json->>'q_type'='essay'), 0),
-                oral_practical_max=COALESCE((SELECT SUM(LEAST((snapshot::json->>'max_points')::numeric, 10)) FROM answers a WHERE a.submission_id=s.id AND snapshot::json->>'q_type'='oral_practical'), 0)
-                WHERE s.mcq_max=0 AND s.essay_max=0 AND s.oral_practical_max=0""")
             c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''")
             c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS test_date DATE")
             c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMPTZ")
             c.execute("CREATE TABLE IF NOT EXISTS projects (name TEXT PRIMARY KEY)")
             c.execute("CREATE TABLE IF NOT EXISTS assessment_settings (question_type TEXT PRIMARY KEY, question_count INTEGER NOT NULL CHECK (question_count > 0), max_points DOUBLE PRECISION NOT NULL DEFAULT 1 CHECK (max_points > 0))")
             c.execute("ALTER TABLE assessment_settings ADD COLUMN IF NOT EXISTS max_points DOUBLE PRECISION NOT NULL DEFAULT 1")
-            c.execute("""INSERT INTO assessment_settings(question_type, question_count, max_points)
-                SELECT 'oral_practical', SUM(question_count), MAX(max_points)
-                FROM assessment_settings WHERE question_type IN ('oral', 'practical')
-                HAVING COUNT(*) > 0
-                ON CONFLICT (question_type) DO UPDATE SET question_count=EXCLUDED.question_count, max_points=EXCLUDED.max_points""")
-            c.execute("DELETE FROM assessment_settings WHERE question_type IN ('oral', 'practical')")
             c.execute("UPDATE assessment_settings SET max_points=10 WHERE question_type IN ('essay', 'oral_practical') AND max_points=1")
             c.cursor().executemany("INSERT INTO assessment_settings(question_type, question_count, max_points) VALUES (%s,%s,%s) ON CONFLICT (question_type) DO NOTHING", [('mcq', 20, 1), ('essay', 5, 10), ('oral_practical', 6, 10)])
             c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_projects TEXT[] NOT NULL DEFAULT '{}'")
@@ -196,7 +202,7 @@ def init_db():
             c.execute("CREATE INDEX IF NOT EXISTS submissions_user_idx ON submissions(user_id)")
             c.execute("CREATE INDEX IF NOT EXISTS questions_disc_active_idx ON questions(discipline, active)")
             c.execute("CREATE INDEX IF NOT EXISTS users_candidate_date_idx ON users(role, test_date)")
-            c.execute("INSERT INTO schema_info (key, value) VALUES ('v2', 'true') ON CONFLICT (key) DO UPDATE SET value='true'")
+            c.execute("INSERT INTO schema_info (key, value) VALUES ('question_template_v1', 'true') ON CONFLICT (key) DO UPDATE SET value='true'")
 
         original_questions = json.loads(Path(__file__).with_name('seed_questions.json').read_text(encoding='utf-8'))
         original_questions = [row[:4] + [row[4], row[5], 1 if row[1] == 'mcq' else row[6]] for row in original_questions]
@@ -586,11 +592,12 @@ def add_questions(actor, parse_results, progress_callback=None):
                 continue
             q = result['question']
             try:
-                validated = _validate_question(q['discipline'], q['kind'], q['prompt'], q['options'], q['correct'], q['rubric'], q.get('subject'), q.get('sub_subject'), q.get('is_scored', True), q.get('difficulty'), q.get('topic_group'), q.get('delivery_stage'))
-                _insert_question(c, validated)
-            except ValueError as e:
+                with c.transaction():
+                    validated = _validate_question(q['discipline'], q['kind'], q['prompt'], q['options'], q['correct'], q['rubric'], q.get('subject'), q.get('sub_subject'), q.get('is_scored', True), q.get('difficulty'), q.get('topic_group'), q.get('delivery_stage'))
+                    _insert_question(c, validated)
+            except (ValueError, psycopg.Error) as e:
                 result['success'] = False
-                result['error'] = str(e)
+                result['error'] = str(e).splitlines()[0]
     return parse_results
 
 def autogenerate_questions(actor, discipline, kind, count, progress_callback=None):

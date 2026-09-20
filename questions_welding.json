@@ -941,7 +941,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "oral",
+    "kind": "oral_practical",
     "prompt": "Interviewer provides a welder card and joint detail drawing (NPS 4 CS pipe, 6G position, GTAW+SMAW). Candidate must verbally walk through essential variable verification steps.",
     "options": [],
     "correct": "",
@@ -949,7 +949,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "oral",
+    "kind": "oral_practical",
     "prompt": "Candidate is presented with a preheat torch, digital contact pyrometer, and temperature chalks. Candidate must explain and demonstrate how to measure preheat on a pipe joint.",
     "options": [],
     "correct": "",
@@ -957,7 +957,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "oral",
+    "kind": "oral_practical",
     "prompt": "Candidate is given an RT film on an illuminator viewer and corresponding NDT report. Candidate must verbally interpret film density, IQI placement, and flaw indications.",
     "options": [],
     "correct": "",
@@ -965,7 +965,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "oral",
+    "kind": "oral_practical",
     "prompt": "Candidate walks reviewer through a simulated live production weld inspection. Candidate must measure welding voltage, amperage, and travel speed, and calculate heat input.",
     "options": [],
     "correct": "",
@@ -973,7 +973,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "oral",
+    "kind": "oral_practical",
     "prompt": "Reviewer provides candidate with a furnace PWHT temperature recorder chart for a Cr-Mo piping spool. Candidate must review and defend pass/fail status under questioning.",
     "options": [],
     "correct": "",
@@ -981,7 +981,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "oral",
+    "kind": "oral_practical",
     "prompt": "Candidate conducts a verbal audit walkthrough of an electrode storage facility with reviewer, explaining key checks for SMAW consumables.",
     "options": [],
     "correct": "",
@@ -989,7 +989,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "oral",
+    "kind": "oral_practical",
     "prompt": "Candidate is presented with an argon purging rig, digital oxygen analyzer, and SS pipe spool. Candidate explains purge setup and demonstrates O2 measurement.",
     "options": [],
     "correct": "",
@@ -997,7 +997,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "oral",
+    "kind": "oral_practical",
     "prompt": "Reviewer cross-examines candidate on a recurring root crack defect on P-No. 5A alloy steel pipe. Candidate must verbally defend repair WPS, preheat, DHT, and NDT sequence.",
     "options": [],
     "correct": "",
@@ -1005,7 +1005,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "oral",
+    "kind": "oral_practical",
     "prompt": "Candidate is provided with a Telebrineller / Equotip hardness tester and a welded coupon. Candidate must explain calibration verification and perform hardness readings.",
     "options": [],
     "correct": "",
@@ -1013,7 +1013,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "oral",
+    "kind": "oral_practical",
     "prompt": "Reviewer presents candidate with 5 visual defect samples (undercut, overlap, porosity, crater crack, excess reinforcement). Candidate must verbally identify each.",
     "options": [],
     "correct": "",
@@ -1021,7 +1021,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "practical",
+    "kind": "oral_practical",
     "prompt": "Candidate is provided with a Bridge Cam gauge and a welded carbon steel pipe coupon. Candidate must measure weld reinforcement height and undercut depth.",
     "options": [],
     "correct": "",
@@ -1029,7 +1029,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "practical",
+    "kind": "oral_practical",
     "prompt": "Candidate is provided with an internal Hi-Lo gauge, feeler blades, and an un-welded pipe joint prep. Candidate must inspect fit-up parameters.",
     "options": [],
     "correct": "",
@@ -1037,7 +1037,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "practical",
+    "kind": "oral_practical",
     "prompt": "Candidate is provided with a fillet weld gauge set and a socket-welded fitting sample. Candidate must measure leg length, throat thickness, and profile.",
     "options": [],
     "correct": "",
@@ -1045,7 +1045,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "practical",
+    "kind": "oral_practical",
     "prompt": "Candidate performs a solvent-removable visible dye penetrant inspection (PT) on a stainless steel weld plate specimen using cleaner, penetrant, and developer.",
     "options": [],
     "correct": "",
@@ -1053,7 +1053,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "practical",
+    "kind": "oral_practical",
     "prompt": "Candidate is provided with a universal bevel protractor and a machined pipe bevel. Candidate must measure the bevel angle and root land thickness.",
     "options": [],
     "correct": "",
@@ -1061,7 +1061,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "practical",
+    "kind": "oral_practical",
     "prompt": "Candidate conducts an AC magnetic particle inspection (MT) on a carbon steel plate weldment using dry magnetic powder.",
     "options": [],
     "correct": "",
@@ -1069,7 +1069,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "practical",
+    "kind": "oral_practical",
     "prompt": "Candidate is given a welded pipe coupon containing 3 distinct surface/profile defects. Candidate must inspect, measure, log, and write a detailed inspection report.",
     "options": [],
     "correct": "",
@@ -1077,7 +1077,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "practical",
+    "kind": "oral_practical",
     "prompt": "Candidate is presented with a rejected radiograph report showing 50 mm continuous lack of fusion on a high-pressure gas line weld. Candidate must draft a complete NCR.",
     "options": [],
     "correct": "",
@@ -1085,7 +1085,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "practical",
+    "kind": "oral_practical",
     "prompt": "Candidate is presented with a cut pipe spool section, a hard-stamped heat number, and a Mill Test Certificate (MTC). Candidate must verify traceability.",
     "options": [],
     "correct": "",
@@ -1093,7 +1093,7 @@
   },
   {
     "discipline": "Welding QC",
-    "kind": "practical",
+    "kind": "oral_practical",
     "prompt": "Candidate conducts a complete final inspection of a completed pipe spool weld (VT + NDT report review + drawing check) and signs off the final inspection report.",
     "options": [],
     "correct": "",

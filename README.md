@@ -113,7 +113,7 @@ Commit the secrets **example**, but never the real `.streamlit/secrets.toml` fil
 | Role | Access |
 | --- | --- |
 | Candidate | Sign in on the assigned date, choose a discipline, answer the randomized assessment, view own results and feedback |
-| Reviewer | Create and schedule Candidate accounts, send invitations, add questions/disciplines, review submissions, score essays/oral/practical tests, finalize grades, export results CSV |
+| Reviewer | Create and schedule Candidate accounts, send invitations, add questions/disciplines, review submissions, score Essay and Oral-Practical questions, finalize grades, export results CSV |
 | Admin | Reviewer access, create accounts, add questions/disciplines, archive/restore questions |
 
 Starter disciplines: Welding, NDT, Piping, Civil, Coating, Electrical, Instrumentation, E&I, Mechanical, Telecom, Pipeline QC, and PQCS. Coating QC, Telecom QC, E&I QC, and Mechanical QC are available immediately in discipline selectors; add their questions through the Question bank or Excel import before scheduling assessments.

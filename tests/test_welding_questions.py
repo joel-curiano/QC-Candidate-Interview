@@ -26,14 +26,11 @@ def test_welding_template_generation_and_validation():
     # 4. Check breakdown by type
     mcq_count = sum(1 for r in results if r["question"]["kind"] == "mcq")
     essay_count = sum(1 for r in results if r["question"]["kind"] == "essay")
-    oral_count = sum(1 for r in results if r["question"]["kind"] == "oral")
-    practical_count = sum(1 for r in results if r["question"]["kind"] == "practical")
+    oral_practical_count = sum(1 for r in results if r["question"]["kind"] == "oral_practical")
 
     assert mcq_count == 60, f"Expected 60 MCQ, got {mcq_count}"
     assert essay_count == 20, f"Expected 20 Essay, got {essay_count}"
-    assert oral_count == 10, f"Expected 10 Oral, got {oral_count}"
-    assert practical_count == 10, f"Expected 10 Practical, got {practical_count}"
-    assert oral_count + practical_count == 20, "Expected 20 Oral-Practical questions total"
+    assert oral_practical_count == 20, f"Expected 20 Oral-Practical questions, got {oral_practical_count}"
 
     # 5. Check discipline and MCQ distractor lengths
     for r in results:

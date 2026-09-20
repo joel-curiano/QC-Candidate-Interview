@@ -3,6 +3,7 @@ import csv
 import base64
 import io
 import json
+import logging
 import secrets
 import time
 from datetime import date
@@ -15,6 +16,8 @@ from question_types import QUESTION_TYPES, QUESTION_TYPE_LABELS, QUESTION_TYPE_S
 from email_service import EmailDeliveryError, send_candidate_invitation, send_candidate_result, send_reviewer_credentials, send_test_email
 from question_import import QuestionImportError, export_questions_bytes, parse_questions, template_bytes
 from result_export import excel_bytes
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -507,7 +510,7 @@ def candidate_result_pdf(sub):
         overall_status = 'PASS' if overall_pct >= 70 and all(db.category_percentage(sub, kind) >= 50 for kind in QUESTION_TYPES) else 'FAIL'
         overall_color = '#188038' if overall_status == 'PASS' else '#B51F2D'
         story += [Spacer(1, 4*mm), Paragraph('Results by question type', styles['CATResultHeading']), Table(rows, colWidths=[39*mm, 26.6*mm, 22.4*mm], style=TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#B51F2D')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('GRID',(0,0),(-1,-1),0.4,colors.HexColor('#D9DCDE')),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),8),('LEADING',(0,0),(-1,-1),10),('PADDING',(0,0),(-1,-1),4)])), Spacer(1, 5*mm), Paragraph(f'<b>Overall result:</b> {overall_pct:.1f}% - <font color="{overall_color}"><b>{overall_status}</b></font>', styles['CATOverallResult'])]
-    story += [Spacer(1, 6*mm), Paragraph('<b>How pass/fail is determined</b>', styles['CATExplainHeading']), Paragraph('The candidate must achieve at least 50% in every question type and at least 70% overall. The overall percentage is calculated from the accumulated points earned divided by the total possible points. Failing any one question type results in an overall FAIL, even when the overall percentage is 70% or higher. A result remains Pending Review until the Reviewer scores all Essay, Oral Test, and Practical Test responses.', styles['CATExplainBody'])]
+    story += [Spacer(1, 6*mm), Paragraph('<b>How pass/fail is determined</b>', styles['CATExplainHeading']), Paragraph('The candidate must achieve at least 50% in every question type and at least 70% overall. The overall percentage is calculated from the accumulated points earned divided by the total possible points. Failing any one question type results in an overall FAIL, even when the overall percentage is 70% or higher. A result remains Pending Review until the Reviewer scores all Essay and Oral-Practical responses.', styles['CATExplainBody'])]
     doc.build(story)
     return output.getvalue()
 
@@ -1031,7 +1034,16 @@ else:
         
         upcoming = filter_upcoming_candidates(scheduled_candidates, search_name, search_discipline, search_iqama)
         st.caption(f'Showing {len(upcoming)} of {len(scheduled_candidates)} upcoming candidate(s).')
-            
+        bulk_result = st.session_state.pop('bulk_invite_result', None)
+        if bulk_result:
+            if bulk_result.get('failed_count'):
+                st.warning(f"Sent {bulk_result['success_count']} invitations; {bulk_result['failed_count']} failed.")
+                with st.expander("View delivery failure details"):
+                    for err in bulk_result.get('errors', []):
+                        st.markdown(f"- {err}")
+            else:
+                st.success(f"All {bulk_result['success_count']} invitations sent successfully.")
+
         if not upcoming:
             st.info('No upcoming schedules match the filters.')
         else:
@@ -1040,6 +1052,7 @@ else:
                 if st.button(f'Send Schedule & Credentials to All Pending ({len(unsent_candidates)})', type='primary', key='bulk_send_invites'):
                     success_count = 0
                     failed_count = 0
+                    failed_errors = []
                     progress_text = st.empty()
                     for idx, c in enumerate(unsent_candidates, 1):
                         progress_text.caption(f"Sending {idx} of {len(unsent_candidates)}: {c['name']}...")
@@ -1052,14 +1065,17 @@ else:
                             )
                             db.mark_invitation_sent(user['id'], c['id'])
                             success_count += 1
-                        except Exception:
+                        except Exception as exc:
                             failed_count += 1
+                            logger.exception("Failed to send candidate invitation to %s (%s)", c.get('name'), c.get('email'))
+                            failed_errors.append(f"**{c.get('name', 'Candidate')}** ({c.get('email', '')}): {exc}")
                     clear_read_caches()
                     progress_text.empty()
-                    if failed_count:
-                        st.warning(f"Sent {success_count} invitations; {failed_count} failed.")
-                    else:
-                        st.success(f"All {success_count} invitations sent successfully.")
+                    st.session_state['bulk_invite_result'] = {
+                        'success_count': success_count,
+                        'failed_count': failed_count,
+                        'errors': failed_errors,
+                    }
                     st.rerun()
             for candidate in upcoming:
                 with st.expander(f"{candidate['name']} - {candidate['discipline']} - {candidate['iqama_no']} - {candidate['test_date']}"):

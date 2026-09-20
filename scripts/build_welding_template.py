@@ -3,8 +3,7 @@
 Breakdown:
 - 60 Multiple Choice Questions (mcq)
 - 20 Essay Questions (essay)
-- 10 Oral Test Questions (oral)
-- 10 Practical Test Questions (practical)
+- 20 Oral-Practical Questions (oral_practical)
 Total: 100 questions
 """
 
@@ -20,6 +19,12 @@ HEADERS = [
     'Multiple Choice options',
     'Correct answer',
     'Scoring rubric',
+    'Subject',
+    'Sub-subject',
+    'Scored question',
+    'Difficulty',
+    'Topic group',
+    'Delivery stage',
 ]
 
 WELDING_QUESTIONS = [
@@ -987,14 +992,14 @@ WELDING_QUESTIONS = [
     },
 
     # =========================================================================
-    # PART 3: 20 ORAL-PRACTICAL QUESTIONS (10 oral, 10 practical)
+    # PART 3: 20 ORAL-PRACTICAL QUESTIONS
     # Every Oral/Practical question includes a structured 10-point max scoring rubric.
     # =========================================================================
     
     # 10 Oral Test Questions (oral)
     {
         "discipline": "Welding QC",
-        "kind": "oral",
+        "kind": "oral_practical",
         "prompt": "Interviewer provides a welder card and joint detail drawing (NPS 4 CS pipe, 6G position, GTAW+SMAW). Candidate must verbally walk through essential variable verification steps.",
         "options": [],
         "correct": "",
@@ -1002,7 +1007,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "oral",
+        "kind": "oral_practical",
         "prompt": "Candidate is presented with a preheat torch, digital contact pyrometer, and temperature chalks. Candidate must explain and demonstrate how to measure preheat on a pipe joint.",
         "options": [],
         "correct": "",
@@ -1010,7 +1015,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "oral",
+        "kind": "oral_practical",
         "prompt": "Candidate is given an RT film on an illuminator viewer and corresponding NDT report. Candidate must verbally interpret film density, IQI placement, and flaw indications.",
         "options": [],
         "correct": "",
@@ -1018,7 +1023,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "oral",
+        "kind": "oral_practical",
         "prompt": "Candidate walks reviewer through a simulated live production weld inspection. Candidate must measure welding voltage, amperage, and travel speed, and calculate heat input.",
         "options": [],
         "correct": "",
@@ -1026,7 +1031,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "oral",
+        "kind": "oral_practical",
         "prompt": "Reviewer provides candidate with a furnace PWHT temperature recorder chart for a Cr-Mo piping spool. Candidate must review and defend pass/fail status under questioning.",
         "options": [],
         "correct": "",
@@ -1034,7 +1039,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "oral",
+        "kind": "oral_practical",
         "prompt": "Candidate conducts a verbal audit walkthrough of an electrode storage facility with reviewer, explaining key checks for SMAW consumables.",
         "options": [],
         "correct": "",
@@ -1042,7 +1047,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "oral",
+        "kind": "oral_practical",
         "prompt": "Candidate is presented with an argon purging rig, digital oxygen analyzer, and SS pipe spool. Candidate explains purge setup and demonstrates O2 measurement.",
         "options": [],
         "correct": "",
@@ -1050,7 +1055,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "oral",
+        "kind": "oral_practical",
         "prompt": "Reviewer cross-examines candidate on a recurring root crack defect on P-No. 5A alloy steel pipe. Candidate must verbally defend repair WPS, preheat, DHT, and NDT sequence.",
         "options": [],
         "correct": "",
@@ -1058,7 +1063,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "oral",
+        "kind": "oral_practical",
         "prompt": "Candidate is provided with a Telebrineller / Equotip hardness tester and a welded coupon. Candidate must explain calibration verification and perform hardness readings.",
         "options": [],
         "correct": "",
@@ -1066,7 +1071,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "oral",
+        "kind": "oral_practical",
         "prompt": "Reviewer presents candidate with 5 visual defect samples (undercut, overlap, porosity, crater crack, excess reinforcement). Candidate must verbally identify each.",
         "options": [],
         "correct": "",
@@ -1076,7 +1081,7 @@ WELDING_QUESTIONS = [
     # 10 Practical Test Questions (practical)
     {
         "discipline": "Welding QC",
-        "kind": "practical",
+        "kind": "oral_practical",
         "prompt": "Candidate is provided with a Bridge Cam gauge and a welded carbon steel pipe coupon. Candidate must measure weld reinforcement height and undercut depth.",
         "options": [],
         "correct": "",
@@ -1084,7 +1089,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "practical",
+        "kind": "oral_practical",
         "prompt": "Candidate is provided with an internal Hi-Lo gauge, feeler blades, and an un-welded pipe joint prep. Candidate must inspect fit-up parameters.",
         "options": [],
         "correct": "",
@@ -1092,7 +1097,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "practical",
+        "kind": "oral_practical",
         "prompt": "Candidate is provided with a fillet weld gauge set and a socket-welded fitting sample. Candidate must measure leg length, throat thickness, and profile.",
         "options": [],
         "correct": "",
@@ -1100,7 +1105,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "practical",
+        "kind": "oral_practical",
         "prompt": "Candidate performs a solvent-removable visible dye penetrant inspection (PT) on a stainless steel weld plate specimen using cleaner, penetrant, and developer.",
         "options": [],
         "correct": "",
@@ -1108,7 +1113,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "practical",
+        "kind": "oral_practical",
         "prompt": "Candidate is provided with a universal bevel protractor and a machined pipe bevel. Candidate must measure the bevel angle and root land thickness.",
         "options": [],
         "correct": "",
@@ -1116,7 +1121,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "practical",
+        "kind": "oral_practical",
         "prompt": "Candidate conducts an AC magnetic particle inspection (MT) on a carbon steel plate weldment using dry magnetic powder.",
         "options": [],
         "correct": "",
@@ -1124,7 +1129,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "practical",
+        "kind": "oral_practical",
         "prompt": "Candidate is given a welded pipe coupon containing 3 distinct surface/profile defects. Candidate must inspect, measure, log, and write a detailed inspection report.",
         "options": [],
         "correct": "",
@@ -1132,7 +1137,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "practical",
+        "kind": "oral_practical",
         "prompt": "Candidate is presented with a rejected radiograph report showing 50 mm continuous lack of fusion on a high-pressure gas line weld. Candidate must draft a complete NCR.",
         "options": [],
         "correct": "",
@@ -1140,7 +1145,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "practical",
+        "kind": "oral_practical",
         "prompt": "Candidate is presented with a cut pipe spool section, a hard-stamped heat number, and a Mill Test Certificate (MTC). Candidate must verify traceability.",
         "options": [],
         "correct": "",
@@ -1148,7 +1153,7 @@ WELDING_QUESTIONS = [
     },
     {
         "discipline": "Welding QC",
-        "kind": "practical",
+        "kind": "oral_practical",
         "prompt": "Candidate conducts a complete final inspection of a completed pipe spool weld (VT + NDT report review + drawing check) and signs off the final inspection report.",
         "options": [],
         "correct": "",
@@ -1166,7 +1171,7 @@ def create_welding_template(output_filepath="qc-question-template-Welding.xlsx")
     # 1. Append Headers
     ws.append(HEADERS)
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = "A1:F101"
+    ws.auto_filter.ref = "A1:L101"
     
     # Header Styling
     header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid") # Dark Blue
@@ -1174,7 +1179,7 @@ def create_welding_template(output_filepath="qc-question-template-Welding.xlsx")
     center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
     left_align = Alignment(horizontal="left", vertical="top", wrap_text=True)
     
-    for col_idx in range(1, 7):
+    for col_idx in range(1, len(HEADERS) + 1):
         cell = ws.cell(row=1, column=col_idx)
         cell.fill = header_fill
         cell.font = header_font
@@ -1196,16 +1201,22 @@ def create_welding_template(output_filepath="qc-question-template-Welding.xlsx")
             q.get("prompt", ""),
             options_text,
             q.get("correct", ""),
-            q.get("rubric", "")
+            q.get("rubric", ""),
+            "General",
+            "General",
+            "yes",
+            "moderate",
+            "General",
+            "standard",
         ]
         ws.append(row_data)
         
         # Style Data Row
-        for col_idx in range(1, 7):
+        for col_idx in range(1, len(HEADERS) + 1):
             cell = ws.cell(row=idx, column=col_idx)
             cell.font = Font(name="Calibri", size=10)
             cell.border = thin_border
-            if col_idx in (1, 2):
+            if col_idx in (1, 2, 9, 10, 12):
                 cell.alignment = Alignment(horizontal="center", vertical="top")
             else:
                 cell.alignment = left_align
@@ -1217,7 +1228,13 @@ def create_welding_template(output_filepath="qc-question-template-Welding.xlsx")
         'C': 65, # Question
         'D': 55, # Multiple Choice options
         'E': 45, # Correct answer
-        'F': 65  # Scoring rubric
+        'F': 65, # Scoring rubric
+        'G': 22, # Subject
+        'H': 24, # Sub-subject
+        'I': 16, # Scored question
+        'J': 16, # Difficulty
+        'K': 32, # Topic group
+        'L': 18, # Delivery stage
     }
     for col_letter, width in column_widths.items():
         ws.column_dimensions[col_letter].width = width
@@ -1226,9 +1243,9 @@ def create_welding_template(output_filepath="qc-question-template-Welding.xlsx")
     ws_inst = wb.create_sheet(title="Instructions")
     ws_inst.append(["Welding QC Question Bank Import Template"])
     ws_inst.append(["1. Fill the Questions sheet and leave no completely blank rows between questions."])
-    ws_inst.append(["2. Question type must be mcq, essay, oral, or practical."])
+    ws_inst.append(["2. Question type must be mcq, essay, or oral_practical."])
     ws_inst.append(["3. For Multiple Choice questions, put one option per line in 'Multiple Choice options'."])
-    ws_inst.append(["4. For Essay, Oral, and Practical questions, provide a structured scoring rubric."])
+    ws_inst.append(["4. For Essay and Oral-Practical questions, provide a structured scoring rubric."])
     ws_inst.append(["5. Keep the header row unchanged."])
     
     ws_inst.column_dimensions['A'].width = 110
@@ -1247,4 +1264,3 @@ def create_welding_template(output_filepath="qc-question-template-Welding.xlsx")
 
 if __name__ == "__main__":
     create_welding_template()
-

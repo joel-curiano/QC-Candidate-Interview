@@ -26,22 +26,21 @@ def test_candidate_and_reviewer_flow(postgres_db):
         db.add_question(admin['id'], 'Welding QC', 'mcq', f'Additional choice {index}', ['A', 'B'], 'A', '')
     for index in range(4):
         db.add_question(admin['id'], 'Welding QC', 'essay', f'Additional essay {index}', [], '', 'Award for evidence.')
-    for kind in ('oral', 'practicum'):
-        for index in range(5):
-            db.add_question(admin['id'], 'Welding QC', kind, f'Additional {kind} {index}', [], '', 'Award for evidence.')
+    for index in range(6):
+        db.add_question(admin['id'], 'Welding QC', 'oral_practical', f'Additional oral-practical {index}', [], '', 'Award for evidence.')
     candidate = db.authenticate('candidate', PASSWORD)
     at = AppTest.from_file(APP, default_timeout=15).run()
     at.text_input[0].input('candidate')
     at.text_input[1].input(PASSWORD)
     next(b for b in at.button if b.label == 'Sign in').click().run()
     assert not at.exception
-    for field, value in {'Designation': 'Inspector', 'Project Location': 'Test project'}.items():
+    for field, value in {'Designation': 'Inspector'}.items():
         next(widget for widget in at.text_input if widget.label == field).input(value)
     next(b for b in at.button if b.label == 'Start Multiple Choice Questions').click().run()
     for radio in at.radio:
         if radio.label != 'Navigation':
             radio.set_value(radio.options[0])
-    next(b for b in at.button if b.label == 'Continue to Essay, Oral, and Practical Tests').click().run()
+    next(b for b in at.button if b.label == 'Continue to Essay Questions').click().run()
     for area in at.text_area:
         area.input('Verify criteria, collect inspection evidence, report nonconformance and verify closure.')
     next(b for b in at.button if b.label == 'Submit assessment').click().run()
