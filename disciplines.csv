@@ -71,30 +71,30 @@ Coating QC,Documentation and turnover,Coating dossier and punch closure evidence
 Coating QC,Safety and field execution,Ventilation and solvent vapor controls
 Coating QC,Safety and field execution,Abrasive blasting and respiratory protection
 Coating QC,Safety and field execution,Fire prevention and coating waste management
-Communications QC,Codes and standards,Controlled telecom drawings specifications and project document hierarchy
-Communications QC,Codes and standards,Applicable communications and cybersecurity requirements
-Communications QC,Codes and standards,ITP acceptance criteria and approved deviations
-Communications QC,Inspection planning,Telecom equipment cable and network inspection plan
-Communications QC,Inspection planning,Hold and witness points for installation and testing
-Communications QC,Inspection planning,Calibrated test equipment and configuration readiness
-Communications QC,Materials and traceability,Equipment model firmware and serial number traceability
-Communications QC,Materials and traceability,Fiber copper cable and connector certificates
-Communications QC,Materials and traceability,Rack cabinet and accessory verification
-Communications QC,Installation and workmanship,Equipment rack grounding and cable management
-Communications QC,Installation and workmanship,Fiber termination splice and connector cleanliness
-Communications QC,Installation and workmanship,Pathway segregation labeling and bend radius
-Communications QC,Testing and verification,Fiber loss and OTDR testing
-Communications QC,Testing and verification,Copper cable continuity and performance testing
-Communications QC,Testing and verification,Network connectivity alarm and functional testing
-Communications QC,Nonconformance and corrective action,Failed link test troubleshooting and disposition
-Communications QC,Nonconformance and corrective action,Configuration mismatch corrective action
-Communications QC,Nonconformance and corrective action,Retest and acceptance after correction
-Communications QC,Documentation and turnover,Cable schedules test results and equipment records
-Communications QC,Documentation and turnover,Network configuration and as built drawings
-Communications QC,Documentation and turnover,Telecom turnover dossier and punch closure evidence
-Communications QC,Safety and field execution,Work near energized telecom systems
-Communications QC,Safety and field execution,Fiber optic handling and laser safety
-Communications QC,Safety and field execution,Access control and configuration change discipline
+Telecom QC,Codes and standards,Controlled telecom drawings specifications and project document hierarchy
+Telecom QC,Codes and standards,Applicable communications and cybersecurity requirements
+Telecom QC,Codes and standards,ITP acceptance criteria and approved deviations
+Telecom QC,Inspection planning,Telecom equipment cable and network inspection plan
+Telecom QC,Inspection planning,Hold and witness points for installation and testing
+Telecom QC,Inspection planning,Calibrated test equipment and configuration readiness
+Telecom QC,Materials and traceability,Equipment model firmware and serial number traceability
+Telecom QC,Materials and traceability,Fiber copper cable and connector certificates
+Telecom QC,Materials and traceability,Rack cabinet and accessory verification
+Telecom QC,Installation and workmanship,Equipment rack grounding and cable management
+Telecom QC,Installation and workmanship,Fiber termination splice and connector cleanliness
+Telecom QC,Installation and workmanship,Pathway segregation labeling and bend radius
+Telecom QC,Testing and verification,Fiber loss and OTDR testing
+Telecom QC,Testing and verification,Copper cable continuity and performance testing
+Telecom QC,Testing and verification,Network connectivity alarm and functional testing
+Telecom QC,Nonconformance and corrective action,Failed link test troubleshooting and disposition
+Telecom QC,Nonconformance and corrective action,Configuration mismatch corrective action
+Telecom QC,Nonconformance and corrective action,Retest and acceptance after correction
+Telecom QC,Documentation and turnover,Cable schedules test results and equipment records
+Telecom QC,Documentation and turnover,Network configuration and as built drawings
+Telecom QC,Documentation and turnover,Telecom turnover dossier and punch closure evidence
+Telecom QC,Safety and field execution,Work near energized telecom systems
+Telecom QC,Safety and field execution,Fiber optic handling and laser safety
+Telecom QC,Safety and field execution,Access control and configuration change discipline
 Electrical QC,Codes and standards,Controlled electrical drawings specifications and project document hierarchy
 Electrical QC,Codes and standards,Applicable electrical safety and installation standards
 Electrical QC,Codes and standards,ITP acceptance criteria and approved deviations

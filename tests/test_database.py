@@ -37,7 +37,7 @@ def test_auth_and_roles(accounts):
     db.add_question(accounts['reviewer'], 'E&I QC', 'mcq', 'Choose E&I evidence', ['A', 'B'], 'A', '')
     assert 'E&I QC' in db.disciplines()
     assert 'Mechanical QC' in db.disciplines()
-    assert 'Communications QC' in db.disciplines()
+    assert 'Telecom QC' in db.disciplines()
 
 def test_candidate_login_requires_scheduled_date(accounts):
     db.create_user('future', 'Future Candidate', PASSWORD, actor=accounts['admin'], email='future@example.com', test_date=date.today() + timedelta(days=1))

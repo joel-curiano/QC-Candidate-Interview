@@ -4,6 +4,7 @@ from copy import copy
 import json
 
 from openpyxl import Workbook, load_workbook
+from question_types import QUESTION_TYPES, REVIEWER_SCORED_TYPES
 
 
 CORE_HEADERS = ['Discipline', 'Question type', 'Question', 'Multiple Choice options', 'Correct answer', 'Scoring rubric']
@@ -34,7 +35,9 @@ def parse_questions(workbook_bytes):
     except Exception as exc:
         raise QuestionImportError('The uploaded file is not a readable Excel workbook.') from exc
 
-    sheet = workbook.active
+    if 'Questions' not in workbook.sheetnames:
+        raise QuestionImportError('The workbook must contain a Questions sheet from qc-question-template.xlsx.')
+    sheet = workbook['Questions']
     rows = sheet.iter_rows(values_only=True)
     header = next(rows, None)
     normalized_header = [_text(value) for value in header[:len(HEADERS)]] if header is not None else []
@@ -61,18 +64,19 @@ def parse_questions(workbook_bytes):
         try:
             if not discipline or not prompt:
                 raise QuestionImportError('Discipline and question are required.')
-            if kind not in ('mcq', 'essay', 'oral', 'practical'):
-                raise QuestionImportError('Question type must be mcq, essay, oral, or practical.')
+            if kind not in QUESTION_TYPES:
+                raise QuestionImportError('Question type must be mcq, essay, or oral_practical.')
             if difficulty not in ('easy', 'moderate', 'difficult') or delivery_stage not in ('standard', 'oral_opening'):
                 raise QuestionImportError('Difficulty and delivery stage values are invalid.')
-            if delivery_stage == 'oral_opening' and (kind != 'oral' or scored):
-                raise QuestionImportError('Oral opening questions must be non-scored oral questions.')
-            option_values = [value.strip() for value in options.replace(';', '\n').splitlines() if value.strip()]
+            if delivery_stage == 'oral_opening' and (kind != 'oral_practical' or scored):
+                raise QuestionImportError('Oral opening questions must be non-scored Oral-Practical questions.')
+            option_separator = '\n' if '\n' in options or '\r' in options else ';'
+            option_values = [value.strip() for value in options.split(option_separator) if value.strip()]
             if kind == 'mcq':
                 if len(option_values) < 2 or len(set(option_values)) != len(option_values) or correct not in option_values:
                     raise QuestionImportError('Multiple Choice questions need unique options and an exact correct answer.')
-            elif not rubric:
-                raise QuestionImportError('Essay, oral, and practical questions require a scoring rubric.')
+            elif kind in REVIEWER_SCORED_TYPES and not rubric:
+                raise QuestionImportError('Essay and Oral-Practical questions require a scoring rubric.')
             row_result['question'] = {
                 'discipline': discipline,
                 'kind': kind,
@@ -100,8 +104,8 @@ def template_bytes():
     sheet.title = 'Questions'
     sheet.append(HEADERS)
     sheet.freeze_panes = 'A2'
-    sheet.auto_filter.ref = 'A1:G1'
-    widths = [22, 16, 65, 45, 35, 65, 16]
+    sheet.auto_filter.ref = 'A1:L1'
+    widths = [22, 20, 65, 45, 35, 65, 22, 28, 18, 16, 40, 18]
     for index, width in enumerate(widths, 1):
         sheet.column_dimensions[chr(64 + index)].width = width
     for cell in sheet[1]:
@@ -111,7 +115,7 @@ def template_bytes():
     instructions = workbook.create_sheet('Instructions')
     instructions.append(['Question bank import instructions'])
     instructions.append(['Fill the Questions sheet and leave no completely blank rows between questions.'])
-    instructions.append(['Question type must be mcq, essay, oral, or practical. For Multiple Choice questions, put one option per line in Multiple Choice options.'])
+    instructions.append(['Question type must be mcq, essay, or oral_practical. For Multiple Choice questions, put one option per line in Multiple Choice options.'])
     instructions.append(['Assessment Settings determines the maximum points for each question type. Keep the headers unchanged.'])
     instructions.column_dimensions['A'].width = 110
     output = BytesIO()

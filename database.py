@@ -13,10 +13,11 @@ from psycopg import sql
 from psycopg.rows import dict_row
 from contextlib import contextmanager
 from pathlib import Path
+from question_types import QUESTION_TYPES, REVIEWER_SCORED_TYPES
 
 DB_SCHEMA = 'qc_portal'
 STARTER_DISCIPLINES = (
-    'Cathodic Protection QC', 'Civil QC', 'Coating QC', 'Communications QC', 'Electrical QC', 'E&I QC', 'Instrumentation QC',
+    'Cathodic Protection QC', 'Civil QC', 'Coating QC', 'Telecom QC', 'Electrical QC', 'E&I QC', 'Instrumentation QC',
     'Mechanical QC', 'NDT QC', 'Piping QC', 'Welding QC',
     'Pipeline QC', 'PQCS',
 )
@@ -119,56 +120,84 @@ def init_db():
     """Seed an empty question bank and add Civil QC when the discipline is missing."""
     with connection() as c:
         c.execute('SELECT pg_advisory_xact_lock(74192001)')
-        c.execute('ALTER TABLE questions DROP CONSTRAINT IF EXISTS questions_q_type_check')
-        c.execute("UPDATE questions SET q_type='practical' WHERE q_type='practicum'")
-        c.execute("UPDATE answers SET snapshot=jsonb_set(snapshot::jsonb, '{q_type}', '\"practical\"'::jsonb) WHERE snapshot::json->>'q_type'='practicum'")
-        c.execute("ALTER TABLE questions ADD CONSTRAINT questions_q_type_check CHECK (q_type IN ('mcq', 'essay', 'oral', 'practical'))")
-        c.execute("UPDATE questions SET max_points=1 WHERE q_type='mcq' AND max_points <> 1")
-        c.execute("UPDATE questions SET max_points=10 WHERE q_type IN ('essay', 'oral', 'practical') AND max_points > 10")
-        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS designation TEXT NOT NULL DEFAULT ''")
-        c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS candidate_name")
-        c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS iqama_no")
-        c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS employee_no")
-        c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS exam_date")
-        c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS project_location")
-        c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS project_assignment")
-        c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS discipline")
-        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS oral_score DOUBLE PRECISION NOT NULL DEFAULT 0")
-        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS practical_score DOUBLE PRECISION NOT NULL DEFAULT 0")
-        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS mcq_max DOUBLE PRECISION NOT NULL DEFAULT 0")
-        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS essay_max DOUBLE PRECISION NOT NULL DEFAULT 0")
-        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS oral_max DOUBLE PRECISION NOT NULL DEFAULT 0")
-        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS practical_max DOUBLE PRECISION NOT NULL DEFAULT 0")
-        c.execute("""UPDATE submissions s SET
-            mcq_max=COALESCE((SELECT SUM(CASE WHEN snapshot::json->>'q_type'='mcq' THEN 1 ELSE 0 END) FROM answers a WHERE a.submission_id=s.id), 0),
-            essay_max=COALESCE((SELECT SUM(LEAST((snapshot::json->>'max_points')::numeric, 10)) FROM answers a WHERE a.submission_id=s.id AND snapshot::json->>'q_type'='essay'), 0),
-            oral_max=COALESCE((SELECT SUM(LEAST((snapshot::json->>'max_points')::numeric, 10)) FROM answers a WHERE a.submission_id=s.id AND snapshot::json->>'q_type'='oral'), 0),
-            practical_max=COALESCE((SELECT SUM(LEAST((snapshot::json->>'max_points')::numeric, 10)) FROM answers a WHERE a.submission_id=s.id AND snapshot::json->>'q_type'='practical'), 0)
-            WHERE s.mcq_max=0 AND s.essay_max=0 AND s.oral_max=0 AND s.practical_max=0""")
-        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''")
-        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS test_date DATE")
-        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMPTZ")
-        c.execute("CREATE TABLE IF NOT EXISTS projects (name TEXT PRIMARY KEY)")
-        c.execute("CREATE TABLE IF NOT EXISTS assessment_settings (question_type TEXT PRIMARY KEY, question_count INTEGER NOT NULL CHECK (question_count > 0), max_points DOUBLE PRECISION NOT NULL DEFAULT 1 CHECK (max_points > 0))")
-        c.execute("ALTER TABLE assessment_settings ADD COLUMN IF NOT EXISTS max_points DOUBLE PRECISION NOT NULL DEFAULT 1")
-        c.execute("UPDATE assessment_settings SET max_points=10 WHERE question_type IN ('essay', 'oral', 'practical') AND max_points=1")
-        c.cursor().executemany("INSERT INTO assessment_settings(question_type, question_count, max_points) VALUES (%s,%s,%s) ON CONFLICT (question_type) DO NOTHING", [('mcq', 20, 1), ('essay', 5, 10), ('oral', 3, 10), ('practical', 3, 10)])
-        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_projects TEXT[] NOT NULL DEFAULT '{}'")
-        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS discipline TEXT NOT NULL DEFAULT ''")
-        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS iqama_no TEXT NOT NULL DEFAULT ''")
-        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_no TEXT NOT NULL DEFAULT ''")
-        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mobile_no TEXT NOT NULL DEFAULT ''")
-        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS previous_schedules JSONB NOT NULL DEFAULT '[]'::jsonb")
-        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS project_assignment TEXT NOT NULL DEFAULT ''")
-        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS scheduled_discipline TEXT NOT NULL DEFAULT ''")
-        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_token TEXT")
-        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_at TIMESTAMPTZ")
-        c.execute("CREATE INDEX IF NOT EXISTS answers_question_idx ON answers(question_id)")
-        c.execute("CREATE INDEX IF NOT EXISTS answers_submission_idx ON answers(submission_id)")
-        c.execute("CREATE INDEX IF NOT EXISTS submissions_status_idx ON submissions(status)")
-        c.execute("CREATE INDEX IF NOT EXISTS submissions_user_idx ON submissions(user_id)")
-        c.execute("CREATE INDEX IF NOT EXISTS questions_disc_active_idx ON questions(discipline, active)")
-        c.execute("CREATE INDEX IF NOT EXISTS users_candidate_date_idx ON users(role, test_date)")
+        c.execute('CREATE TABLE IF NOT EXISTS schema_info (key TEXT PRIMARY KEY, value TEXT)')
+        initialized = c.execute("SELECT value FROM schema_info WHERE key='v2'").fetchone()
+        
+        if not initialized:
+            c.execute('ALTER TABLE questions DROP CONSTRAINT IF EXISTS questions_q_type_check')
+            c.execute("""DO $$ DECLARE constraint_name TEXT; BEGIN
+                FOR constraint_name IN SELECT conname FROM pg_constraint
+                    WHERE conrelid='questions'::regclass AND contype='c'
+                    AND pg_get_constraintdef(oid) LIKE '%delivery_stage%'
+                LOOP EXECUTE format('ALTER TABLE questions DROP CONSTRAINT %I', constraint_name); END LOOP;
+            END $$""")
+            c.execute("UPDATE questions SET q_type='oral_practical' WHERE q_type IN ('oral', 'practical', 'practicum')")
+            c.execute("UPDATE answers SET snapshot=jsonb_set(snapshot::jsonb, '{q_type}', '\"oral_practical\"'::jsonb) WHERE snapshot::json->>'q_type' IN ('oral', 'practical', 'practicum')")
+            c.execute(f"ALTER TABLE questions ADD CONSTRAINT questions_q_type_check CHECK (q_type IN {QUESTION_TYPES})")
+            c.execute("ALTER TABLE questions ADD CONSTRAINT questions_delivery_stage_check CHECK (delivery_stage = 'standard' OR (q_type = 'oral_practical' AND is_scored = FALSE))")
+            c.execute("UPDATE questions SET max_points=1 WHERE q_type='mcq' AND max_points <> 1")
+            c.execute("UPDATE questions SET max_points=10 WHERE q_type IN ('essay', 'oral_practical') AND max_points > 10")
+            c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS designation TEXT NOT NULL DEFAULT ''")
+            c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS candidate_name")
+            c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS iqama_no")
+            c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS employee_no")
+            c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS exam_date")
+            c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS project_location")
+            c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS project_assignment")
+            c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS discipline")
+            c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS oral_practical_score DOUBLE PRECISION NOT NULL DEFAULT 0")
+            c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS mcq_max DOUBLE PRECISION NOT NULL DEFAULT 0")
+            c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS essay_max DOUBLE PRECISION NOT NULL DEFAULT 0")
+            c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS oral_practical_max DOUBLE PRECISION NOT NULL DEFAULT 0")
+            c.execute("""DO $$ BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='submissions' AND column_name='oral_score')
+                   AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='submissions' AND column_name='practical_score') THEN
+                    UPDATE submissions SET oral_practical_score=oral_score + practical_score
+                    WHERE oral_practical_score=0;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='submissions' AND column_name='oral_max')
+                   AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='submissions' AND column_name='practical_max') THEN
+                    UPDATE submissions SET oral_practical_max=oral_max + practical_max
+                    WHERE oral_practical_max=0;
+                END IF;
+            END $$""")
+            c.execute("""UPDATE submissions s SET
+                mcq_max=COALESCE((SELECT SUM(CASE WHEN snapshot::json->>'q_type'='mcq' THEN 1 ELSE 0 END) FROM answers a WHERE a.submission_id=s.id), 0),
+                essay_max=COALESCE((SELECT SUM(LEAST((snapshot::json->>'max_points')::numeric, 10)) FROM answers a WHERE a.submission_id=s.id AND snapshot::json->>'q_type'='essay'), 0),
+                oral_practical_max=COALESCE((SELECT SUM(LEAST((snapshot::json->>'max_points')::numeric, 10)) FROM answers a WHERE a.submission_id=s.id AND snapshot::json->>'q_type'='oral_practical'), 0)
+                WHERE s.mcq_max=0 AND s.essay_max=0 AND s.oral_practical_max=0""")
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''")
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS test_date DATE")
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS invitation_sent_at TIMESTAMPTZ")
+            c.execute("CREATE TABLE IF NOT EXISTS projects (name TEXT PRIMARY KEY)")
+            c.execute("CREATE TABLE IF NOT EXISTS assessment_settings (question_type TEXT PRIMARY KEY, question_count INTEGER NOT NULL CHECK (question_count > 0), max_points DOUBLE PRECISION NOT NULL DEFAULT 1 CHECK (max_points > 0))")
+            c.execute("ALTER TABLE assessment_settings ADD COLUMN IF NOT EXISTS max_points DOUBLE PRECISION NOT NULL DEFAULT 1")
+            c.execute("""INSERT INTO assessment_settings(question_type, question_count, max_points)
+                SELECT 'oral_practical', SUM(question_count), MAX(max_points)
+                FROM assessment_settings WHERE question_type IN ('oral', 'practical')
+                HAVING COUNT(*) > 0
+                ON CONFLICT (question_type) DO UPDATE SET question_count=EXCLUDED.question_count, max_points=EXCLUDED.max_points""")
+            c.execute("DELETE FROM assessment_settings WHERE question_type IN ('oral', 'practical')")
+            c.execute("UPDATE assessment_settings SET max_points=10 WHERE question_type IN ('essay', 'oral_practical') AND max_points=1")
+            c.cursor().executemany("INSERT INTO assessment_settings(question_type, question_count, max_points) VALUES (%s,%s,%s) ON CONFLICT (question_type) DO NOTHING", [('mcq', 20, 1), ('essay', 5, 10), ('oral_practical', 6, 10)])
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_projects TEXT[] NOT NULL DEFAULT '{}'")
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS discipline TEXT NOT NULL DEFAULT ''")
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS iqama_no TEXT NOT NULL DEFAULT ''")
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_no TEXT NOT NULL DEFAULT ''")
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mobile_no TEXT NOT NULL DEFAULT ''")
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS previous_schedules JSONB NOT NULL DEFAULT '[]'::jsonb")
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS project_assignment TEXT NOT NULL DEFAULT ''")
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS scheduled_discipline TEXT NOT NULL DEFAULT ''")
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_token TEXT")
+            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_at TIMESTAMPTZ")
+            c.execute("CREATE INDEX IF NOT EXISTS answers_question_idx ON answers(question_id)")
+            c.execute("CREATE INDEX IF NOT EXISTS answers_submission_idx ON answers(submission_id)")
+            c.execute("CREATE INDEX IF NOT EXISTS submissions_status_idx ON submissions(status)")
+            c.execute("CREATE INDEX IF NOT EXISTS submissions_user_idx ON submissions(user_id)")
+            c.execute("CREATE INDEX IF NOT EXISTS questions_disc_active_idx ON questions(discipline, active)")
+            c.execute("CREATE INDEX IF NOT EXISTS users_candidate_date_idx ON users(role, test_date)")
+            c.execute("INSERT INTO schema_info (key, value) VALUES ('v2', 'true') ON CONFLICT (key) DO UPDATE SET value='true'")
+
         original_questions = json.loads(Path(__file__).with_name('seed_questions.json').read_text(encoding='utf-8'))
         original_questions = [row[:4] + [row[4], row[5], 1 if row[1] == 'mcq' else row[6]] for row in original_questions]
         has_any_users = c.execute('SELECT 1 FROM users LIMIT 1').fetchone()
@@ -366,7 +395,7 @@ def assessment_settings(actor):
 def update_assessment_settings(actor, settings):
     with connection() as c:
         require(c, actor, ('Admin', 'Reviewer'))
-        kinds = {'mcq', 'essay', 'oral', 'practical'}
+        kinds = set(QUESTION_TYPES)
         expected = kinds | {f'{kind}_points' for kind in kinds}
         if set(settings) != expected:
             raise ValueError('Assessment settings are incomplete.')
@@ -490,21 +519,31 @@ def remove_candidate_schedule(actor, candidate_id):
             raise ValueError('Candidate account not found.')
 
 def questions(discipline=None, include_inactive=False):
+    conditions = []
+    params = []
+    if not include_inactive:
+        conditions.append("q.active = 1")
+    if discipline is not None:
+        conditions.append("q.discipline = %s")
+        params.append(discipline)
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    query = f'''
+        SELECT q.*, EXISTS(SELECT 1 FROM answers a WHERE a.question_id = q.id) as is_used
+        FROM questions q
+        {where_clause}
+        ORDER BY q.discipline, q.id
+    '''
     with connection() as c:
-        rows = c.execute('''
-            SELECT q.*, EXISTS(SELECT 1 FROM answers a WHERE a.question_id = q.id) as is_used
-            FROM questions q
-            ORDER BY q.discipline, q.id
-        ''').fetchall()
-    return [dict(q) for q in rows if (include_inactive or q['active']) and (discipline is None or q['discipline'] == discipline)]
+        rows = c.execute(query, params).fetchall()
+    return [dict(q) for q in rows]
 
 def disciplines():
     with connection() as c:
         rows = c.execute('SELECT DISTINCT discipline FROM questions ORDER BY discipline').fetchall()
     return sorted(set(STARTER_DISCIPLINES) | {row['discipline'] for row in rows})
 
-def add_question(actor, discipline, kind, prompt, options, correct, rubric):
-    question = _validate_question(discipline, kind, prompt, options, correct, rubric)
+def add_question(actor, discipline, kind, prompt, options, correct, rubric, subject='General', topic='General', difficulty='moderate'):
+    question = _validate_question(discipline, kind, prompt, options, correct, rubric, subject=subject, topic_group=topic, difficulty=difficulty)
     with connection() as c:
         require(c, actor, ('Admin', 'Reviewer'))
         _insert_question(c, question)
@@ -513,16 +552,16 @@ def _validate_question(discipline, kind, prompt, options, correct, rubric, subje
     options = [v.strip() for v in options if v.strip()]
     if not discipline.strip() or not prompt.strip():
         raise ValueError('Discipline and question are required.')
-    if kind not in ('mcq', 'essay', 'oral', 'practical'):
+    if kind not in QUESTION_TYPES:
         raise ValueError('Invalid question type.')
     if kind == 'mcq' and (len(options) < 2 or len(set(options)) != len(options) or correct not in options):
         raise ValueError('Provide unique options and an exact matching correct answer.')
-    if kind in ('essay', 'oral', 'practical') and not rubric.strip():
-        raise ValueError('Essay, oral, and practical questions require a scoring rubric.')
+    if kind in REVIEWER_SCORED_TYPES and not rubric.strip():
+        raise ValueError('Essay and Oral-Practical questions require a scoring rubric.')
     if difficulty not in ('easy', 'moderate', 'difficult'):
         raise ValueError('Difficulty must be easy, moderate, or difficult.')
-    if delivery_stage not in ('standard', 'oral_opening') or (delivery_stage == 'oral_opening' and (kind != 'oral' or is_scored)):
-        raise ValueError('Oral opening questions must be non-scored oral questions.')
+    if delivery_stage not in ('standard', 'oral_opening') or (delivery_stage == 'oral_opening' and (kind != 'oral_practical' or is_scored)):
+        raise ValueError('Oral opening questions must be non-scored Oral-Practical questions.')
     points = 1 if kind == 'mcq' else 10
     return (discipline.strip(), kind, prompt.strip(), options, correct.strip(), rubric.strip(), points, subject.strip() or 'General', sub_subject.strip() or 'General', bool(is_scored), difficulty, topic_group.strip() or 'General', delivery_stage)
 
@@ -557,7 +596,7 @@ def add_questions(actor, parse_results, progress_callback=None):
 def autogenerate_questions(actor, discipline, kind, count, progress_callback=None):
     if not isinstance(count, int) or not (1 <= count <= 500):
         raise ValueError('Count must be between 1 and 500.')
-    if kind not in ('mcq', 'essay', 'oral', 'practical'):
+    if kind not in QUESTION_TYPES:
         raise ValueError('Invalid question type.')
     with connection() as c:
         require(c, actor, ('Admin',))
@@ -609,12 +648,26 @@ def wipe_questions(actor):
 def wipe_archived_questions(actor, progress_callback=None):
     with connection() as c:
         require(c, actor, ('Admin',))
-        archived = c.execute('SELECT id FROM questions WHERE active=0').fetchall()
-        total = len(archived)
-        for i, q in enumerate(archived):
-            if progress_callback:
-                progress_callback(i + 1, total)
-            delete_question(actor, q['id'], force=True)
+        archived_ids = [row['id'] for row in c.execute('SELECT id FROM questions WHERE active=0').fetchall()]
+        total = len(archived_ids)
+        if not archived_ids:
+            return 0
+        if progress_callback:
+            progress_callback(0, total)
+        submission_ids = [
+            row['submission_id']
+            for row in c.execute(
+                'SELECT DISTINCT submission_id FROM answers WHERE question_id = ANY(%s)',
+                (archived_ids,),
+            ).fetchall()
+        ]
+        if submission_ids:
+            c.execute('DELETE FROM answers WHERE submission_id = ANY(%s)', (submission_ids,))
+            c.execute('DELETE FROM submissions WHERE id = ANY(%s)', (submission_ids,))
+        c.execute('DELETE FROM questions WHERE id = ANY(%s)', (archived_ids,))
+        if progress_callback:
+            progress_callback(total, total)
+        return total
 
 def submit(actor, discipline, responses, token, candidate_details=None, question_ids=None, point_settings=None, expected_counts=None):
     if not isinstance(token, str) or not token.strip():
@@ -635,20 +688,20 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
             qs = c.execute('SELECT * FROM questions WHERE discipline=%s AND active=1 AND id=ANY(%s) ORDER BY id FOR SHARE', (discipline, list(question_ids))).fetchall()
         if point_settings:
             qs = [dict(q, max_points=(1 if q['q_type'] == 'mcq' else point_settings.get(q['q_type'], q['max_points']))) for q in qs]
-        candidate_question_ids = {q['id'] for q in qs if q['q_type'] not in ('oral', 'practical')}
+        candidate_question_ids = {q['id'] for q in qs if q['q_type'] != 'oral_practical'}
         if not qs or set(responses) != candidate_question_ids:
             raise ValueError('The question set changed. Reload the assessment before submitting.')
         if question_ids is not None:
             settings = expected_counts
-            counts = {kind: sum(q['q_type'] == kind for q in qs) for kind in ('mcq', 'essay', 'oral', 'practical')}
+            counts = {kind: sum(q['q_type'] == kind for q in qs) for kind in QUESTION_TYPES}
             if settings is not None and counts != settings:
                 raise ValueError('The assessment question counts do not match the settings used when this assessment started.')
-        candidate_qs = [q for q in qs if q['q_type'] not in ('oral', 'practical')]
+        candidate_qs = [q for q in qs if q['q_type'] != 'oral_practical']
         if not any(isinstance(responses.get(q['id']), str) and responses.get(q['id'], '').strip() for q in candidate_qs):
             raise ValueError('Answer every question (maximum 20,000 characters per answer).')
         for q in qs:
             answer = responses.get(q['id'], '')
-            if q['q_type'] in ('oral', 'practical'):
+            if q['q_type'] == 'oral_practical':
                 continue
             if not isinstance(answer, str) or len(answer) > 20000:
                 raise ValueError('Answer every question (maximum 20,000 characters per answer).')
@@ -659,12 +712,12 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         if not candidate_name:
             raise ValueError('Candidate name is required.')
         mcq_score = sum(q['max_points'] for q in qs if q['q_type'] == 'mcq' and responses[q['id']] == q['correct_answer'])
-        status = 'Pending Review' if any(q['q_type'] in ('essay', 'oral', 'practical') for q in qs) else 'Graded'
+        status = 'Pending Review' if any(q['q_type'] in REVIEWER_SCORED_TYPES for q in qs) else 'Graded'
         project_assignment = str(details.get('project_assignment', '')).strip()
         max_points = sum(1 if q['q_type'] == 'mcq' else min(q['max_points'], 10) for q in qs)
-        maxima = {kind: sum(1 if q['q_type'] == 'mcq' else min(q['max_points'], 10) for q in qs if q['q_type'] == kind) for kind in ('mcq', 'essay', 'oral', 'practical')}
-        sid = c.execute("INSERT INTO submissions(designation,mcq_score,max_possible_points,mcq_max,essay_max,oral_max,practical_max,status,user_id,token,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP) RETURNING id",
-                        (str(details.get('designation', '')).strip(), mcq_score, max_points, maxima['mcq'], maxima['essay'], maxima['oral'], maxima['practical'], status, actor, token)).fetchone()['id']
+        maxima = {kind: sum(1 if q['q_type'] == 'mcq' else min(q['max_points'], 10) for q in qs if q['q_type'] == kind) for kind in QUESTION_TYPES}
+        sid = c.execute("INSERT INTO submissions(designation,mcq_score,max_possible_points,mcq_max,essay_max,oral_practical_max,status,user_id,token,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP) RETURNING id",
+                        (str(details.get('designation', '')).strip(), mcq_score, max_points, maxima['mcq'], maxima['essay'], maxima['oral_practical'], status, actor, token)).fetchone()['id']
         for q in qs:
             score = q['max_points'] if q['q_type'] == 'mcq' and responses[q['id']] == q['correct_answer'] else 0
             c.execute('INSERT INTO answers(submission_id,question_id,submitted_answer,awarded_score,snapshot) VALUES (%s,%s,%s,%s,%s)',
@@ -681,7 +734,7 @@ def submissions(actor):
                    COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline) AS discipline,
                    u.project_assignment, u.test_date AS scheduled_test_date,
                    s.created_at::date AS exam_date,
-                   s.essay_score AS essay_only_score, s.oral_score, s.practical_score
+                   s.essay_score AS essay_only_score, s.oral_practical_score
             FROM submissions s LEFT JOIN users u ON u.id=s.user_id
             WHERE s.user_id=%s OR %s = 'Admin' OR (%s = 'Reviewer' AND u.project_assignment = ANY(%s))
             ORDER BY s.id DESC
@@ -707,7 +760,7 @@ def grade(actor, sid, scores, comments, observed_responses=None):
         sub = c.execute('SELECT * FROM submissions WHERE id=%s FOR UPDATE', (sid,)).fetchone()
         if not sub or sub['status'] == 'Graded':
             raise ValueError('This assessment has already been graded or is unavailable.')
-        essays = [dict(a) for a in c.execute('SELECT * FROM answers WHERE submission_id=%s', (sid,)) if json.loads(a['snapshot'])['q_type'] in ('essay', 'oral', 'practical')]
+        essays = [dict(a) for a in c.execute('SELECT * FROM answers WHERE submission_id=%s', (sid,)) if json.loads(a['snapshot'])['q_type'] in REVIEWER_SCORED_TYPES]
         if set(scores) != {a['id'] for a in essays}:
             raise ValueError('Score every essay before finalizing.')
         for a in essays:
@@ -719,15 +772,15 @@ def grade(actor, sid, scores, comments, observed_responses=None):
             if not isinstance(response, str) or len(response) > 20000:
                 raise ValueError('Observed responses must be 20,000 characters or fewer.')
             c.execute("UPDATE answers SET submitted_answer=%s WHERE id=%s AND submission_id=%s", (response.strip(), answer_id, sid))
-        typed_scores = {kind: sum(scores[a['id']] for a in essays if json.loads(a['snapshot'])['q_type'] == kind) for kind in ('essay', 'oral', 'practical')}
-        c.execute("UPDATE submissions SET essay_score=%s,oral_score=%s,practical_score=%s,status='Graded',reviewer_comments=%s,reviewer_id=%s,graded_at=CURRENT_TIMESTAMP WHERE id=%s",
-                  (typed_scores['essay'], typed_scores['oral'], typed_scores['practical'], comments.strip(), actor, sid))
+        typed_scores = {kind: sum(scores[a['id']] for a in essays if json.loads(a['snapshot'])['q_type'] == kind) for kind in ('essay', 'oral_practical')}
+        c.execute("UPDATE submissions SET essay_score=%s,oral_practical_score=%s,status='Graded',reviewer_comments=%s,reviewer_id=%s,graded_at=CURRENT_TIMESTAMP WHERE id=%s",
+                  (typed_scores['essay'], typed_scores['oral_practical'], comments.strip(), actor, sid))
 
 def result(sub):
     if sub['status'] != 'Graded':
         return 'Pending Review'
-    percentage = 100 * (sub['mcq_score'] + sub['essay_score'] + sub.get('oral_score', 0) + sub.get('practical_score', 0)) / sub['max_possible_points'] if sub['max_possible_points'] else 0
-    minimums = all(category_percentage(sub, kind) >= 50 for kind in ('mcq', 'essay', 'oral', 'practical'))
+    percentage = 100 * (sub['mcq_score'] + sub['essay_score'] + sub.get('oral_practical_score', 0)) / sub['max_possible_points'] if sub['max_possible_points'] else 0
+    minimums = all(category_percentage(sub, kind) >= 50 for kind in QUESTION_TYPES)
     return f"{'PASS' if percentage >= 70 and minimums else 'FAIL'} ({percentage:.1f}%)"
 
 def category_percentage(sub, kind):

@@ -11,6 +11,7 @@ from PIL import Image as PILImage
 import streamlit as st
 import streamlit.components.v1 as components
 import database as db
+from question_types import QUESTION_TYPES, QUESTION_TYPE_LABELS, QUESTION_TYPE_SECTION_LABELS, REVIEWER_SCORED_TYPES
 from email_service import EmailDeliveryError, send_candidate_invitation, send_candidate_result, send_reviewer_credentials, send_test_email
 from question_import import QuestionImportError, export_questions_bytes, parse_questions, template_bytes
 from result_export import excel_bytes
@@ -18,6 +19,7 @@ from result_export import excel_bytes
 
 
 
+@st.cache_resource(show_spinner=False)
 def _load_tab_icon():
     base_dir = Path(__file__).resolve().parent
     icon_png_path = base_dir / 'img' / 'Icon' / 'CAT-Tab-Icon.png'
@@ -331,6 +333,31 @@ def question_options(question):
     return [str(option) for option in raw_options]
 
 
+def select_assessment_questions(bank, settings, rng):
+    """Select reviewer-scored questions from the subject-topic coverage of selected MCQs."""
+    pools = {kind: [question for question in bank if question['q_type'] == kind] for kind in QUESTION_TYPES}
+    missing = [kind for kind in QUESTION_TYPES if len(pools[kind]) < settings[kind]]
+    if missing:
+        raise ValueError('This discipline does not have enough questions for the assessment settings.')
+    selected = {'mcq': rng.sample(pools['mcq'], settings['mcq'])}
+    selected_subject_topics = {
+        (question.get('subject', 'General'), question.get('topic_group', 'General'))
+        for question in selected['mcq']
+    }
+    for kind in REVIEWER_SCORED_TYPES:
+        aligned_pool = [
+            question for question in pools[kind]
+            if (question.get('subject', 'General'), question.get('topic_group', 'General')) in selected_subject_topics
+        ]
+        if len(aligned_pool) < settings[kind]:
+            raise ValueError(
+                f"The selected Multiple Choice subjects and topics need at least {settings[kind]} aligned "
+                f"{QUESTION_TYPE_LABELS[kind]} questions."
+            )
+        selected[kind] = rng.sample(aligned_pool, settings[kind])
+    return selected
+
+
 try:
     with st.spinner('Loading Competency Technical Assessment (CTA) Portal...'):
         initialize_database()
@@ -423,8 +450,7 @@ def result_table(rows):
              'Exam Date': format_result_datetime(r.get('exam_date', '')), 'Status': r['status'],
              'Multiple Choice Grade': db.category_result(r, 'mcq'),
              'Essay Grade': db.category_result(r, 'essay'),
-             'Oral Grade': db.category_result(r, 'oral'),
-             'Practical Grade': db.category_result(r, 'practical'),
+             'Oral-Practical Grade': db.category_result(r, 'oral_practical'),
              'Reviewer Comments': r.get('reviewer_comments', ''), 'Graded (UTC)': format_result_datetime(r.get('graded_at', '')),
              'Overall Result': db.result(r)} for r in rows]
 
@@ -474,11 +500,11 @@ def candidate_result_pdf(sub):
         story.append(Paragraph('<b>Overall result:</b> Pending Review', styles['CATOverallResult']))
     else:
         rows = [['Question type', 'Percentage', 'Status']]
-        for kind, label in (('mcq', 'Multiple Choice'), ('essay', 'Essay'), ('oral', 'Oral Test'), ('practical', 'Practical Test')):
+        for kind, label in (('mcq', 'Multiple Choice'), ('essay', 'Essay'), ('oral_practical', 'Oral-Practical')):
             pct = db.category_percentage(sub, kind)
             rows.append([label, f'{pct:.1f}%', 'PASS' if pct >= 50 else 'FAIL'])
-        overall_pct = 100 * (sub['mcq_score'] + sub['essay_score'] + sub.get('oral_score', 0) + sub.get('practical_score', 0)) / sub['max_possible_points'] if sub['max_possible_points'] else 0
-        overall_status = 'PASS' if overall_pct >= 70 and all(db.category_percentage(sub, kind) >= 50 for kind in ('mcq', 'essay', 'oral', 'practical')) else 'FAIL'
+        overall_pct = 100 * (sub['mcq_score'] + sub['essay_score'] + sub.get('oral_practical_score', 0)) / sub['max_possible_points'] if sub['max_possible_points'] else 0
+        overall_status = 'PASS' if overall_pct >= 70 and all(db.category_percentage(sub, kind) >= 50 for kind in QUESTION_TYPES) else 'FAIL'
         overall_color = '#188038' if overall_status == 'PASS' else '#B51F2D'
         story += [Spacer(1, 4*mm), Paragraph('Results by question type', styles['CATResultHeading']), Table(rows, colWidths=[39*mm, 26.6*mm, 22.4*mm], style=TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#B51F2D')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('GRID',(0,0),(-1,-1),0.4,colors.HexColor('#D9DCDE')),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),8),('LEADING',(0,0),(-1,-1),10),('PADDING',(0,0),(-1,-1),4)])), Spacer(1, 5*mm), Paragraph(f'<b>Overall result:</b> {overall_pct:.1f}% - <font color="{overall_color}"><b>{overall_status}</b></font>', styles['CATOverallResult'])]
     story += [Spacer(1, 6*mm), Paragraph('<b>How pass/fail is determined</b>', styles['CATExplainHeading']), Paragraph('The candidate must achieve at least 50% in every question type and at least 70% overall. The overall percentage is calculated from the accumulated points earned divided by the total possible points. Failing any one question type results in an overall FAIL, even when the overall percentage is 70% or higher. A result remains Pending Review until the Reviewer scores all Essay, Oral Test, and Practical Test responses.', styles['CATExplainBody'])]
@@ -552,27 +578,30 @@ if hasattr(st, 'dialog'):
 
     @st.dialog('Deleting Archived Questions')
     def wipe_archived_dialog(uid):
-        progress_bar = st.progress(0, text='Preparing to delete...')
-        def wipe_progress(current, total):
-            progress_bar.progress(current / total if total > 0 else 1.0, text=f'Deleting question {current} of {total}...')
-        try:
-            db.wipe_archived_questions(uid, progress_callback=wipe_progress)
-            clear_read_caches()
-            progress_bar.empty()
-            st.success('Archived questions and their related candidate records have been deleted.')
-            if st.button('Close'):
-                st.rerun()
-        except ValueError as exc:
-            progress_bar.empty()
-            st.error(str(exc))
+        st.warning('This permanently deletes archived questions and every candidate assessment that used them.')
+        confirmed = st.checkbox('I understand that archived questions and affected candidate records cannot be recovered.')
+        if st.button('Wipe archived questions and candidate records', type='primary', disabled=not confirmed):
+            progress_bar = st.progress(0, text='Preparing to delete...')
+            def wipe_progress(current, total):
+                text = 'Removing affected candidate records...' if current == 0 else f'Deleted {total} archived questions.'
+                progress_bar.progress(current / total if total > 0 else 1.0, text=text)
+            try:
+                deleted_count = db.wipe_archived_questions(uid, progress_callback=wipe_progress)
+                clear_read_caches()
+                progress_bar.empty()
+                st.success(f'Wipe complete. Deleted {deleted_count} archived questions and their related candidate records.')
+            except ValueError as exc:
+                progress_bar.empty()
+                st.error(str(exc))
+        if st.button('Close'):
+            st.rerun()
 
     @st.dialog('Confirm Question Bank Wipe')
     def wipe_question_bank_dialog(uid):
         st.warning(
             'This removes all unanswered questions and archives every question that has already been used in a candidate assessment.'
         )
-        confirmed = st.checkbox('I understand that this action will clear the active Question Bank.')
-        if st.button('Confirm Wipe Question Bank', type='primary', disabled=not confirmed):
+        if st.button('Confirm Wipe Question Bank', type='primary'):
             try:
                 db.wipe_questions(uid)
                 clear_read_caches()
@@ -662,10 +691,9 @@ if user['role'] == 'Candidate':
             st.stop()
         bank = cached_questions(discipline)
         settings = cached_assessment_settings(user['id'])
-        mcq_bank = [q for q in bank if q['q_type'] == 'mcq']
-        reviewer_pools = {kind: [q for q in bank if q['q_type'] == kind] for kind in ('essay', 'oral', 'practical')}
-        if len(mcq_bank) < settings['mcq'] or any(len(reviewer_pools[kind]) < settings[kind] for kind in reviewer_pools):
-            st.error(f"This discipline needs {settings['mcq']} MCQ, {settings['essay']} Essay, {settings['oral']} Oral, and {settings['practical']} Practical Test questions.")
+        question_pools = {kind: [q for q in bank if q['q_type'] == kind] for kind in QUESTION_TYPES}
+        if any(len(question_pools[kind]) < settings[kind] for kind in QUESTION_TYPES):
+            st.error(f"This discipline needs {settings['mcq']} MCQ, {settings['essay']} Essay, and {settings['oral_practical']} Oral-Practical questions.")
             st.stop()
 
         if st.session_state.get('assessment_discipline') != discipline:
@@ -681,7 +709,7 @@ if user['role'] == 'Candidate':
             st.info(
                 '**Candidate instructions**\n\n'
                 '- Be presentable and maintain a professional appearance and conduct throughout the assessment, '
-                'including the oral and practical portions.\n'
+                'including the Oral-Practical portion.\n'
                 '- You have 40 minutes to answer all Multiple Choice Questions. The countdown begins when you '
                 'press the Start Multiple Choice Questions button.'
             )
@@ -699,10 +727,11 @@ if user['role'] == 'Candidate':
                         }
                         rng = secrets.SystemRandom()
                         try:
-                            selected_mcqs = rng.sample(mcq_bank, settings['mcq'])
-                            st.session_state.assessment_mcq_ids = [q['id'] for q in selected_mcqs]
-                            st.session_state.assessment_essay_ids = [q['id'] for q in rng.sample(reviewer_pools['essay'], settings['essay'])]
-                            st.session_state.assessment_reviewer_ids = [q['id'] for kind in ('oral', 'practical') for q in rng.sample(reviewer_pools[kind], settings[kind])]
+                            selected = select_assessment_questions(bank, settings, rng)
+                            selected_mcqs = selected['mcq']
+                            st.session_state.assessment_mcq_ids = [q['id'] for q in selected['mcq']]
+                            st.session_state.assessment_essay_ids = [q['id'] for q in selected['essay']]
+                            st.session_state.assessment_reviewer_ids = [q['id'] for q in selected['oral_practical']]
                             st.session_state.assessment_mcq_options = {
                                 q['id']: rng.sample(question_options(q), len(question_options(q)))
                                 for q in selected_mcqs
@@ -711,7 +740,7 @@ if user['role'] == 'Candidate':
                             st.session_state.assessment_mcq_deadline = started_at + MCQ_TIME_LIMIT_SECONDS
                             st.session_state.assessment_essay_started_at = {}
                             st.session_state.assessment_essay_index = 0
-                            st.session_state.assessment_counts = {kind: settings[kind] for kind in ('mcq', 'essay', 'oral', 'practical')}
+                            st.session_state.assessment_counts = {kind: settings[kind] for kind in QUESTION_TYPES}
                             st.session_state.assessment_phase = 'mcq'
                             st.rerun()
                         except (TypeError, ValueError, json.JSONDecodeError) as exc:
@@ -722,7 +751,7 @@ if user['role'] == 'Candidate':
         mcq_questions = [question_map[qid] for qid in st.session_state.assessment_mcq_ids]
         essay_questions = [question_map[qid] for qid in st.session_state.assessment_essay_ids if question_map[qid]['q_type'] == 'essay']
         responses = st.session_state.setdefault('assessment_responses', {})
-        st.info(f"Complete {settings['mcq']} Multiple Choice Questions and {settings['essay']} Essay questions in the app. Oral ({settings['oral']}) and Practical Tests ({settings['practical']}) are completed and graded by a Reviewer.")
+        st.info(f"Complete {settings['mcq']} Multiple Choice Questions and {settings['essay']} Essay questions in the app. Oral-Practical questions ({settings['oral_practical']}) are completed and graded by a Reviewer.")
         if st.session_state.get('assessment_phase', 'mcq') == 'mcq':
             section = st.expander('Multiple Choice Questions', expanded=True)
             section.__enter__()
@@ -759,7 +788,7 @@ if user['role'] == 'Candidate':
             section = st.expander('Essay Questions', expanded=True)
             section.__enter__()
             st.subheader('Essay Questions')
-            st.info('Each Essay question has six minutes. Oral and Practical Tests are completed and graded by a Reviewer.')
+            st.info('Each Essay question has six minutes. Oral-Practical questions are completed and graded by a Reviewer.')
             essay_index = st.session_state.setdefault('assessment_essay_index', 0)
             if essay_index >= len(essay_questions):
                 st.success('All Essay questions are complete. Submit the assessment when ready.')
@@ -772,7 +801,7 @@ if user['role'] == 'Candidate':
                             user['id'], discipline, responses, st.session_state.attempt_token,
                             st.session_state.candidate_details,
                             st.session_state.assessment_mcq_ids + st.session_state.assessment_essay_ids + st.session_state.assessment_reviewer_ids,
-                            point_settings={kind: settings[f'{kind}_points'] for kind in ('mcq', 'essay', 'oral', 'practical')},
+                            point_settings={kind: settings[f'{kind}_points'] for kind in QUESTION_TYPES},
                             expected_counts=st.session_state.get('assessment_counts'))
                         clear_read_caches()
                         db.release_login(user['id'], st.session_state.login_token)
@@ -850,10 +879,10 @@ else:
         current = cached_assessment_settings(user['id'])
         with st.form('assessment_settings'):
             counts = {kind: st.number_input(label, min_value=1, max_value=100, value=current[kind], step=1) for kind, label in {
-                'mcq': 'Multiple Choice Questions', 'essay': 'Essay Questions', 'oral': 'Oral Test Questions', 'practical': 'Practical Test Questions'
+                'mcq': 'Multiple Choice Questions', 'essay': 'Essay Questions', 'oral_practical': 'Oral-Practical Questions'
             }.items()}
             points = {kind: st.number_input(f'{label} maximum points per question', min_value=1.0, max_value=10.0, value=float(current[f'{kind}_points']), step=1.0) for kind, label in {
-                'mcq': 'Multiple Choice', 'essay': 'Essay', 'oral': 'Oral Test', 'practical': 'Practical Test'
+                'mcq': 'Multiple Choice', 'essay': 'Essay', 'oral_practical': 'Oral-Practical'
             }.items()}
             if st.form_submit_button('Save Assessment Settings', type='primary'):
                 try:
@@ -1228,11 +1257,8 @@ else:
                     else:
                         st.session_state['confirm_wipe_question_bank'] = True
                 if st.session_state.get('confirm_wipe_question_bank'):
-                    confirmed = st.checkbox(
-                        'I understand that this action will clear the active Question Bank.',
-                        key='confirm_wipe_question_bank_acknowledged',
-                    )
-                    if st.button('Confirm Wipe Question Bank', type='primary', disabled=not confirmed):
+                    st.warning('This removes all unanswered questions and archives every question that has already been used in a candidate assessment.')
+                    if st.button('Confirm Wipe Question Bank', type='primary'):
                         try:
                             db.wipe_questions(user['id'])
                             clear_read_caches()
@@ -1247,15 +1273,23 @@ else:
                     if hasattr(st, 'dialog'):
                         wipe_archived_dialog(user['id'])
                     else:
+                        st.session_state['confirm_wipe_archived_questions'] = True
+                if st.session_state.get('confirm_wipe_archived_questions'):
+                    confirmed = st.checkbox(
+                        'I understand that archived questions and affected candidate records cannot be recovered.',
+                        key='confirm_wipe_archived_questions_acknowledged',
+                    )
+                    if st.button('Confirm Wipe Archived Questions', type='primary', disabled=not confirmed):
                         progress_bar = st.progress(0, text='Preparing to delete...')
                         def wipe_progress(current, total):
-                            progress_bar.progress(current / total if total > 0 else 1.0, text=f'Deleting question {current} of {total}...')
+                            text = 'Removing affected candidate records...' if current == 0 else f'Deleted {total} archived questions.'
+                            progress_bar.progress(current / total if total > 0 else 1.0, text=text)
                         try:
-                            db.wipe_archived_questions(user['id'], progress_callback=wipe_progress)
+                            deleted_count = db.wipe_archived_questions(user['id'], progress_callback=wipe_progress)
                             clear_read_caches()
                             progress_bar.empty()
-                            st.success('Archived questions and their related candidate records have been deleted.')
-                            st.rerun()
+                            st.session_state.pop('confirm_wipe_archived_questions', None)
+                            st.success(f'Wipe complete. Deleted {deleted_count} archived questions and their related candidate records.')
                         except ValueError as exc:
                             progress_bar.empty()
                             st.error(str(exc))
@@ -1327,19 +1361,19 @@ else:
                             stage.error('Step 2 of 2: Import failed after validation completed.')
                         st.error(str(exc))
         with st.expander('Add a question', expanded=True):
-            kind = st.selectbox('Question type', ['mcq', 'essay', 'oral', 'practical'], format_func=lambda value: {
-                'mcq': 'Multiple Choice Question', 'essay': 'Essay',
-                'oral': 'Oral Test', 'practical': 'Practical Test'
-            }[value])
+            kind = st.selectbox('Question type', QUESTION_TYPES, format_func=lambda value: QUESTION_TYPE_LABELS[value])
             with st.form('new_question'):
                 discipline = st.selectbox('Discipline', cached_disciplines())
                 prompt = st.text_area('Question')
                 options = st.text_area('Multiple Choice options (one per line)') if kind == 'mcq' else ''
                 correct = st.text_input('Correct answer (exact option text)') if kind == 'mcq' else ''
-                rubric = st.text_area('Scoring rubric') if kind in ('essay', 'oral', 'practical') else ''
+                subject = st.text_input('Subject', value='General')
+                topic = st.text_input('Topic', value='General')
+                difficulty = st.selectbox('Difficulty', ['easy', 'moderate', 'difficult'], index=1)
+                rubric = st.text_area('Scoring rubric') if kind in REVIEWER_SCORED_TYPES else ''
                 if st.form_submit_button('Add question'):
                     try:
-                        db.add_question(user['id'], discipline, kind, prompt, options.splitlines(), correct.strip(), rubric)
+                        db.add_question(user['id'], discipline, kind, prompt, options.splitlines(), correct.strip(), rubric, subject, topic, difficulty)
                         clear_read_caches()
                         st.success('Question added.')
                     except ValueError as exc:
@@ -1348,10 +1382,7 @@ else:
             with st.expander('Auto-generate placeholder questions'):
                 with st.form('autogenerate'):
                     auto_discipline = st.selectbox('Discipline', db.STARTER_DISCIPLINES)
-                    auto_kind = st.selectbox('Question type', ['mcq', 'essay', 'oral', 'practical'], format_func=lambda value: {
-                        'mcq': 'Multiple Choice Question', 'essay': 'Essay',
-                        'oral': 'Oral Test', 'practical': 'Practical Test'
-                    }[value])
+                    auto_kind = st.selectbox('Question type', QUESTION_TYPES, format_func=lambda value: QUESTION_TYPE_LABELS[value])
                     auto_count = st.number_input('Number of questions', 1, 500, 5)
                     if st.form_submit_button('Generate'):
                         progress_bar = st.progress(0, text='Generating placeholder questions...')
@@ -1362,7 +1393,6 @@ else:
                             clear_read_caches()
                             progress_bar.empty()
                             st.success(f'{auto_count} placeholder questions generated.')
-                            # Use a short delay or just let the user see the success message
                         except ValueError as exc:
                             progress_bar.empty()
                             st.error(str(exc))
@@ -1374,19 +1404,22 @@ else:
         all_disciplines = sorted(list(set(q['discipline'] for q in all_questions)))
         all_types = sorted(list(set(q['q_type'] for q in all_questions)))
         
-        col1, col2, col3 = st.columns([1, 1, 1])
+        col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
         filter_discipline = col1.selectbox('Filter by Discipline', ['All'] + all_disciplines)
-        type_options = {
-            'mcq': 'Multiple Choice Question', 'essay': 'Essay',
-            'oral': 'Oral Test', 'practical': 'Practical Test'
-        }
+        type_options = QUESTION_TYPE_LABELS
         filter_type = col2.selectbox('Filter by Question Type', ['All'] + all_types, format_func=lambda x: type_options.get(x, x))
-        search_kw = col3.text_input('Search Question / Rubric', placeholder='Keyword...').strip().lower()
+        all_subjects = sorted({q.get('subject', 'General') for q in all_questions})
+        all_topics = sorted({q.get('topic_group', 'General') for q in all_questions})
+        filter_subject = col3.selectbox('Filter by Subject', ['All'] + all_subjects)
+        filter_topic = col4.selectbox('Filter by Topic', ['All'] + all_topics)
+        filter_difficulty = col5.selectbox('Filter by Difficulty', ['All', 'easy', 'moderate', 'difficult'])
+        search_kw = st.text_input('Search Question / Rubric', placeholder='Keyword...').strip().lower()
         
         filtered_questions = [
             q for q in all_questions 
             if (filter_discipline == 'All' or q['discipline'] == filter_discipline) and 
                (filter_type == 'All' or q['q_type'] == filter_type) and
+               (filter_difficulty == 'All' or q.get('difficulty', 'moderate') == filter_difficulty) and
                (not search_kw or search_kw in q['question_text'].lower() or search_kw in (q.get('rubric') or '').lower())
         ]
         
@@ -1429,6 +1462,7 @@ else:
                                 if st.button('Delete entirely (Removes candidate records)', key=f"hard_delete_{q['id']}", type='primary'):
                                     try:
                                         db.delete_question(user['id'], q['id'], force=True)
+                                        clear_read_caches()
                                         st.rerun()
                                     except ValueError as exc:
                                         st.error(str(exc))
@@ -1436,6 +1470,7 @@ else:
                         if st.button('Delete', key=f"delete_{q['id']}"):
                             try:
                                 db.delete_question(user['id'], q['id'])
+                                clear_read_caches()
                                 st.rerun()
                             except ValueError as exc:
                                 st.error(str(exc))
@@ -1460,7 +1495,19 @@ else:
         }
         </style>
         ''', unsafe_allow_html=True)
-        for index, result_row in enumerate(table):
+        page_size = 15
+        total_pages = max(1, (len(table) + page_size - 1) // page_size)
+        if total_pages > 1:
+            p_col1, p_col2 = st.columns([1, 3])
+            with p_col1:
+                page_num = st.number_input('Page', min_value=1, max_value=total_pages, value=1, step=1, key='ar_page')
+            with p_col2:
+                st.caption(f"Showing submissions {(page_num-1)*page_size + 1} to {min(page_num*page_size, len(table))} of {len(table)}")
+            page_table = table[(page_num - 1) * page_size : page_num * page_size]
+        else:
+            page_table = table
+
+        for index, result_row in enumerate(page_table):
             summary = f"{result_row['Candidate']} · {result_row['Discipline']} · {result_row['Status']}"
             with st.expander(summary, expanded=False):
                 for label, value in result_row.items():
@@ -1498,15 +1545,14 @@ else:
                     if question_section is not None:
                         question_section.__exit__(None, None, None)
                     question_section_type = q['q_type']
-                    section_title = {'mcq': 'Multiple Choice Questions', 'essay': 'Essay Questions', 'oral': 'Oral Test', 'practical': 'Practical Test'}.get(q['q_type'], 'Questions')
+                    section_title = QUESTION_TYPE_SECTION_LABELS.get(q['q_type'], 'Questions')
                     question_section = st.expander(section_title, expanded=sub['status'] != 'Graded')
                     question_section.__enter__()
                 question_type = {
-                    'mcq': 'Multiple Choice Question', 'essay': 'Essay', 'oral': 'Oral Test',
-                    'practical': 'Practical Test',
+                    'mcq': 'Multiple Choice Question', 'essay': 'Essay', 'oral_practical': 'Oral-Practical',
                 }.get(q['q_type'], q['q_type'])
                 st.write(f"{question_type}: {q['question_text']}")
-                if q['q_type'] in ('essay', 'oral', 'practical'):
+                if q['q_type'] in REVIEWER_SCORED_TYPES:
                     if q['q_type'] == 'essay':
                         st.text_area('Candidate response', value=a['submitted_answer'], disabled=True,
                                      height=160, key=f"response_{a['id']}")
@@ -1532,7 +1578,7 @@ else:
         if sub['status'] == 'Graded':
             st.subheader('CTA Results')
             with st.expander('Results by Question Type', expanded=True):
-                for kind, label in (('mcq', 'Multiple Choice'), ('essay', 'Essay'), ('oral', 'Oral Test'), ('practical', 'Practical Test')):
+                for kind, label in (('mcq', 'Multiple Choice'), ('essay', 'Essay'), ('oral_practical', 'Oral-Practical')):
                     grade = db.category_result(sub, kind)
                     (st.success if grade.startswith('PASS') else st.error)(f'{label}: {grade}')
             with st.expander('Final Result', expanded=True):
