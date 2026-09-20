@@ -135,7 +135,8 @@ def export_questions_bytes(questions):
             question.get('question_text', ''),
             '\n'.join(str(option) for option in options),
             question.get('correct_answer', '') or '',
-            question.get('rubric', '') or '',
+            question.get('rubric', '') or '', question.get('subject', 'General'), question.get('sub_subject', 'General'),
+            'yes' if question.get('is_scored', True) else 'no', question.get('difficulty', 'moderate'), question.get('topic_group', 'General'), question.get('delivery_stage', 'standard'),
         ])
         for cell in sheet[sheet.max_row]:
             if isinstance(cell.value, str):

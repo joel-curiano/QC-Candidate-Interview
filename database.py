@@ -175,16 +175,16 @@ def init_db():
         
         # Only seed questions if the database is entirely empty (no questions and no users).
         if not has_any_users and not c.execute('SELECT 1 FROM questions LIMIT 1').fetchone():
-            c.cursor().executemany('INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points) VALUES (%s,%s,%s,%s,%s,%s,%s)', original_questions)
+            c.cursor().executemany('INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points,subject,sub_subject,is_scored,difficulty,topic_group,delivery_stage) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)', original_questions)
             essay_prompts = {
                 'Electrical QC': 'Describe how you would inspect an electrical installation against approved drawings and test records. Explain how you would document and close an identified discrepancy.',
                 'Instrumentation QC': 'Describe how you would review instrument calibration and loop-check records. Explain traceability checks and how you would handle a failed result.',
             }
             for discipline, essay_prompt in essay_prompts.items():
                 options = ['Record and report the nonconformance', 'Ignore the result', 'Change the acceptance criteria', 'Approve without evidence']
-                c.execute('INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points) VALUES (%s,%s,%s,%s,%s,%s,%s)',
+                c.execute('INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points,subject,sub_subject,is_scored,difficulty,topic_group,delivery_stage) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                           (discipline, 'mcq', f'During a {discipline} inspection, a result does not meet the approved acceptance criteria. What should you do?', json.dumps(options), options[0], '', 10))
-                c.execute('INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points) VALUES (%s,%s,%s,%s,%s,%s,%s)',
+                c.execute('INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points,subject,sub_subject,is_scored,difficulty,topic_group,delivery_stage) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                           (discipline, 'essay', essay_prompt, None, None,
                            'Award up to 5 points each for: approved documents and criteria; inspection steps and evidence; nonconformance handling; verified closure and traceability. Adapt technical criteria to the project.', 20))
 
@@ -192,7 +192,7 @@ def init_db():
         if not has_any_users and not c.execute('SELECT 1 FROM questions WHERE discipline=%s LIMIT 1', ('Civil QC',)).fetchone():
             civil_questions = [q for q in original_questions if q[0] == 'Civil QC']
             c.cursor().executemany(
-                'INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points) VALUES (%s,%s,%s,%s,%s,%s,%s)',
+                'INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points,subject,sub_subject,is_scored,difficulty,topic_group,delivery_stage) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                 civil_questions,
             )
 
@@ -509,7 +509,7 @@ def add_question(actor, discipline, kind, prompt, options, correct, rubric):
         require(c, actor, ('Admin', 'Reviewer'))
         _insert_question(c, question)
 
-def _validate_question(discipline, kind, prompt, options, correct, rubric):
+def _validate_question(discipline, kind, prompt, options, correct, rubric, subject='General', sub_subject='General', is_scored=True, difficulty='moderate', topic_group='General', delivery_stage='standard'):
     options = [v.strip() for v in options if v.strip()]
     if not discipline.strip() or not prompt.strip():
         raise ValueError('Discipline and question are required.')
@@ -519,8 +519,12 @@ def _validate_question(discipline, kind, prompt, options, correct, rubric):
         raise ValueError('Provide unique options and an exact matching correct answer.')
     if kind in ('essay', 'oral', 'practical') and not rubric.strip():
         raise ValueError('Essay, oral, and practical questions require a scoring rubric.')
+    if difficulty not in ('easy', 'moderate', 'difficult'):
+        raise ValueError('Difficulty must be easy, moderate, or difficult.')
+    if delivery_stage not in ('standard', 'oral_opening') or (delivery_stage == 'oral_opening' and (kind != 'oral' or is_scored)):
+        raise ValueError('Oral opening questions must be non-scored oral questions.')
     points = 1 if kind == 'mcq' else 10
-    return (discipline.strip(), kind, prompt.strip(), options, correct.strip(), rubric.strip(), points)
+    return (discipline.strip(), kind, prompt.strip(), options, correct.strip(), rubric.strip(), points, subject.strip() or 'General', sub_subject.strip() or 'General', bool(is_scored), difficulty, topic_group.strip() or 'General', delivery_stage)
 
 def _insert_question(connection, question):
     values = list(question) + ['General', 'General', True, 'moderate', 'General', 'standard']
@@ -528,9 +532,9 @@ def _insert_question(connection, question):
     existing = connection.execute('SELECT id FROM questions WHERE discipline=%s AND q_type=%s AND question_text=%s', (discipline, kind, prompt)).fetchone()
     if existing:
         raise ValueError('Duplicate question found.')
-    connection.execute('INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points) VALUES (%s,%s,%s,%s,%s,%s,%s)',
+    connection.execute('INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points,subject,sub_subject,is_scored,difficulty,topic_group,delivery_stage) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                        (discipline, kind, prompt, json.dumps(options) if kind == 'mcq' else None,
-                        correct if kind == 'mcq' else None, rubric, points))
+                        correct if kind == 'mcq' else None, rubric, points, subject, sub_subject, is_scored, difficulty, topic_group, delivery_stage))
 
 def add_questions(actor, parse_results, progress_callback=None):
     with connection() as c:
@@ -543,7 +547,7 @@ def add_questions(actor, parse_results, progress_callback=None):
                 continue
             q = result['question']
             try:
-                validated = _validate_question(q['discipline'], q['kind'], q['prompt'], q['options'], q['correct'], q['rubric'])
+                validated = _validate_question(q['discipline'], q['kind'], q['prompt'], q['options'], q['correct'], q['rubric'], q.get('subject'), q.get('sub_subject'), q.get('is_scored', True), q.get('difficulty'), q.get('topic_group'), q.get('delivery_stage'))
                 _insert_question(c, validated)
             except ValueError as e:
                 result['success'] = False
@@ -734,3 +738,31 @@ def category_result(sub, kind):
         return 'Pending Review'
     pct = category_percentage(sub, kind)
     return f"{'PASS' if pct >= 50 else 'FAIL'} ({pct:.1f}%)"
+
+def weakness_summary(submission):
+    """Return deterministic taxonomy results from immutable answer snapshots."""
+    if submission.get('status') != 'Graded':
+        return {'status': 'Pending Review', 'weaknesses': [], 'message': 'Pending Review'}
+    grouped = {}
+    for answer in submission.get('answers', []):
+        snap = answer.get('snapshot') or {}
+        if isinstance(snap, str):
+            snap = json.loads(snap)
+        if not snap.get('is_scored', True):
+            continue
+        subject = snap.get('subject', 'General')
+        sub_subject = snap.get('sub_subject', 'General')
+        key = (subject, sub_subject)
+        item = grouped.setdefault(key, {'subject': subject, 'sub_subject': sub_subject, 'awarded': 0.0, 'possible': 0.0, 'count': 0})
+        item['awarded'] += float(answer.get('awarded_score') or 0)
+        item['possible'] += float(snap.get('max_points') or 0)
+        item['count'] += 1
+    rows = []
+    for item in grouped.values():
+        pct = 100 * item['awarded'] / item['possible'] if item['possible'] else 0
+        item['percentage'] = pct
+        item['status'] = 'Critical development area' if pct < 50 else ('Development area' if pct < 70 else 'Demonstrated strength')
+        item['evidence_status'] = 'Limited evidence' if item['count'] < 2 else 'Sufficient evidence'
+        rows.append(item)
+    weaknesses = sorted((r for r in rows if r['percentage'] < 70), key=lambda r: (r['percentage'], -r['possible'], r['subject'], r['sub_subject']))[:3]
+    return {'status': 'Graded', 'weaknesses': weaknesses, 'categories': rows, 'message': 'No scored technical weakness was identified.' if not weaknesses else 'Development areas identified.'}
