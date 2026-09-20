@@ -1,0 +1,1250 @@
+"""Generator script to populate qc-question-template-Welding.xlsx with 100 Aramco-aligned Welding QC questions.
+
+Breakdown:
+- 60 Multiple Choice Questions (mcq)
+- 20 Essay Questions (essay)
+- 10 Oral Test Questions (oral)
+- 10 Practical Test Questions (practical)
+Total: 100 questions
+"""
+
+import os
+from io import BytesIO
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+HEADERS = [
+    'Discipline',
+    'Question type',
+    'Question',
+    'Multiple Choice options',
+    'Correct answer',
+    'Scoring rubric',
+]
+
+WELDING_QUESTIONS = [
+    # =========================================================================
+    # PART 1: 60 MULTIPLE CHOICE QUESTIONS (MCQs)
+    # Distractors are crafted to be near in length to the correct answer.
+    # =========================================================================
+    
+    # Theme 1: Codes, Standards, WPS, PQR & Essential Variables (Q1 - Q10)
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "Which of the following is considered an essential variable for SMAW procedure qualification under ASME Section IX (QW-403.6)?",
+        "options": [
+            "Change from P-No. 1 to P-No. 8 base material",
+            "Change in brand of welding machine manufacturer",
+            "Minor fluctuation in ambient lighting conditions",
+            "Change in joint groove angle by less than 2 degrees"
+        ],
+        "correct": "Change from P-No. 1 to P-No. 8 base material",
+        "rubric": "Verify against ASME Section IX QW-403.6 and SAES-W-011 requirements."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "Which Saudi Aramco Engineering Standard governs welding requirements for onshore pressure piping systems?",
+        "options": [
+            "SAES-W-011 Welding Requirements Onshore Piping",
+            "SAES-W-012 Welding Requirements Cross Pipelines",
+            "SAES-W-010 Welding Requirements Pressure Vessels",
+            "SAES-A-206 Positive Material Identification Procedure"
+        ],
+        "correct": "SAES-W-011 Welding Requirements Onshore Piping",
+        "rubric": "Verify against Saudi Aramco Engineering Standards document hierarchy."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "Per ASME Section IX QW-409.2, which change in GMAW transfer mode constitutes an essential variable requiring requalification?",
+        "options": [
+            "A change from spray transfer mode to short-circuiting mode",
+            "A change in shielding gas flow rate within plus minus 10 percent",
+            "A change in welding position from 1G flat to 2G horizontal",
+            "A change in cleaning method from wire brushing to grinding"
+        ],
+        "correct": "A change from spray transfer mode to short-circuiting mode",
+        "rubric": "Verify against ASME Section IX Table QW-256 for GMAW essential variables."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "A welder qualifies on a pipe coupon with NPS 2 (60.3 mm OD). Per ASME Section IX QW-452.3, what is the qualified diameter range?",
+        "options": [
+            "Qualified for NPS 1 inch (33.4 mm OD) and all larger sizes",
+            "Qualified for NPS 2 inch (60.3 mm OD) up to NPS 12 inch only",
+            "Qualified for NPS 1/2 inch (21.3 mm OD) up to unlimited sizes",
+            "Qualified for exact coupon diameter of NPS 2 inch exclusively"
+        ],
+        "correct": "Qualified for NPS 1 inch (33.4 mm OD) and all larger sizes",
+        "rubric": "Verify against ASME Section IX QW-452.3 performance qualification limits."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "Per ASME Section IX QW-322.1 and SAES-W-011, what is the maximum period a welder can remain inactive before requalification is required?",
+        "options": [
+            "6 consecutive months without using qualified process",
+            "3 consecutive months without using qualified process",
+            "12 consecutive months without using qualified process",
+            "30 consecutive days without using qualified process"
+        ],
+        "correct": "6 consecutive months without using qualified process",
+        "rubric": "Verify against ASME IX QW-322.1 and SAES-W-011 welder continuity rules."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "Under ASME Section IX QW-408.2, which shielding gas change represents a WPS essential variable during GTAW operations?",
+        "options": [
+            "Deletion of shielding gas or change in nominal gas mixture composition",
+            "Increase in shielding gas nozzle diameter by 2 mm during production",
+            "Minor variation in gas cylinder pressure above 50 bar during welding",
+            "Change in shielding gas hose color from black to blue on site"
+        ],
+        "correct": "Deletion of shielding gas or change in nominal gas mixture composition",
+        "rubric": "Verify against ASME IX Table QW-256 shielding gas essential variables."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "When welding impact-tested carbon steel materials, what heat input restriction applies per ASME Section IX QW-409.1 and SAES-W-011?",
+        "options": [
+            "Maximum heat input qualified on PQR must not be exceeded",
+            "Heat input may be increased up to 50 percent above PQR limit",
+            "Heat input is non-essential and requires no field monitoring",
+            "Minimum heat input on PQR must be strictly maintained on site"
+        ],
+        "correct": "Maximum heat input qualified on PQR must not be exceeded",
+        "rubric": "Verify against ASME IX QW-409.1 and SAES-W-011 supplementary essential variables."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "Per SAES-W-011, what testing is mandatory for PQR qualification when low-temperature carbon steel (-45°C design temp) is specified?",
+        "options": [
+            "Charpy V-notch impacts required for weld metal and HAZ at design temp",
+            "Tensile and side bend tests only, impact testing is waived below 25mm",
+            "Hardness testing HV10 only, Charpy impacts required for alloy steel",
+            "Drop weight test per ASTM E208 mandatory for all wall thicknesses"
+        ],
+        "correct": "Charpy V-notch impacts required for weld metal and HAZ at design temp",
+        "rubric": "Verify against SAES-W-011 Para 6.2 impact testing requirements."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What hardness testing methodology and limit are mandatory during PQR qualification for sour service per SAES-W-011 and NACE MR0175?",
+        "options": [
+            "Vickers HV10 survey mandatory across cap, mid, root (max 250 HV10)",
+            "Rockwell HRB test mandatory on cap surface only (max 100 HRB)",
+            "Brinell HBW test on base metal only, weld metal is exempted",
+            "Hardness survey optional if PWHT was performed after welding"
+        ],
+        "correct": "Vickers HV10 survey mandatory across cap, mid, root (max 250 HV10)",
+        "rubric": "Verify against SAES-W-011 Para 9.2 and NACE MR0175/ISO 15156 limits."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "When combining GTAW root and SMAW fill passes on a single PQR, how are qualified base metal thickness ranges determined per ASME Sec IX QW-200.2?",
+        "options": [
+            "Each process qualifies its own deposited weld metal thickness range",
+            "GTAW qualifies total joint thickness for all subsequent processes",
+            "SMAW qualifies GTAW root pass thickness up to 2 times total",
+            "Combined processes qualify single-process WPS without limits"
+        ],
+        "correct": "Each process qualifies its own deposited weld metal thickness range",
+        "rubric": "Verify against ASME Section IX QW-200.2 and QW-451 limits."
+    },
+
+    # Theme 2: Preheat, Interpass, Heat Input & Metallurgy (Q11 - Q20)
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "Which calibrated instrument is approved for measuring weld preheat and interpass temperatures in the field per SAES-W-011?",
+        "options": [
+            "Calibrated digital contact pyrometer or infrared thermometer",
+            "Surface roughness comparator gauge with optical magnifier",
+            "Ultrasonic thickness gauge with high-temperature transducer",
+            "Magnetic particle yoke with dry powder field indicator"
+        ],
+        "correct": "Calibrated digital contact pyrometer or infrared thermometer",
+        "rubric": "Verify against SAES-W-011 Para 7.1 temperature monitoring tools."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the maximum allowable interpass temperature for P-No. 8 austenitic stainless steel piping per SAES-W-011?",
+        "options": [
+            "175°C (350°F) maximum interpass temperature",
+            "315°C (600°F) maximum interpass temperature",
+            "250°C (480°F) maximum interpass temperature",
+            "400°C (750°F) maximum interpass temperature"
+        ],
+        "correct": "175°C (350°F) maximum interpass temperature",
+        "rubric": "Verify against SAES-W-011 Table 1 interpass temperature limits."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the preheat maintenance requirement during GTAW welding of P-No. 5A (Cr-Mo alloy steel) piping per SAES-W-011?",
+        "options": [
+            "Preheat must be continuously maintained until completion of PWHT or DHT",
+            "Preheat may be discontinued immediately after root pass completion",
+            "Preheat is only required during SMAW fill passes on P-No. 5A steel",
+            "Preheat must be lowered to ambient before applying hot pass layer"
+        ],
+        "correct": "Preheat must be continuously maintained until completion of PWHT or DHT",
+        "rubric": "Verify against SAES-W-011 Para 7.4 preheat soak rules."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the minimum preheat heating band distance required on each side of a pipe weld joint per SAES-W-011 and AWS D1.1?",
+        "options": [
+            "75 mm (3 in) or 1.5 times wall thickness, whichever is greater",
+            "25 mm (1 in) from bevel edge regardless of wall thickness",
+            "150 mm (6 in) minimum distance for all carbon steel spools",
+            "50 mm (2 in) fixed band width centered on weld joint centerline"
+        ],
+        "correct": "75 mm (3 in) or 1.5 times wall thickness, whichever is greater",
+        "rubric": "Verify against SAES-W-011 Para 7.2 preheat band specifications."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the primary metallurgical purpose of applying preheat to carbon and low alloy steel weldments prior to welding?",
+        "options": [
+            "Slow cooling rate to allow hydrogen diffusion and avoid martensite",
+            "Increase weld metal tensile strength above base material minimum",
+            "Eliminate need for back purging during TIG root pass execution",
+            "Reduce surface oxide formation on carbon steel joint bevel faces"
+        ],
+        "correct": "Slow cooling rate to allow hydrogen diffusion and avoid martensite",
+        "rubric": "Verify against SAES-W-011 metallurgical principles."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What parameters govern De-hydrogenation Heat Treatment (DHT) for P-No. 5A welds prior to cooling to ambient per SAES-W-011?",
+        "options": [
+            "Maintain 300°C to 350°C for minimum 2 hours before cooling",
+            "Maintain 150°C to 200°C for 30 minutes before NDT inspection",
+            "Heat to 600°C for 1 hour followed by rapid water quenching",
+            "Cool slowly in still air from interpass temperature to ambient"
+        ],
+        "correct": "Maintain 300°C to 350°C for minimum 2 hours before cooling",
+        "rubric": "Verify against SAES-W-011 Para 7.5 DHT protocol."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "Which standard mathematical formula is used by QC Inspectors to calculate arc heat input (kJ/mm) during parameter verification?",
+        "options": [
+            "(Voltage x Amperage x 60) / (Travel Speed mm/min x 1000)",
+            "(Voltage x Amperage) / (Travel Speed mm/sec x 60 x 1000)",
+            "(Voltage x Travel Speed mm/min) / (Amperage x 1000)",
+            "(Amperage x Travel Speed mm/min x 60) / (Voltage x 1000)"
+        ],
+        "correct": "(Voltage x Amperage x 60) / (Travel Speed mm/min x 1000)",
+        "rubric": "Verify against ASME IX QW-409.1 heat input calculation formula."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the primary cause of chromium carbide precipitation (sensitization) in 304L stainless steel heat-affected zones (HAZ)?",
+        "options": [
+            "Chromium carbide precipitation at grain boundaries from high heat input",
+            "Excessive delta ferrite transformation due to rapid water cooling",
+            "Hydrogen entrapment causing micro-cracking in austentic lattice",
+            "Sigma phase formation resulting from low interpass temperatures"
+        ],
+        "correct": "Chromium carbide precipitation at grain boundaries from high heat input",
+        "rubric": "Verify against SAES-W-011 SS metallurgy requirements."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the maximum allowable ambient wind velocity for unshielded GTAW or GMAW field welding per SAES-W-011?",
+        "options": [
+            "8 km/h (5 mph) maximum wind velocity",
+            "15 km/h (9.3 mph) maximum wind velocity",
+            "25 km/h (15.5 mph) maximum wind velocity",
+            "5 km/h (3.1 mph) maximum wind velocity"
+        ],
+        "correct": "8 km/h (5 mph) maximum wind velocity",
+        "rubric": "Verify against SAES-W-011 Para 5.3 weather protection limits."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "Why is back purging required when GTAW root welding P-No. 8 (SS) and P-No. 43 (Ni-alloy) piping per SAES-W-011?",
+        "options": [
+            "Prevent root oxidation (sugarberry) and maintain root bead corrosion resist",
+            "Increase root pass penetration depth and welding travel speed",
+            "Cool root pass rapidly to prevent grain growth in heat-affected zone",
+            "Eliminate need for internal cleaning prior to joint fit-up assembly"
+        ],
+        "correct": "Prevent root oxidation (sugarberry) and maintain root bead corrosion resist",
+        "rubric": "Verify against SAES-W-011 Para 8.1 back purge requirements."
+    },
+
+    # Theme 3: Materials, Filler Metals, Storage & Traceability (Q21 - Q30)
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "After opening sealed containers, at what minimum temperature must low-hydrogen SMAW electrodes (E7018) be stored per SAES-W-011?",
+        "options": [
+            "Store in holding oven maintained at 120°C to 150°C minimum",
+            "Store at ambient room temperature in dry open plastic bin",
+            "Re-bake immediately at 400°C after every 2 hours of exposure",
+            "Keep in portable heated quivers at 50°C for maximum 24 hours"
+        ],
+        "correct": "Store in holding oven maintained at 120°C to 150°C minimum",
+        "rubric": "Verify against SAES-W-011 Table 2 consumable storage rules."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the maximum permissible atmospheric exposure time for E7018 low-hydrogen electrodes outside holding ovens per AWS D1.1 and SAES-W-011?",
+        "options": [
+            "4 hours maximum exposure time limit",
+            "8 hours maximum exposure time limit",
+            "12 hours maximum exposure time limit",
+            "2 hours maximum exposure time limit"
+        ],
+        "correct": "4 hours maximum exposure time limit",
+        "rubric": "Verify against SAES-W-011 and AWS D1.1 Table 5.5 limits."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "Per SAES-A-206, what is the mandatory Positive Material Identification (PMI) sampling requirement for alloy filler metal wires?",
+        "options": [
+            "100% PMI testing on all alloy filler wires prior to issue & weld metal",
+            "10% sampling of alloy filler wire spools per batch shipment",
+            "PMI testing on base metal pipe spools only, filler wires exempted",
+            "PMI testing on completed weld cap surface exclusively post-PWHT"
+        ],
+        "correct": "100% PMI testing on all alloy filler wires prior to issue & weld metal",
+        "rubric": "Verify against SAES-A-206 Para 6.1 PMI verification frequency."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What rebaking procedure is required for low-hydrogen E7018 electrodes that exceed allowed atmospheric exposure limits per SAES-W-011?",
+        "options": [
+            "Rebake at 260°C to 430°C for 2 hours (maximum 1 rebake allowed)",
+            "Rebake at 100°C to 150°C for 1 hour (unlimited rebakes permitted)",
+            "Rebake at 500°C for 4 hours (maximum 3 rebakes allowed)",
+            "Air dry at ambient 40°C for 24 hours prior to oven storage"
+        ],
+        "correct": "Rebake at 260°C to 430°C for 2 hours (maximum 1 rebake allowed)",
+        "rubric": "Verify against SAES-W-011 Table 2 electrode baking instructions."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "Prior to authorizing joint fit-up, how must the QC Inspector verify base metal traceability per SAES-W-011?",
+        "options": [
+            "Verify heat number on pipe matches MTC chemical & mechanical properties",
+            "Check pipe manufacturer logo matches project approved vendor list only",
+            "Confirm pipe hydrostatic test pressure report without heat number check",
+            "Ensure pipe length and surface color coding match purchase order summary"
+        ],
+        "correct": "Verify heat number on pipe matches MTC chemical & mechanical properties",
+        "rubric": "Verify against SAES-W-011 Para 4.2 material traceability rules."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "In the AWS electrode classification E7018, what does the digit '1' designate per AWS A5.1?",
+        "options": [
+            "Qualified for welding in all positions",
+            "Minimum tensile strength of 70 ksi",
+            "Low hydrogen iron powder coating type",
+            "Flat and horizontal fillet position only"
+        ],
+        "correct": "Qualified for welding in all positions",
+        "rubric": "Verify against AWS A5.1 electrode nomenclature."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What are the jobsite storage and handling rules for GTAW cut-length filler wires (e.g. ER70S-6, ER316L) per SAES-W-011?",
+        "options": [
+            "Flagged with heat number / AWS tag, stored clean, dry, off ground",
+            "Bundled in open racks outdoors exposed to ambient sea atmosphere",
+            "Stored in high-temperature electrode baking oven at 300°C",
+            "Kept inside diesel fuel wash tank until required for fit-up"
+        ],
+        "correct": "Flagged with heat number / AWS tag, stored clean, dry, off ground",
+        "rubric": "Verify against SAES-W-011 consumable control provisions."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "How are E7018 and E6010 electrodes categorized by ASME Section IX F-Number designation (QW-432)?",
+        "options": [
+            "E7018 is F-No. 4 and E6010 is F-No. 3 electrode",
+            "E7018 is F-No. 3 and E6010 is F-No. 4 electrode",
+            "E7018 is F-No. 1 and E6010 is F-No. 2 electrode",
+            "E7018 is F-No. 6 and E6010 is F-No. 5 electrode"
+        ],
+        "correct": "E7018 is F-No. 4 and E6010 is F-No. 3 electrode",
+        "rubric": "Verify against ASME Section IX Table QW-432 F-Number groupings."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the maximum allowable residual oxygen level in back-purge gas when welding duplex stainless steel (UNS S31803) per SAES-W-011?",
+        "options": [
+            "Less than 0.05% (500 ppm) oxygen level",
+            "Less than 1.0% (10,000 ppm) oxygen level",
+            "Less than 0.5% (5,000 ppm) oxygen level",
+            "Less than 2.0% (20,000 ppm) oxygen level"
+        ],
+        "correct": "Less than 0.05% (500 ppm) oxygen level",
+        "rubric": "Verify against SAES-W-011 duplex purge requirements."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What action must a QC Inspector take if an unidentifiable filler wire without heat number flag is found in a welder's quiver?",
+        "options": [
+            "Immediately quarantine and scrap unidentifiable wire",
+            "Perform quick visual check and return to holding oven",
+            "Use wire for root pass welding on carbon steel piping",
+            "Re-tag wire with nearest heat number on project log"
+        ],
+        "correct": "Immediately quarantine and scrap unidentifiable wire",
+        "rubric": "Verify against SAES-W-011 consumable traceability rules."
+    },
+
+    # Theme 4: Fit-Up, Bevel Prep, Alignment & Socket Welds (Q31 - Q40)
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the standard root gap range for SMAW butt joint fit-up on carbon steel piping per WPS and SAES-W-011?",
+        "options": [
+            "1.6 mm to 3.2 mm (1/16 in to 1/8 in) gap",
+            "4.5 mm to 6.0 mm (3/16 in to 1/4 in) gap",
+            "0.0 mm to 0.8 mm (0 in to 1/32 in) gap",
+            "6.0 mm to 8.0 mm (1/4 in to 5/16 in) gap"
+        ],
+        "correct": "1.6 mm to 3.2 mm (1/16 in to 1/8 in) gap",
+        "rubric": "Verify against SAES-W-011 joint fit-up tolerances."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the minimum required expansion gap before welding socket-weld piping joints per ASME B31.3 Para 311.2?",
+        "options": [
+            "1.6 mm (1/16 in) approximate gap before welding",
+            "3.2 mm (1/8 in) approximate gap before welding",
+            "0.0 mm (bottomed out firmly against socket wall)",
+            "4.8 mm (3/16 in) approximate gap before welding"
+        ],
+        "correct": "1.6 mm (1/16 in) approximate gap before welding",
+        "rubric": "Verify against ASME B31.3 Fig 328.5.2B and SAES-W-011."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the maximum allowable internal misalignment (hi-lo) for butt welds on process piping per SAES-W-011 and ASME B31.3?",
+        "options": [
+            "1.5 mm (1/16 in) or 0.2 x WT, whichever is less",
+            "3.0 mm (1/8 in) maximum internal misalignment limit",
+            "4.0 mm (5/32 in) for pipe sizes up to NPS 12 inch",
+            "0.5 mm (1/64 in) fixed tolerance for all pipe sizes"
+        ],
+        "correct": "1.5 mm (1/16 in) or 0.2 x WT, whichever is less",
+        "rubric": "Verify against SAES-W-011 Para 6.4 misalignment limits."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the standard bevel angle requirement for carbon steel pipe butt joint preparation per ASME B16.25 and WPS?",
+        "options": [
+            "37.5 degrees plus minus 2.5 degrees bevel",
+            "45.0 degrees plus minus 5.0 degrees bevel",
+            "22.5 degrees plus minus 2.5 degrees bevel",
+            "60.0 degrees plus minus 5.0 degrees bevel"
+        ],
+        "correct": "37.5 degrees plus minus 2.5 degrees bevel",
+        "rubric": "Verify against ASME B16.25 bevel details."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "When joining pipes of unequal wall thickness, what internal taper transition angle limit applies per ASME B31.3 and SAES-W-011?",
+        "options": [
+            "Internal taper slope not steeper than 1:4 (14 degrees)",
+            "Internal taper slope not steeper than 1:1 (45 degrees)",
+            "External taper slope not steeper than 1:2 (30 degrees)",
+            "Direct fillet weld overlay without taper machining"
+        ],
+        "correct": "Internal taper slope not steeper than 1:4 (14 degrees)",
+        "rubric": "Verify against ASME B31.3 Fig 328.4.3 taper requirements."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "Which precision inspection tool is specifically used by QC Inspectors to measure internal hi-lo misalignment and root gap width?",
+        "options": [
+            "Hi-Lo gauge or Bridge Cam welding gauge",
+            "Ultrasonic digital thickness measurement probe",
+            "Vernier height gauge with magnetic base plate",
+            "Optical bevel protractor with dial indicator"
+        ],
+        "correct": "Hi-Lo gauge or Bridge Cam welding gauge",
+        "rubric": "Verify against standard welding inspection gauge usage."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What surface cleaning extent is mandatory on pipe bevels prior to initiating carbon steel welding per SAES-W-011?",
+        "options": [
+            "Clean 25 mm minimum each side of bevel to bright metal (no rust/oil)",
+            "Wipe bevel surface with diesel fuel rag immediately before welding",
+            "Apply primer coat of epoxy paint inside bevel to prevent flash rust",
+            "Wire brush weld joint cap area only, bevel surface requires no prep"
+        ],
+        "correct": "Clean 25 mm minimum each side of bevel to bright metal (no rust/oil)",
+        "rubric": "Verify against SAES-W-011 Para 6.1 surface prep rules."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "Why does ASME B31.3 mandate a 1.6 mm expansion gap in socket weld assembly prior to fillet welding?",
+        "options": [
+            "Prevent thermal expansion stress cracking at pipe root during service",
+            "Allow full penetration welding of socket pipe bottom shoulder area",
+            "Increase fluid flow rate and decrease pressure drop across fitting",
+            "Provide space for placing backing ring inside socket fitting bore"
+        ],
+        "correct": "Prevent thermal expansion stress cracking at pipe root during service",
+        "rubric": "Verify against ASME B31.3 Commentary on socket welds."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What corrective action is required when carbon steel pipe joint fit-up reveals internal misalignment exceeding 1.5 mm?",
+        "options": [
+            "Trim, re-bevel, counterbore 1:4 taper, or rotate pipe joint",
+            "Apply heavy weld overlay pass inside pipe ID to level joint",
+            "Force alignment using hydraulic pipe clamp during root welding",
+            "Fill root gap with extra thick welding wire during GTAW pass"
+        ],
+        "correct": "Trim, re-bevel, counterbore 1:4 taper, or rotate pipe joint",
+        "rubric": "Verify against SAES-W-011 Para 6.4 corrective measures."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What quality governance rules apply to bridge tacks and tack welds during joint fit-up assembly per SAES-W-011?",
+        "options": [
+            "Made by qualified welder, using approved WPS, feathered at both ends",
+            "Made by fitter using any available electrode without WPS qualification",
+            "Left uncleaned with heavy slag to hold joint firmly in position",
+            "Placed exclusively inside pipe bore without external accessibility"
+        ],
+        "correct": "Made by qualified welder, using approved WPS, feathered at both ends",
+        "rubric": "Verify against SAES-W-011 Para 6.3 tack welding controls."
+    },
+
+    # Theme 5: Visual Weld Inspection & Defect Acceptance Criteria (Q41 - Q50)
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "Per ASME B31.3 Table 341.3.2, what is the maximum allowable undercut depth for Normal Fluid Service piping?",
+        "options": [
+            "1.0 mm (1/32 in) or 1/4 WT, whichever is less",
+            "2.0 mm (1/16 in) maximum depth regardless of wall thickness",
+            "0.5 mm (1/64 in) maximum depth for carbon steel piping",
+            "Undercut is strictly prohibited under any service condition"
+        ],
+        "correct": "1.0 mm (1/32 in) or 1/4 WT, whichever is less",
+        "rubric": "Verify against ASME B31.3 Table 341.3.2 acceptance limits."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the visual acceptance criteria for undercut depth in Severe Cyclic Service piping per ASME B31.3 Table 341.3.2?",
+        "options": [
+            "Zero (0.0 mm) - No undercut allowed",
+            "0.8 mm (1/32 in) maximum undercut depth",
+            "1.5 mm (1/16 in) maximum undercut depth",
+            "0.5 mm (1/64 in) maximum undercut depth"
+        ],
+        "correct": "Zero (0.0 mm) - No undercut allowed",
+        "rubric": "Verify against ASME B31.3 Table 341.3.2 severe cyclic limits."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "For 10 mm wall thickness pipe butt weld, what is the maximum allowable face reinforcement height per ASME B31.3?",
+        "options": [
+            "1.5 mm to 3.0 mm maximum reinforcement height",
+            "5.0 mm to 6.5 mm maximum reinforcement height",
+            "0.0 mm (must be flush ground smooth with base metal)",
+            "4.0 mm to 5.5 mm maximum reinforcement height"
+        ],
+        "correct": "1.5 mm to 3.0 mm maximum reinforcement height",
+        "rubric": "Verify against ASME B31.3 Table 341.3.2 L criteria."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the visual acceptance threshold for crack defects in production welds per ASME B31.3 and SAES-W-011?",
+        "options": [
+            "Zero tolerance - Cracks strictly prohibited",
+            "Maximum 2 mm micro-crack length permitted",
+            "Single crack per joint permitted if < 5 mm",
+            "Crater crack permitted if filled completely"
+        ],
+        "correct": "Zero tolerance - Cracks strictly prohibited",
+        "rubric": "Verify against ASME B31.3 Table 341.3.2 Crack criteria."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What evaluation and repair protocol applies to stray arc strikes outside the weld groove per SAES-W-011?",
+        "options": [
+            "Remove by grinding, MT/PT test, check WT remaining >= min design",
+            "Buff with wire wheel and paint over strike area without NDT",
+            "Fill arc strike crater with GTAW wire and grind flush with pipe",
+            "Perform 100% RT examination of entire pipe spool circumference"
+        ],
+        "correct": "Remove by grinding, MT/PT test, check WT remaining >= min design",
+        "rubric": "Verify against SAES-W-011 Para 6.6 arc strike handling."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the acceptance criteria for incomplete penetration (LOP) in ASME B31.3 Normal Fluid Service?",
+        "options": [
+            "Total length <= 38 mm in 150 mm weld, max depth <= 38 mm or 0.2 WT",
+            "Zero LOP allowed under any fluid service category in ASME B31.3",
+            "LOP permitted up to 50% of wall thickness for NPS 6 and larger",
+            "LOP permitted continuously if root bead visual examination passes"
+        ],
+        "correct": "Total length <= 38 mm in 150 mm weld, max depth <= 38 mm or 0.2 WT",
+        "rubric": "Verify against ASME B31.3 Table 341.3.2 LOP limits."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "Under what condition is root bead concavity (suck-back) acceptable in girth butt welds per ASME B31.3?",
+        "options": [
+            "Total joint thickness including root concavity >= min required WT",
+            "Concavity depth up to 3.0 mm permitted regardless of WT",
+            "Root concavity strictly prohibited for carbon steel piping",
+            "Concavity permitted if root bead surface is bright and clean"
+        ],
+        "correct": "Total joint thickness including root concavity >= min required WT",
+        "rubric": "Verify against ASME B31.3 Table 341.3.2 Concavity criteria."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the minimum required fillet weld leg size for socket-welded fittings per ASME B31.3 and SAES-W-011?",
+        "options": [
+            "Minimum leg size >= 1.09 x nominal socket pipe wall thickness",
+            "Minimum leg size >= 1.50 x nominal socket pipe wall thickness",
+            "Minimum leg size >= 0.75 x nominal socket pipe wall thickness",
+            "Equal leg size mandatory (1.00 x nominal socket pipe WT)"
+        ],
+        "correct": "Minimum leg size >= 1.09 x nominal socket pipe wall thickness",
+        "rubric": "Verify against ASME B31.3 Fig 328.5.2C leg size rule."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What surface porosity limit applies during visual inspection of carbon steel production weld caps per SAES-W-011?",
+        "options": [
+            "Zero surface porosity permitted on weld cap and HAZ surfaces",
+            "Single pore <= 2 mm permitted per 100 mm of weld length",
+            "Cluster porosity permitted if total area <= 5 square mm",
+            "Pin-hole surface porosity permitted up to 3 mm depth"
+        ],
+        "correct": "Zero surface porosity permitted on weld cap and HAZ surfaces",
+        "rubric": "Verify against SAES-W-011 Para 6.5 visual criteria."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "Which welding gauge is designed to measure weld cap reinforcement height, fillet leg length, and undercut depth?",
+        "options": [
+            "Cambridge gauge or Bridge Cam welding inspection gauge",
+            "Dial caliper with carbide-tipped measuring jaws",
+            "Ultrasonic flaw detector with angle beam transducer",
+            "Feeler gauge set with hardened steel shim blades"
+        ],
+        "correct": "Cambridge gauge or Bridge Cam welding inspection gauge",
+        "rubric": "Verify against inspection tool functional capabilities."
+    },
+
+    # Theme 6: NDT Inspection, PWHT, Hardness & Repairs (Q51 - Q60)
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What minimum extent of random NDT (RT/UT) is mandated for carbon steel Normal Fluid Service butt welds per SAES-W-011 and ASME B31.3?",
+        "options": [
+            "10% random RT or UT examination of butt welds",
+            "100% full RT examination of all butt welds",
+            "100% MT examination of all fillet and butt welds",
+            "5% random PT examination of weld root passes"
+        ],
+        "correct": "10% random RT or UT examination of butt welds",
+        "rubric": "Verify against SAES-W-011 Table 3 and ASME B31.3 Para 341.4."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What volumetric NDT extent is required for process piping butt welds in Severe Cyclic Service per ASME B31.3 Table 341.4.1?",
+        "options": [
+            "100% RT or 100% UT volumetric examination",
+            "10% random RT examination of butt welds",
+            "100% PT examination of weld cap surfaces",
+            "50% random RT examination of tie-in welds"
+        ],
+        "correct": "100% RT or 100% UT volumetric examination",
+        "rubric": "Verify against ASME B31.3 Table 341.4.1 NDT extent."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the mandatory Post-Weld Heat Treatment (PWHT) soak temperature range for P-No. 1 carbon steel per SAES-W-011?",
+        "options": [
+            "600°C to 650°C (1100°F to 1200°F) range",
+            "700°C to 750°C (1300°F to 1380°F) range",
+            "500°C to 550°C (930°F to 1020°F) range",
+            "400°C to 450°C (750°F to 840°F) range"
+        ],
+        "correct": "600°C to 650°C (1100°F to 1200°F) range",
+        "rubric": "Verify against SAES-W-011 Table 4 PWHT parameters."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the maximum allowable hardness limit for carbon steel welds in sour service (NACE MR0175 / SAES-W-011) post-PWHT?",
+        "options": [
+            "250 HV10 (22 HRC / 237 HBW) maximum hardness",
+            "300 HV10 (31 HRC / 285 HBW) maximum hardness",
+            "200 HV10 (15 HRC / 190 HBW) maximum hardness",
+            "350 HV10 (38 HRC / 330 HBW) maximum hardness"
+        ],
+        "correct": "250 HV10 (22 HRC / 237 HBW) maximum hardness",
+        "rubric": "Verify against SAES-W-011 Para 9.2 & NACE MR0175."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What NDT requirement must be executed following completion of a weld repair on pressure piping per SAES-W-011?",
+        "options": [
+            "Re-inspect repair area using original NDT method plus VT",
+            "Hydrostatic test entire piping spool immediately after repair",
+            "Hardness testing HV10 only, volumetric NDT is waived",
+            "Perform 100% PMI testing on repaired weld cap surface"
+        ],
+        "correct": "Re-inspect repair area using original NDT method plus VT",
+        "rubric": "Verify against SAES-W-011 Para 10.3 repair NDT rules."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "When a random weld fails RT examination, what tracer weld progressive examination is mandated per ASME B31.3 Para 341.4.3?",
+        "options": [
+            "Examine 2 additional tracer welds by same welder on same lot",
+            "Examine 100% of all welds executed on project immediately",
+            "Re-qualify welder on test coupon before continuing production",
+            "Cut out failed weld spool and replace without further NDT"
+        ],
+        "correct": "Examine 2 additional tracer welds by same welder on same lot",
+        "rubric": "Verify against ASME B31.3 Para 341.4.3 tracer rules."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the maximum number of repair attempts permitted on the same weld joint location before cutout per SAES-W-011?",
+        "options": [
+            "Maximum 2 repair cycles permitted before cutout",
+            "Maximum 3 repair cycles permitted before cutout",
+            "Single repair cycle permitted for all alloy steels",
+            "Unlimited repair cycles permitted if approved by QC"
+        ],
+        "correct": "Maximum 2 repair cycles permitted before cutout",
+        "rubric": "Verify against SAES-W-011 Para 10.1 repair limits."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What is the minimum PWHT soak holding time for 25 mm wall thickness carbon steel piping per SAES-W-011 and ASME Section VIII?",
+        "options": [
+            "1 hour minimum soak time (1 hr per 25 mm)",
+            "30 minutes soak time for carbon steel piping",
+            "2 hours soak time regardless of wall thickness",
+            "15 minutes soak time for shop fabricated spools"
+        ],
+        "correct": "1 hour minimum soak time (1 hr per 25 mm)",
+        "rubric": "Verify against SAES-W-011 Table 4 soak time rates."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "What cooling delay period is mandatory post-PWHT before conducting final non-destructive examination on P-No. 5A steels per SAES-W-011?",
+        "options": [
+            "Minimum 24 hours cooling period prior to NDT",
+            "Immediate NDT examination while joint is warm",
+            "Minimum 48 hours cooling period prior to NDT",
+            "12 hours cooling period under insulating blanket"
+        ],
+        "correct": "Minimum 24 hours cooling period prior to NDT",
+        "rubric": "Verify against SAES-W-011 Para 10.2 NDT delay rules."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "mcq",
+        "prompt": "How frequently must portable hardness testing instruments (Telebrineller / Equotip) be verified against test blocks per SAES-W-011?",
+        "options": [
+            "Verify against test block before/after each shift & keep records",
+            "Calibrate annually at manufacturer facility without daily check",
+            "Calibrate once per project duration prior to production testing",
+            "Zero instrument on base material pipe spool prior to testing"
+        ],
+        "correct": "Verify against test block before/after each shift & keep records",
+        "rubric": "Verify against SAES-W-011 Para 9.3 calibration frequency."
+    },
+
+    # =========================================================================
+    # PART 2: 20 ESSAY QUESTIONS (essay)
+    # Every Essay includes a structured 10-point max scoring rubric.
+    # =========================================================================
+    
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "Describe the mandatory pre-weld inspection checks a Welding QC Inspector must perform prior to authorizing root pass welding on carbon steel piping per SAES-W-011. Detail the verified documents and tool checks.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for verifying WPS, PQR, and Welder WQR qualification essential variables.\n- Award up to 2.5 points for bevel cleaning, bevel angle, and dimensional fit-up checks (root gap, hi-lo misalignment).\n- Award up to 2.5 points for preheat temperature check using calibrated pyrometer and verifying heating band width.\n- Award up to 2.5 points for consumable verification (electrode storage/quiver temperature, heat number tag) and joint log sign-off."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "Explain the in-process quality control monitoring required during multi-pass SMAW welding of carbon steel piping spools per SAES-W-011 and AWS D1.1.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for interpass temperature monitoring methods and maximum temperature limits.\n- Award up to 2.5 points for electrode quiver temperature checks and tracking atmospheric exposure time limits (4 hrs for E7018).\n- Award up to 2.5 points for interpass slag cleaning and visual inspection between passes.\n- Award up to 2.5 points for arc energy parameter checks (amps, volts, travel speed) and heat input verification."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "You are reviewing a proposed WPS and supporting PQR for welding P-No. 1 carbon steel piping with impact requirements at -29°C. List five essential variables under ASME Section IX and explain how you verify PQR compliance.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for correctly identifying 5 essential variables (P-No, F-No, thickness, heat input, PWHT).\n- Award up to 2.5 points for evaluating Charpy V-notch impact test values at -29°C against ASME/SAES acceptance limits.\n- Award up to 2.5 points for verifying tensile and bend test results on supporting PQR documents.\n- Award up to 2.5 points for verifying qualified thickness and diameter ranges listed on the final WPS."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "Detail the metallurgical mechanisms causing hydrogen-induced cold cracking in carbon and alloy steel welds. Explain four mandatory jobsite preventive controls and the investigation protocol if a delay crack is detected.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for explaining 3 cracking factors: diffusible hydrogen, martensitic microstructure, residual stress.\n- Award up to 2.5 points for detailing 4 preventive controls: low-H2 baking, preheat/interpass, DHT, PWHT.\n- Award up to 2.5 points for NDT delay time rules (24-48 hr hold post-weld) prior to final inspection.\n- Award up to 2.5 points for root cause investigation steps and formal NCR repair disposition workflow."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "Describe the specialized welding quality controls required for GTAW root welding of austenitic stainless steel (Type 316L) process piping per SAES-W-011, focusing on back purging, interpass temperature, and heat input.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for back purging setup, argon gas purity (99.998%), and residual O2 measurement (<0.05%).\n- Award up to 2.5 points for interpass temperature control (175°C max) and measurement method.\n- Award up to 2.5 points for low heat input parameter limits to prevent sensitization and chromium carbide precipitation.\n- Award up to 2.5 points for post-weld cleaning, pickling/passivation, and visual root inspection criteria."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "Explain the detailed quality inspection steps for socket weld joints in small-bore hydrocarbon piping per ASME B31.3 and SAES-W-011. Address gap verification, fillet leg size calculation, and common defect prevention.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for expansion gap check (1.6 mm before welding) and scribe line marking verification.\n- Award up to 2.5 points for checking WPS and welder qualification essential variables for socket welding.\n- Award up to 2.5 points for calculating minimum fillet leg size (>=1.09 x WT) and checking convex profile.\n- Award up to 2.5 points for visual VT criteria (no cracks, no undercut, zero overlap) and NDT requirements."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "Outline the step-by-step Quality Control oversight required before, during, and after Post-Weld Heat Treatment (PWHT) of P-No. 5A Cr-Mo alloy steel piping spools per SAES-W-011 and ASME Section VIII.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for pre-PWHT checks: thermocouple placement, insulation, gauge calibration, NDT completion.\n- Award up to 2.5 points for in-process rate controls: heating rate, soak temperature range, soak duration, cooling rate.\n- Award up to 2.5 points for post-PWHT temperature-time chart recorder review and sign-off.\n- Award up to 2.5 points for post-PWHT hardness testing (HV10 / HBW) and NDT re-examination requirements."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "A volumetric NDT report reveals a 15 mm lack of fusion indication in a carbon steel pipe butt weld. Detail the step-by-step QC process from NCR issuance to final repair closeout per SAES-W-011.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for issuing NCR, physical marking of weld joint, and root cause identification.\n- Award up to 2.5 points for approved repair WPS authorization and excavation boundary limits.\n- Award up to 2.5 points for excavation cavity inspection (PT/MT check) and preheat control during repair.\n- Award up to 2.5 points for final VT + volumetric NDT re-inspection and NCR closure dossier documentation."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "Explain how a Welding QC Inspector verifies, tracks, and maintains Welder Qualification Records (WQR) on an Aramco project per ASME Section IX and SAES-W-011.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for checking WQR essential variables (P-No, F-No, thickness, diameter, position, backing).\n- Award up to 2.5 points for test coupon supervision, visual examination, and bend/NDT test verification.\n- Award up to 2.5 points for daily welder ID hard-stamping and weld map traceability maintenance.\n- Award up to 2.5 points for maintaining 6-month continuous activity logs and handling requalification triggers."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "Describe the Positive Material Identification (PMI) verification program for alloy steel piping and weldments (P-No. 5, P-No. 8, P-No. 43) per SAES-A-206 and SAES-W-011.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for PMI analyzer calibration check and operator qualification verification.\n- Award up to 2.5 points for base material and filler metal testing protocols prior to welding.\n- Award up to 2.5 points for 100% production weld deposit PMI testing procedures.\n- Award up to 2.5 points for handling non-conforming chemistry results, re-testing rules, and NCR disposition."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "Explain the stringent welding quality controls mandated by SAES-W-011 and NACE MR0175 for piping operating in wet H2S (sour) service. Focus on chemistry, PWHT, and hardness testing.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for base/filler metal chemistry restrictions (Ni <= 1.0%, carbon equivalent limits).\n- Award up to 2.5 points for PWHT requirements to reduce residual stresses in sour service.\n- Award up to 2.5 points for Vickers hardness survey rules (250 HV10 max on cap, mid, root HAZ).\n- Award up to 2.5 points for investigating hardness test failures and engineering disposition protocols."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "Radiographic testing reveals a cluster of piping welds with persistent root piping porosity and lack of penetration executed by the GTAW process. Detail your technical root cause investigation and corrective action plan.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for investigating gas shielding issues (purity, flow rate, wind draft, purge dams).\n- Award up to 2.5 points for inspecting joint fit-up parameters (bevel angle, root gap, land thickness, bevel rust).\n- Award up to 2.5 points for evaluating welder technique and electrical parameters (amps, travel speed, tungsten prep).\n- Award up to 2.5 points for issuing CAR, welder retraining/requalification, and tracking progressive NDT rates."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "Describe the quality inspection program for corrosion-resistant weld overlay (316L SS onto Carbon Steel) on a pressure vessel shell per SAES-W-014 and ASME Section VIII Div 1.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for WPS/PQR essential variable verification for overlay (chemical composition at depth).\n- Award up to 2.5 points for surface preparation and PT examination of base metal prior to overlay deposition.\n- Award up to 2.5 points for monitoring overlay thickness, interpass temperature, and ferrite number (FN).\n- Award up to 2.5 points for 100% PT examination, thickness measurement, and bend test verification."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "Golden tie-in welds often cannot be hydrostatically tested. Explain the enhanced quality control and non-destructive examination (NDE) requirements for pipeline golden tie-in welds per SAES-W-012 and SAES-L-350.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for pre-weld alignment, line identity check, and fit-up verification.\n- Award up to 2.5 points for 100% visual inspection of root, interpass, and cap weld layers.\n- Award up to 2.5 points for mandatory 100% RT plus 100% UT (or PAUT) volumetric examination.\n- Award up to 2.5 points for 100% MT/PT of cap and HAZ plus QA/QC sign-off record documentation."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "Outline the mandatory safety and field execution controls required for hot work welding activities in an operating gas plant facility per Aramco Safety Standards.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for Hot Work Permit authorization, gas testing, and dedicated fire watch setup.\n- Award up to 2.5 points for gas cylinder securing, flashback arrestors, and separation distances.\n- Award up to 2.5 points for welding machine grounding, cable insulation, and electrical isolation.\n- Award up to 2.5 points for PPE, welding screens, habitat enclosure, and local exhaust ventilation."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "You are auditing a site welding electrode storage and baking facility. Describe the key compliance checks required per SAES-W-011 and AWS D1.1.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for ambient temperature and relative humidity control inside storage room.\n- Award up to 2.5 points for electrode baking oven calibration, temperature indicators, and consumable segregation.\n- Award up to 2.5 points for holding oven operation (120-150°C) and batch/heat issue tracking logs.\n- Award up to 2.5 points for portable heated quiver checks on site and exposure time tracking."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "Explain the inspection requirements for complete joint penetration (CJP) groove welds on structural steel members (pipe racks/platforms) per AWS D1.1 and SAES-M-001.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for verifying WPS/PQR compliance under AWS D1.1 (pre-qualified vs tested).\n- Award up to 2.5 points for joint fit-up, backing bar alignment, and steel cleanliness inspection.\n- Award up to 2.5 points for in-process back gouging inspection (MT of gouged root cavity).\n- Award up to 2.5 points for visual inspection and UT/RT acceptance criteria for structural CJP welds."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "Describe the metallurgical considerations and filler metal selection rules when welding carbon steel (P-No. 1) to austenitic stainless steel (P-No. 8) per SAES-W-011.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for selecting correct filler metal (ER309L / E309L) to prevent martensite & cracking.\n- Award up to 2.5 points for heat input and dilution control during root and fill passes.\n- Award up to 2.5 points for preheat restrictions (no preheat on SS side, controlled preheat on CS side).\n- Award up to 2.5 points for post-weld NDT (PT inspection) and ferrite content verification."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "During a 1.5 x design pressure hydrostatic test of a P-No. 1 carbon steel piping loop, a girth weld ruptures at 85% test pressure. Detail your failure investigation methodology and technical disposition.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for site safety isolation, pressure relief, and visual/photographic fracture logging.\n- Award up to 2.5 points for metallurgical sample cutting, chemical/tensile/impact testing, and SEM fractography.\n- Award up to 2.5 points for reviewing construction records (WPS, WQR, MTC, NDT reports, preheat logs).\n- Award up to 2.5 points for issuing failure investigation report, extent of condition audit, and corrective actions."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "essay",
+        "prompt": "Describe the essential welding quality records that must be compiled into the final Mechanical Completion Dossier (Quality Book) prior to project turnover per Aramco standards.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for Weld Summary Log (Weld Map) matching P&ID/Isometrics.\n- Award up to 2.5 points for approved WPS, PQR, and WQR register matching joint records.\n- Award up to 2.5 points for NDT examination reports (RT, UT, MT, PT) and PWHT/hardness charts.\n- Award up to 2.5 points for MTCs, PMI reports, punch list clearance evidence, and QC sign-off certificates."
+    },
+
+    # =========================================================================
+    # PART 3: 20 ORAL-PRACTICAL QUESTIONS (10 oral, 10 practical)
+    # Every Oral/Practical question includes a structured 10-point max scoring rubric.
+    # =========================================================================
+    
+    # 10 Oral Test Questions (oral)
+    {
+        "discipline": "Welding QC",
+        "kind": "oral",
+        "prompt": "Interviewer provides a welder card and joint detail drawing (NPS 4 CS pipe, 6G position, GTAW+SMAW). Candidate must verbally walk through essential variable verification steps.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for explaining P-No. matching (P-No. 1 to P-No. 1).\n- Award up to 2.5 points for checking F-No. limits (F-No. 6 GTAW, F-No. 4 SMAW).\n- Award up to 2.5 points for verifying position qualification (6G covers all positions) and diameter limits.\n- Award up to 2.5 points for checking 6-month welder activity log and card expiration status."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "oral",
+        "prompt": "Candidate is presented with a preheat torch, digital contact pyrometer, and temperature chalks. Candidate must explain and demonstrate how to measure preheat on a pipe joint.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for verifying pyrometer calibration sticker and battery check.\n- Award up to 2.5 points for identifying correct preheat measurement distance (75 mm from bevel edge).\n- Award up to 2.5 points for explaining correct application of tempilstik (outside weld zone) vs pyrometer.\n- Award up to 2.5 points for stating pass/fail determination against WPS preheat requirement."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "oral",
+        "prompt": "Candidate is given an RT film on an illuminator viewer and corresponding NDT report. Candidate must verbally interpret film density, IQI placement, and flaw indications.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for checking RT film density (2.0 to 4.0 range) using densitometer.\n- Award up to 2.5 points for verifying IQI sensitivity (essential hole/wire visible on film).\n- Award up to 2.5 points for identifying flaw indication (slag inclusion / lack of penetration) and measuring length.\n- Award up to 2.5 points for evaluating indication against ASME B31.3 acceptance criteria and stating pass/fail."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "oral",
+        "prompt": "Candidate walks reviewer through a simulated live production weld inspection. Candidate must measure welding voltage, amperage, and travel speed, and calculate heat input.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for using calibrated clamp meter/voltmeter to measure electrical parameters.\n- Award up to 2.5 points for measuring travel speed with stopwatch and steel rule.\n- Award up to 2.5 points for accurately calculating heat input in kJ/mm using standard formula.\n- Award up to 2.5 points for comparing calculated heat input against approved WPS limits and stating compliance."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "oral",
+        "prompt": "Reviewer provides candidate with a furnace PWHT temperature recorder chart for a Cr-Mo piping spool. Candidate must review and defend pass/fail status under questioning.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for verifying heating rate compliance above 400°C.\n- Award up to 2.5 points for checking soak temperature range (620°C - 660°C) and soak duration against WT.\n- Award up to 2.5 points for verifying cooling rate compliance down to 400°C.\n- Award up to 2.5 points for checking thermocouple quantity/locations and signing chart acceptance."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "oral",
+        "prompt": "Candidate conducts a verbal audit walkthrough of an electrode storage facility with reviewer, explaining key checks for SMAW consumables.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for checking holding oven temperature gauge (120°C - 150°C).\n- Award up to 2.5 points for verifying electrode batch numbers and AWS classification tags.\n- Award up to 2.5 points for checking portable heated quivers (min 65°C) and welder issue logs.\n- Award up to 2.5 points for explaining atmospheric exposure limits (4 hrs for E7018) and rebaking rules."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "oral",
+        "prompt": "Candidate is presented with an argon purging rig, digital oxygen analyzer, and SS pipe spool. Candidate explains purge setup and demonstrates O2 measurement.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for inspecting purge dams (paper/rubber) and purge hose connections.\n- Award up to 2.5 points for verifying argon gas purity certificate (99.998% pure).\n- Award up to 2.5 points for operating oxygen analyzer and measuring O2 concentration (<0.05% / 500 ppm).\n- Award up to 2.5 points for explaining consequences of premature purge removal (root sugarberry oxidation)."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "oral",
+        "prompt": "Reviewer cross-examines candidate on a recurring root crack defect on P-No. 5A alloy steel pipe. Candidate must verbally defend repair WPS, preheat, DHT, and NDT sequence.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for identifying root cause (lack of preheat / hydrogen entrapment).\n- Award up to 2.5 points for detailing repair excavation boundary and PT examination of cavity.\n- Award up to 2.5 points for specifying mandatory preheat (200°C min) and DHT (300°C for 2 hrs).\n- Award up to 2.5 points for specifying 24-hr delay post-weld NDT (RT + UT) and updating weld repair log."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "oral",
+        "prompt": "Candidate is provided with a Telebrineller / Equotip hardness tester and a welded coupon. Candidate must explain calibration verification and perform hardness readings.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for checking instrument calibration block and verifying test accuracy.\n- Award up to 2.5 points for surface preparation of weld, HAZ, and base metal test spots.\n- Award up to 2.5 points for taking 3 readings per zone (weld, HAZ, base) and recording values.\n- Award up to 2.5 points for evaluating results against NACE MR0175 limit (250 HV10 / 22 HRC max)."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "oral",
+        "prompt": "Reviewer presents candidate with 5 visual defect samples (undercut, overlap, porosity, crater crack, excess reinforcement). Candidate must verbally identify each.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for identifying undercut and overlap defects.\n- Award up to 2.5 points for identifying surface porosity and crater crack defects.\n- Award up to 2.5 points for identifying excess reinforcement height defect.\n- Award up to 2.5 points for stating governing code visual acceptance limits for each defect."
+    },
+
+    # 10 Practical Test Questions (practical)
+    {
+        "discipline": "Welding QC",
+        "kind": "practical",
+        "prompt": "Candidate is provided with a Bridge Cam gauge and a welded carbon steel pipe coupon. Candidate must measure weld reinforcement height and undercut depth.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for zeroing and inspecting Bridge Cam gauge.\n- Award up to 2.5 points for correctly placing gauge and measuring face reinforcement height.\n- Award up to 2.5 points for measuring undercut depth at 3 locations.\n- Award up to 2.5 points for recording measurements on inspection log sheet and stating pass/fail vs ASME B31.3."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "practical",
+        "prompt": "Candidate is provided with an internal Hi-Lo gauge, feeler blades, and an un-welded pipe joint prep. Candidate must inspect fit-up parameters.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for zeroing Hi-Lo gauge and inserting probe into pipe bore.\n- Award up to 2.5 points for measuring internal misalignment (hi-lo) at 4 quadrature points.\n- Award up to 2.5 points for measuring root gap width using feeler gauge / tapered gauge.\n- Award up to 2.5 points for recording fit-up data on SAIC inspection checklist and confirming readiness to weld."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "practical",
+        "prompt": "Candidate is provided with a fillet weld gauge set and a socket-welded fitting sample. Candidate must measure leg length, throat thickness, and profile.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for selecting correct fillet weld gauge size based on pipe WT.\n- Award up to 2.5 points for measuring vertical and horizontal fillet leg lengths.\n- Award up to 2.5 points for measuring actual throat thickness and checking profile (convexity/concavity).\n- Award up to 2.5 points for evaluating minimum leg size against 1.09 x WT requirement and logging result."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "practical",
+        "prompt": "Candidate performs a solvent-removable visible dye penetrant inspection (PT) on a stainless steel weld plate specimen using cleaner, penetrant, and developer.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for surface cleaning and drying of weldment area.\n- Award up to 2.5 points for applying penetrant and maintaining mandatory dwell time (10 mins).\n- Award up to 2.5 points for solvent wiping (no direct spraying) and applying developer spray evenly.\n- Award up to 2.5 points for interpreting indications under white light (>= 1000 lux) and recording flaw sketch."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "practical",
+        "prompt": "Candidate is provided with a universal bevel protractor and a machined pipe bevel. Candidate must measure the bevel angle and root land thickness.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for setting up and zeroing universal bevel protractor.\n- Award up to 2.5 points for measuring bevel angle (target 37.5 deg +/- 2.5 deg).\n- Award up to 2.5 points for measuring root land thickness using depth micrometer / caliper.\n- Award up to 2.5 points for recording measurements on fit-up report and evaluating WPS compliance."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "practical",
+        "prompt": "Candidate conducts an AC magnetic particle inspection (MT) on a carbon steel plate weldment using dry magnetic powder.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for performing 10 lb (4.5 kg) yoke weight lift test check.\n- Award up to 2.5 points for applying AC yoke in orthogonal directions (90 deg pattern).\n- Award up to 2.5 points for dusting dry magnetic powder while energizing yoke and inspecting under white light.\n- Award up to 2.5 points for identifying indication, measuring length, and demagnetizing test specimen."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "practical",
+        "prompt": "Candidate is given a welded pipe coupon containing 3 distinct surface/profile defects. Candidate must inspect, measure, log, and write a detailed inspection report.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for systematic visual inspection coverage using Cambridge gauge and magnifier.\n- Award up to 2.5 points for accurate detection and measurement of all 3 defects (undercut, overlap, concavity).\n- Award up to 2.5 points for looking up correct code clause acceptance limits (ASME B31.3 / API 1104).\n- Award up to 2.5 points for completing formal SATR inspection report with pass/fail disposition."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "practical",
+        "prompt": "Candidate is presented with a rejected radiograph report showing 50 mm continuous lack of fusion on a high-pressure gas line weld. Candidate must draft a complete NCR.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for accurate description of nonconformance, weld ID, line number, & standard reference.\n- Award up to 2.5 points for identifying root cause factors (welder technique / improper bevel prep).\n- Award up to 2.5 points for specifying detailed repair action (excavation, PT check, repair WPS, NDT re-examination).\n- Award up to 2.5 points for specifying preventive measures and signing official NCR form."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "practical",
+        "prompt": "Candidate is presented with a cut pipe spool section, a hard-stamped heat number, and a Mill Test Certificate (MTC). Candidate must verify traceability.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for reading hard-stamped/painted heat number on pipe spool.\n- Award up to 2.5 points for matching heat number to Mill Test Certificate (MTC).\n- Award up to 2.5 points for checking chemical composition (C, Mn, P, S, Si, CE) against SAES-W-011 limits.\n- Award up to 2.5 points for checking mechanical properties (yield, tensile, elongation) and signing receiving card."
+    },
+    {
+        "discipline": "Welding QC",
+        "kind": "practical",
+        "prompt": "Candidate conducts a complete final inspection of a completed pipe spool weld (VT + NDT report review + drawing check) and signs off the final inspection report.",
+        "options": [],
+        "correct": "",
+        "rubric": "Scoring Rubric (10 Points Maximum):\n- Award up to 2.5 points for verifying isometric drawing, joint number, and welder ID.\n- Award up to 2.5 points for performing 100% visual inspection of weld cap, HAZ, & ground arc strike areas.\n- Award up to 2.5 points for reviewing attached RT/UT and PWHT reports for 100% completion.\n- Award up to 2.5 points for signing final SATR-W inspection record and clearing joint for pressure testing."
+    }
+]
+
+
+def create_welding_template(output_filepath="qc-question-template-Welding.xlsx"):
+    """Generate a clean, styled Excel workbook containing the 100 Welding QC questions."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Questions"
+    
+    # 1. Append Headers
+    ws.append(HEADERS)
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = "A1:F101"
+    
+    # Header Styling
+    header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid") # Dark Blue
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    left_align = Alignment(horizontal="left", vertical="top", wrap_text=True)
+    
+    for col_idx in range(1, 7):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = center_align
+
+    # 2. Append Data Rows
+    thin_border = Border(
+        left=Side(style='thin', color='D9D9D9'),
+        right=Side(style='thin', color='D9D9D9'),
+        top=Side(style='thin', color='D9D9D9'),
+        bottom=Side(style='thin', color='D9D9D9')
+    )
+    
+    for idx, q in enumerate(WELDING_QUESTIONS, start=2):
+        options_text = "\n".join(q.get("options", [])) if q.get("kind") == "mcq" else ""
+        row_data = [
+            q.get("discipline", "Welding QC"),
+            q.get("kind", ""),
+            q.get("prompt", ""),
+            options_text,
+            q.get("correct", ""),
+            q.get("rubric", "")
+        ]
+        ws.append(row_data)
+        
+        # Style Data Row
+        for col_idx in range(1, 7):
+            cell = ws.cell(row=idx, column=col_idx)
+            cell.font = Font(name="Calibri", size=10)
+            cell.border = thin_border
+            if col_idx in (1, 2):
+                cell.alignment = Alignment(horizontal="center", vertical="top")
+            else:
+                cell.alignment = left_align
+
+    # Set explicit column widths
+    column_widths = {
+        'A': 20, # Discipline
+        'B': 16, # Question type
+        'C': 65, # Question
+        'D': 55, # Multiple Choice options
+        'E': 45, # Correct answer
+        'F': 65  # Scoring rubric
+    }
+    for col_letter, width in column_widths.items():
+        ws.column_dimensions[col_letter].width = width
+
+    # Add Instructions Sheet
+    ws_inst = wb.create_sheet(title="Instructions")
+    ws_inst.append(["Welding QC Question Bank Import Template"])
+    ws_inst.append(["1. Fill the Questions sheet and leave no completely blank rows between questions."])
+    ws_inst.append(["2. Question type must be mcq, essay, oral, or practical."])
+    ws_inst.append(["3. For Multiple Choice questions, put one option per line in 'Multiple Choice options'."])
+    ws_inst.append(["4. For Essay, Oral, and Practical questions, provide a structured scoring rubric."])
+    ws_inst.append(["5. Keep the header row unchanged."])
+    
+    ws_inst.column_dimensions['A'].width = 110
+    ws_inst.cell(row=1, column=1).font = Font(name="Calibri", size=14, bold=True, color="1F4E78")
+    
+    wb.save(output_filepath)
+    print(f"Successfully saved {len(WELDING_QUESTIONS)} questions to {output_filepath}")
+
+    # Also save JSON format
+    import json
+    json_filepath = "questions_welding.json"
+    with open(json_filepath, "w", encoding="utf-8") as f:
+        json.dump(WELDING_QUESTIONS, f, indent=2)
+    print(f"Successfully saved {len(WELDING_QUESTIONS)} questions to {json_filepath}")
+
+
+if __name__ == "__main__":
+    create_welding_template()
+

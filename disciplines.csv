@@ -1,0 +1,313 @@
+Discipline,Subject,Topic
+Cathodic Protection QC,Codes and standards,Controlled CP design basis and project document hierarchy
+Cathodic Protection QC,Codes and standards,Applicable Aramco requirements and referenced NACE or AMPP standards
+Cathodic Protection QC,Codes and standards,ITP acceptance criteria and approved deviations
+Cathodic Protection QC,Inspection planning,CP material receiving and installation inspection plan
+Cathodic Protection QC,Inspection planning,Hold and witness points for rectifier and anode work
+Cathodic Protection QC,Inspection planning,Calibrated test instruments and survey readiness
+Cathodic Protection QC,Materials and traceability,Anode type output and batch traceability
+Cathodic Protection QC,Materials and traceability,Cable insulation and termination material verification
+Cathodic Protection QC,Materials and traceability,Rectifier transformer and junction box certificates
+Cathodic Protection QC,Installation and workmanship,Anode bed installation depth spacing and backfill
+Cathodic Protection QC,Installation and workmanship,Cable routing splices and mechanical protection
+Cathodic Protection QC,Installation and workmanship,Test station rectifier and bonding installation
+Cathodic Protection QC,Testing and verification,Continuity and isolation checks
+Cathodic Protection QC,Testing and verification,Rectifier commissioning and output verification
+Cathodic Protection QC,Testing and verification,Close interval potential and anode bed performance surveys
+Cathodic Protection QC,Nonconformance and corrective action,Damaged cable or defective anode disposition
+Cathodic Protection QC,Nonconformance and corrective action,Out of tolerance potential survey investigation
+Cathodic Protection QC,Nonconformance and corrective action,Corrective action verification and reinspection
+Cathodic Protection QC,Documentation and turnover,CP installation and test records
+Cathodic Protection QC,Documentation and turnover,As built cable route and anode bed drawings
+Cathodic Protection QC,Documentation and turnover,Commissioning dossier and punch closure evidence
+Cathodic Protection QC,Safety and field execution,Excavation and buried utility controls
+Cathodic Protection QC,Safety and field execution,Electrical isolation and energized equipment safety
+Cathodic Protection QC,Safety and field execution,Chemical backfill handling and environmental controls
+Civil QC,Codes and standards,Controlled civil drawings specifications and project document hierarchy
+Civil QC,Codes and standards,Applicable concrete structural and geotechnical standards
+Civil QC,Codes and standards,ITP acceptance criteria and approved deviations
+Civil QC,Inspection planning,Earthwork concrete and structural inspection plan
+Civil QC,Inspection planning,Hold and witness points before placement and backfilling
+Civil QC,Inspection planning,Survey equipment and test laboratory readiness
+Civil QC,Materials and traceability,Cement aggregate rebar and grout certificates
+Civil QC,Materials and traceability,Concrete mix design and delivery ticket traceability
+Civil QC,Materials and traceability,Embedded item and structural steel identification
+Civil QC,Installation and workmanship,Excavation subgrade and compaction quality
+Civil QC,Installation and workmanship,Reinforcement formwork and embedded item inspection
+Civil QC,Installation and workmanship,Concrete placement curing and finishing
+Civil QC,Testing and verification,Field density and compaction testing
+Civil QC,Testing and verification,Fresh concrete and compressive strength testing
+Civil QC,Testing and verification,Structural dimensions elevation and alignment survey
+Civil QC,Nonconformance and corrective action,Honeycombing cracks and repair disposition
+Civil QC,Nonconformance and corrective action,Failed test result investigation and corrective action
+Civil QC,Nonconformance and corrective action,Reinspection after repair or rework
+Civil QC,Documentation and turnover,Earthwork concrete and structural inspection records
+Civil QC,Documentation and turnover,Concrete pour cards and test reports
+Civil QC,Documentation and turnover,As built drawings and punch closure evidence
+Civil QC,Safety and field execution,Excavation access and shoring controls
+Civil QC,Safety and field execution,Lifting and formwork stability controls
+Civil QC,Safety and field execution,Concrete placement and work area safety
+Coating QC,Codes and standards,Controlled coating specification and project document hierarchy
+Coating QC,Codes and standards,Applicable surface preparation and coating standards
+Coating QC,Codes and standards,ITP acceptance criteria and approved deviations
+Coating QC,Inspection planning,Surface preparation and coating inspection plan
+Coating QC,Inspection planning,Hold and witness points before coating application
+Coating QC,Inspection planning,Calibrated environmental and film thickness instruments
+Coating QC,Materials and traceability,Coating system batch and shelf life verification
+Coating QC,Materials and traceability,Abrasive and thinner identification
+Coating QC,Materials and traceability,Material storage temperature and preservation records
+Coating QC,Installation and workmanship,Surface cleanliness profile and soluble salt control
+Coating QC,Installation and workmanship,Mixing induction time and pot life control
+Coating QC,Installation and workmanship,Application technique stripe coat and overlap quality
+Coating QC,Testing and verification,Ambient condition measurement and recording
+Coating QC,Testing and verification,Wet and dry film thickness verification
+Coating QC,Testing and verification,Holiday adhesion and cure testing
+Coating QC,Nonconformance and corrective action,Coating defect classification and repair method
+Coating QC,Nonconformance and corrective action,Out of specification film thickness disposition
+Coating QC,Nonconformance and corrective action,Reinspection of repaired coating areas
+Coating QC,Documentation and turnover,Surface preparation and coating inspection reports
+Coating QC,Documentation and turnover,Batch traceability and environmental logs
+Coating QC,Documentation and turnover,Coating dossier and punch closure evidence
+Coating QC,Safety and field execution,Ventilation and solvent vapor controls
+Coating QC,Safety and field execution,Abrasive blasting and respiratory protection
+Coating QC,Safety and field execution,Fire prevention and coating waste management
+Communications QC,Codes and standards,Controlled telecom drawings specifications and project document hierarchy
+Communications QC,Codes and standards,Applicable communications and cybersecurity requirements
+Communications QC,Codes and standards,ITP acceptance criteria and approved deviations
+Communications QC,Inspection planning,Telecom equipment cable and network inspection plan
+Communications QC,Inspection planning,Hold and witness points for installation and testing
+Communications QC,Inspection planning,Calibrated test equipment and configuration readiness
+Communications QC,Materials and traceability,Equipment model firmware and serial number traceability
+Communications QC,Materials and traceability,Fiber copper cable and connector certificates
+Communications QC,Materials and traceability,Rack cabinet and accessory verification
+Communications QC,Installation and workmanship,Equipment rack grounding and cable management
+Communications QC,Installation and workmanship,Fiber termination splice and connector cleanliness
+Communications QC,Installation and workmanship,Pathway segregation labeling and bend radius
+Communications QC,Testing and verification,Fiber loss and OTDR testing
+Communications QC,Testing and verification,Copper cable continuity and performance testing
+Communications QC,Testing and verification,Network connectivity alarm and functional testing
+Communications QC,Nonconformance and corrective action,Failed link test troubleshooting and disposition
+Communications QC,Nonconformance and corrective action,Configuration mismatch corrective action
+Communications QC,Nonconformance and corrective action,Retest and acceptance after correction
+Communications QC,Documentation and turnover,Cable schedules test results and equipment records
+Communications QC,Documentation and turnover,Network configuration and as built drawings
+Communications QC,Documentation and turnover,Telecom turnover dossier and punch closure evidence
+Communications QC,Safety and field execution,Work near energized telecom systems
+Communications QC,Safety and field execution,Fiber optic handling and laser safety
+Communications QC,Safety and field execution,Access control and configuration change discipline
+Electrical QC,Codes and standards,Controlled electrical drawings specifications and project document hierarchy
+Electrical QC,Codes and standards,Applicable electrical safety and installation standards
+Electrical QC,Codes and standards,ITP acceptance criteria and approved deviations
+Electrical QC,Inspection planning,Electrical material installation and test inspection plan
+Electrical QC,Inspection planning,Hold and witness points for energization readiness
+Electrical QC,Inspection planning,Calibrated electrical test instruments and test plans
+Electrical QC,Materials and traceability,Cable gland termination and lug verification
+Electrical QC,Materials and traceability,Switchgear transformer and panel certificates
+Electrical QC,Materials and traceability,Cable drum identification and storage controls
+Electrical QC,Installation and workmanship,Cable tray routing support and segregation
+Electrical QC,Installation and workmanship,Cable pulling bending radius and termination quality
+Electrical QC,Installation and workmanship,Grounding bonding and equipment installation
+Electrical QC,Testing and verification,Insulation resistance and continuity testing
+Electrical QC,Testing and verification,Grounding system resistance and continuity testing
+Electrical QC,Testing and verification,Functional interlock and energization tests
+Electrical QC,Nonconformance and corrective action,Damaged cable and defective termination disposition
+Electrical QC,Nonconformance and corrective action,Failed electrical test investigation
+Electrical QC,Nonconformance and corrective action,Corrective action verification and retest
+Electrical QC,Documentation and turnover,Cable test reports and termination records
+Electrical QC,Documentation and turnover,Single line diagrams and red line markups
+Electrical QC,Documentation and turnover,Electrical turnover dossier and punch closure evidence
+Electrical QC,Safety and field execution,Lockout tagout and electrical isolation
+Electrical QC,Safety and field execution,Arc flash boundaries and energized work controls
+Electrical QC,Safety and field execution,Safe test lead use and temporary power control
+E&I QC,Codes and standards,Controlled E&I drawings specifications and project document hierarchy
+E&I QC,Codes and standards,Applicable electrical and instrumentation interface requirements
+E&I QC,Codes and standards,ITP acceptance criteria and approved deviations
+E&I QC,Inspection planning,Integrated E&I installation and commissioning inspection plan
+E&I QC,Inspection planning,Hold and witness points for loop and energization tests
+E&I QC,Inspection planning,Calibrated electrical and instrumentation test equipment
+E&I QC,Materials and traceability,Instrument cable gland and termination verification
+E&I QC,Materials and traceability,Control panel junction box and field device certificates
+E&I QC,Materials and traceability,Cable drum and instrument serial number traceability
+E&I QC,Installation and workmanship,Cable segregation grounding and shielding
+E&I QC,Installation and workmanship,Field instrument mounting impulse line and tubing quality
+E&I QC,Installation and workmanship,Panel wiring labeling and termination workmanship
+E&I QC,Testing and verification,Cable insulation continuity and shield testing
+E&I QC,Testing and verification,Loop checks and point to point verification
+E&I QC,Testing and verification,Cause and effect functional testing
+E&I QC,Nonconformance and corrective action,Wiring polarity and termination defect disposition
+E&I QC,Nonconformance and corrective action,Loop test failure investigation
+E&I QC,Nonconformance and corrective action,Corrective action verification and retest
+E&I QC,Documentation and turnover,Loop folders cable test reports and calibration records
+E&I QC,Documentation and turnover,E&I red line drawings and configuration records
+E&I QC,Documentation and turnover,Integrated turnover dossier and punch closure evidence
+E&I QC,Safety and field execution,Electrical isolation and work permit controls
+E&I QC,Safety and field execution,Process interface hazards during loop testing
+E&I QC,Safety and field execution,Live testing controls and communication protocol
+Instrumentation QC,Codes and standards,Controlled instrument drawings specifications and project document hierarchy
+Instrumentation QC,Codes and standards,Applicable instrumentation and control system standards
+Instrumentation QC,Codes and standards,ITP acceptance criteria and approved deviations
+Instrumentation QC,Inspection planning,Instrument installation calibration and loop inspection plan
+Instrumentation QC,Inspection planning,Hold and witness points for testing and commissioning
+Instrumentation QC,Inspection planning,Calibrated standards and test equipment traceability
+Instrumentation QC,Materials and traceability,Instrument model range and serial number verification
+Instrumentation QC,Materials and traceability,Tubing fittings manifolds and cable certificates
+Instrumentation QC,Materials and traceability,Calibration certificate and shelf life control
+Instrumentation QC,Installation and workmanship,Instrument location orientation and accessibility
+Instrumentation QC,Installation and workmanship,Impulse tubing slope support and leak tightness
+Instrumentation QC,Installation and workmanship,Cable shielding grounding and termination
+Instrumentation QC,Testing and verification,Bench calibration and range verification
+Instrumentation QC,Testing and verification,Loop check and signal simulation
+Instrumentation QC,Testing and verification,Control valve stroke and functional testing
+Instrumentation QC,Nonconformance and corrective action,Out of tolerance calibration disposition
+Instrumentation QC,Nonconformance and corrective action,Instrument installation defect correction
+Instrumentation QC,Nonconformance and corrective action,Retest and documented acceptance
+Instrumentation QC,Documentation and turnover,Calibration certificates and loop folders
+Instrumentation QC,Documentation and turnover,Instrument index data sheets and red lines
+Instrumentation QC,Documentation and turnover,Control system turnover dossier and punch closure evidence
+Instrumentation QC,Safety and field execution,Process isolation and permit controls
+Instrumentation QC,Safety and field execution,Pressure release and impulse line safety
+Instrumentation QC,Safety and field execution,Live loop testing and control room coordination
+Mechanical QC,Codes and standards,Controlled mechanical drawings specifications and project document hierarchy
+Mechanical QC,Codes and standards,Applicable equipment fabrication and installation standards
+Mechanical QC,Codes and standards,ITP acceptance criteria and approved deviations
+Mechanical QC,Inspection planning,Equipment receipt installation and test inspection plan
+Mechanical QC,Inspection planning,Hold and witness points for alignment and commissioning
+Mechanical QC,Inspection planning,Calibrated mechanical measurement and test equipment
+Mechanical QC,Materials and traceability,Equipment nameplate and serial number verification
+Mechanical QC,Materials and traceability,Fastener gasket and spare part traceability
+Mechanical QC,Materials and traceability,Preservation records and storage condition checks
+Mechanical QC,Installation and workmanship,Foundation readiness grouting and anchorage
+Mechanical QC,Installation and workmanship,Equipment leveling alignment and coupling installation
+Mechanical QC,Installation and workmanship,Piping interface supports and accessibility
+Mechanical QC,Testing and verification,Mechanical run test and vibration verification
+Mechanical QC,Testing and verification,Alignment measurement and torque verification
+Mechanical QC,Testing and verification,Functional test and preservation release checks
+Mechanical QC,Nonconformance and corrective action,Equipment damage and preservation failure disposition
+Mechanical QC,Nonconformance and corrective action,Misalignment or excessive vibration investigation
+Mechanical QC,Nonconformance and corrective action,Corrective action verification and retest
+Mechanical QC,Documentation and turnover,Equipment installation and alignment records
+Mechanical QC,Documentation and turnover,Vendor documents and preservation records
+Mechanical QC,Documentation and turnover,Mechanical completion dossier and punch closure evidence
+Mechanical QC,Safety and field execution,Lifting rigging and equipment handling
+Mechanical QC,Safety and field execution,Stored energy and rotating equipment controls
+Mechanical QC,Safety and field execution,Work permit and housekeeping requirements
+NDT QC,Codes and standards,Controlled NDT procedures specifications and project document hierarchy
+NDT QC,Codes and standards,Applicable NDT code acceptance criteria
+NDT QC,Codes and standards,ITP acceptance criteria and approved deviations
+NDT QC,Inspection planning,NDT method coverage and examination plan
+NDT QC,Inspection planning,Hold and witness points for weld examination
+NDT QC,Inspection planning,Personnel qualification and equipment calibration verification
+NDT QC,Materials and traceability,NDT consumable batch and expiry verification
+NDT QC,Materials and traceability,Radiographic film digital media and source traceability
+NDT QC,Materials and traceability,Examination report and weld identification linkage
+NDT QC,Installation and workmanship,Surface preparation and examination access
+NDT QC,Installation and workmanship,Radiographic exposure setup and identification
+NDT QC,Installation and workmanship,UT MT and PT technique application quality
+NDT QC,Testing and verification,Radiographic image quality and interpretation
+NDT QC,Testing and verification,Ultrasonic calibration and scan coverage
+NDT QC,Testing and verification,Magnetic particle and liquid penetrant sensitivity checks
+NDT QC,Nonconformance and corrective action,Rejectable indication reporting and repair traceability
+NDT QC,Nonconformance and corrective action,NDT procedure deviation disposition
+NDT QC,Nonconformance and corrective action,Reexamination after weld repair
+NDT QC,Documentation and turnover,NDT reports images and calibration records
+NDT QC,Documentation and turnover,Weld map and examination status register
+NDT QC,Documentation and turnover,NDT dossier and punch closure evidence
+NDT QC,Safety and field execution,Radiation protection and exclusion controls
+NDT QC,Safety and field execution,Chemical handling for PT and MT materials
+NDT QC,Safety and field execution,Confined space and elevated work examination controls
+Piping QC,Codes and standards,Controlled piping drawings specifications and project document hierarchy
+Piping QC,Codes and standards,Applicable piping code and pressure test requirements
+Piping QC,Codes and standards,ITP acceptance criteria and approved deviations
+Piping QC,Inspection planning,Piping fabrication erection and test inspection plan
+Piping QC,Inspection planning,Hold and witness points for fit up and hydrotest
+Piping QC,Inspection planning,Calibrated gauges torque tools and test equipment
+Piping QC,Materials and traceability,Pipe fittings flanges and valve certificate verification
+Piping QC,Materials and traceability,Material heat number and spool traceability
+Piping QC,Materials and traceability,Gasket bolt and valve preservation control
+Piping QC,Installation and workmanship,Fit up alignment and flange face protection
+Piping QC,Installation and workmanship,Pipe support location orientation and clearance
+Piping QC,Installation and workmanship,Valve installation flow direction and accessibility
+Piping QC,Testing and verification,Hydrostatic test package and boundary verification
+Piping QC,Testing and verification,Line cleanliness flushing and blowing acceptance
+Piping QC,Testing and verification,Pneumatic leak test and reinstatement checks
+Piping QC,Nonconformance and corrective action,Flange leak and assembly defect disposition
+Piping QC,Nonconformance and corrective action,Material mismatch and traceability break investigation
+Piping QC,Nonconformance and corrective action,Retest and documented acceptance after repair
+Piping QC,Documentation and turnover,Test packs weld maps and line check records
+Piping QC,Documentation and turnover,Piping isometrics red lines and support records
+Piping QC,Documentation and turnover,Mechanical completion dossier and punch closure evidence
+Piping QC,Safety and field execution,Pressure test exclusion and depressurization controls
+Piping QC,Safety and field execution,Line opening and stored energy precautions
+Piping QC,Safety and field execution,Lifting and handling of piping materials
+Welding QC,Codes and standards,Controlled welding requirements and project document hierarchy
+Welding QC,Codes and standards,Applicable welding code and acceptance criteria
+Welding QC,Codes and standards,Approved WPS PQR and welder qualification controls
+Welding QC,Inspection planning,Welding inspection plan and hold points
+Welding QC,Inspection planning,Fit up visual and NDT coordination
+Welding QC,Inspection planning,Calibrated welding and inspection equipment verification
+Welding QC,Materials and traceability,Base material heat number and MTC traceability
+Welding QC,Materials and traceability,Filler metal identification storage and conditioning
+Welding QC,Materials and traceability,Weld joint and welder traceability
+Welding QC,Installation and workmanship,Joint preparation fit up and alignment
+Welding QC,Installation and workmanship,Preheat interpass temperature and welding parameter control
+Welding QC,Installation and workmanship,Visual weld profile and defect prevention
+Welding QC,Testing and verification,WPS compliance and consumable control checks
+Welding QC,Testing and verification,Visual examination and NDT acceptance
+Welding QC,Testing and verification,PWHT monitoring and hardness testing where required
+Welding QC,Nonconformance and corrective action,Weld defect reporting and repair authorization
+Welding QC,Nonconformance and corrective action,Repair cycle control and traceability
+Welding QC,Nonconformance and corrective action,Reinspection and NDT after repair
+Welding QC,Documentation and turnover,Weld map WPS and welder qualification records
+Welding QC,Documentation and turnover,NDT PWHT and repair records
+Welding QC,Documentation and turnover,Welding dossier and punch closure evidence
+Welding QC,Safety and field execution,Hot work permit and fire watch controls
+Welding QC,Safety and field execution,Welding fume ventilation and PPE
+Welding QC,Safety and field execution,Gas cylinder handling and electrical safety
+Pipeline QC,Codes and standards,Controlled pipeline drawings specifications and project document hierarchy
+Pipeline QC,Codes and standards,Applicable pipeline construction and integrity standards
+Pipeline QC,Codes and standards,ITP acceptance criteria and approved deviations
+Pipeline QC,Inspection planning,Pipeline spread activity inspection plan
+Pipeline QC,Inspection planning,Hold and witness points for welding coating and testing
+Pipeline QC,Inspection planning,Calibrated survey and test equipment readiness
+Pipeline QC,Materials and traceability,Line pipe coating and fitting certificate verification
+Pipeline QC,Materials and traceability,Pipe joint number and heat traceability
+Pipeline QC,Materials and traceability,Valve and appurtenance preservation control
+Pipeline QC,Installation and workmanship,Stringing trenching and lowering in controls
+Pipeline QC,Installation and workmanship,Girth weld fit up and field bend inspection
+Pipeline QC,Installation and workmanship,Backfill padding and marker installation
+Pipeline QC,Testing and verification,Gauging cleaning and hydrostatic test verification
+Pipeline QC,Testing and verification,Pipeline geometry dent and ovality checks
+Pipeline QC,Testing and verification,Dewatering drying and commissioning readiness
+Pipeline QC,Nonconformance and corrective action,Damaged pipe or coating anomaly disposition
+Pipeline QC,Nonconformance and corrective action,Gauging plate deformation investigation
+Pipeline QC,Nonconformance and corrective action,Repair verification and required rerun testing
+Pipeline QC,Documentation and turnover,Pipeline alignment sheets weld logs and test records
+Pipeline QC,Documentation and turnover,As built route and crossing documentation
+Pipeline QC,Documentation and turnover,Pipeline completion dossier and punch closure evidence
+Pipeline QC,Safety and field execution,Trenching lifting and right of way controls
+Pipeline QC,Safety and field execution,Pressure test exclusion and emergency readiness
+Pipeline QC,Safety and field execution,Environmental protection and restoration requirements
+PQCS,Codes and standards,Controlled project quality plan and document hierarchy
+PQCS,Codes and standards,Applicable Aramco requirements and referenced industry standards
+PQCS,Codes and standards,ITP acceptance criteria and approved deviations
+PQCS,Inspection planning,Project quality surveillance and inspection planning
+PQCS,Inspection planning,ITP hold witness and review point management
+PQCS,Inspection planning,Inspector qualification and calibration oversight
+PQCS,Materials and traceability,Material receiving inspection and certificate verification
+PQCS,Materials and traceability,Traceability system audit and preservation controls
+PQCS,Materials and traceability,Supplier and subcontractor quality records
+PQCS,Installation and workmanship,Work package readiness and first work inspection
+PQCS,Installation and workmanship,Field workmanship surveillance and acceptance
+PQCS,Installation and workmanship,Interface management across construction disciplines
+PQCS,Testing and verification,Test package completeness and release control
+PQCS,Testing and verification,Witness testing and result review
+PQCS,Testing and verification,Measurement system and calibration verification
+PQCS,Nonconformance and corrective action,NCR root cause and corrective action tracking
+PQCS,Nonconformance and corrective action,Concession and technical query control
+PQCS,Nonconformance and corrective action,Effectiveness verification and closeout
+PQCS,Documentation and turnover,Quality records index and turnover dossier review
+PQCS,Documentation and turnover,As built documentation and data book completeness
+PQCS,Documentation and turnover,Punch list prioritization and closure evidence
+PQCS,Safety and field execution,Quality support for work permit readiness
+PQCS,Safety and field execution,Field safety observation and stop work escalation
+PQCS,Safety and field execution,Site access housekeeping and work area controls

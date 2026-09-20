@@ -24,11 +24,24 @@ CREATE TABLE IF NOT EXISTS qc_portal.questions (
     correct_answer TEXT,
     rubric TEXT,
     max_points INTEGER NOT NULL CHECK (max_points > 0),
-    active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1))
+    active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+    subject TEXT NOT NULL DEFAULT 'General',
+    sub_subject TEXT NOT NULL DEFAULT 'General',
+    is_scored BOOLEAN NOT NULL DEFAULT TRUE,
+    difficulty TEXT NOT NULL DEFAULT 'moderate' CHECK (difficulty IN ('easy', 'moderate', 'difficult')),
+    topic_group TEXT NOT NULL DEFAULT 'General',
+    delivery_stage TEXT NOT NULL DEFAULT 'standard' CHECK (delivery_stage IN ('standard', 'oral_opening')),
+    CHECK (delivery_stage = 'standard' OR (q_type = 'oral' AND is_scored = FALSE))
 );
 CREATE TABLE IF NOT EXISTS qc_portal.assessment_settings (
     question_type TEXT PRIMARY KEY,
-    question_count INTEGER NOT NULL CHECK (question_count > 0)
+    question_count INTEGER NOT NULL CHECK (question_count > 0),
+    max_points DOUBLE PRECISION NOT NULL DEFAULT 1 CHECK (max_points > 0),
+    non_scored_count INTEGER NOT NULL DEFAULT 0 CHECK (non_scored_count >= 0),
+    easy_count INTEGER NOT NULL DEFAULT 0 CHECK (easy_count >= 0),
+    moderate_count INTEGER NOT NULL DEFAULT 0 CHECK (moderate_count >= 0),
+    difficult_count INTEGER NOT NULL DEFAULT 0 CHECK (difficult_count >= 0),
+    oral_opening_count INTEGER NOT NULL DEFAULT 2 CHECK (oral_opening_count >= 0)
 );
 INSERT INTO qc_portal.assessment_settings(question_type, question_count) VALUES
     ('mcq', 20), ('essay', 5), ('oral', 5), ('practical', 5)

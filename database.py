@@ -22,6 +22,8 @@ STARTER_DISCIPLINES = (
 )
 
 
+
+
 class DatabaseError(ValueError):
     """Safe, user-facing database error; never includes connection credentials."""
 
@@ -521,7 +523,8 @@ def _validate_question(discipline, kind, prompt, options, correct, rubric):
     return (discipline.strip(), kind, prompt.strip(), options, correct.strip(), rubric.strip(), points)
 
 def _insert_question(connection, question):
-    discipline, kind, prompt, options, correct, rubric, points = question
+    values = list(question) + ['General', 'General', True, 'moderate', 'General', 'standard']
+    discipline, kind, prompt, options, correct, rubric, points, subject, sub_subject, is_scored, difficulty, topic_group, delivery_stage = values[:13]
     existing = connection.execute('SELECT id FROM questions WHERE discipline=%s AND q_type=%s AND question_text=%s', (discipline, kind, prompt)).fetchone()
     if existing:
         raise ValueError('Duplicate question found.')

@@ -6,6 +6,8 @@ import json
 from openpyxl import Workbook, load_workbook
 
 
+CORE_HEADERS = ['Discipline', 'Question type', 'Question', 'Multiple Choice options', 'Correct answer', 'Scoring rubric']
+
 HEADERS = [
     'Discipline',
     'Question type',
@@ -13,6 +15,7 @@ HEADERS = [
     'Multiple Choice options',
     'Correct answer',
     'Scoring rubric',
+    'Subject', 'Sub-subject', 'Scored question', 'Difficulty', 'Topic group', 'Delivery stage',
 ]
 
 
@@ -35,10 +38,11 @@ def parse_questions(workbook_bytes):
     rows = sheet.iter_rows(values_only=True)
     header = next(rows, None)
     normalized_header = [_text(value) for value in header[:len(HEADERS)]] if header is not None else []
-    legacy_headers = HEADERS[:3] + ['MCQ options'] + HEADERS[4:]
-    legacy_headers_with_points = HEADERS + ['Maximum points']
+    legacy_headers = CORE_HEADERS[:3] + ['MCQ options'] + CORE_HEADERS[4:]
+    legacy_headers_with_points = CORE_HEADERS + ['Maximum points']
     legacy_headers_with_points_and_mcq_options = legacy_headers + ['Maximum points']
-    if normalized_header not in (HEADERS, legacy_headers, legacy_headers_with_points, legacy_headers_with_points_and_mcq_options):
+    legacy_headers_with_metadata = CORE_HEADERS + ['Subject', 'Sub-subject', 'Scored question', 'Difficulty', 'Topic group', 'Delivery stage']
+    if normalized_header not in (HEADERS, legacy_headers, legacy_headers_with_points, legacy_headers_with_points_and_mcq_options, legacy_headers_with_metadata):
         raise QuestionImportError('The first row must contain the template headers in the expected order.')
 
     questions = []
@@ -48,7 +52,10 @@ def parse_questions(workbook_bytes):
             continue
         if len(values) < len(HEADERS):
             values.extend([''] * (len(HEADERS) - len(values)))
-        discipline, kind, prompt, options, correct, rubric = map(_text, values)
+        discipline, kind, prompt, options, correct, rubric = map(_text, values[:6])
+        metadata = list(row[6:12]) + ['', '', '', '', '', '']
+        subject, sub_subject, scored, difficulty, topic_group, delivery_stage = map(_text, metadata[:6])
+        subject = subject or 'General'; sub_subject = sub_subject or 'General'; difficulty = difficulty or 'moderate'; topic_group = topic_group or 'General'; scored = scored.lower() not in ('no', 'false', '0', 'non-scored'); delivery_stage = delivery_stage or 'standard'
         
         row_result = {'row_number': row_number, 'success': True, 'error': None, 'question': None, 'prompt': prompt}
         try:
@@ -56,6 +63,10 @@ def parse_questions(workbook_bytes):
                 raise QuestionImportError('Discipline and question are required.')
             if kind not in ('mcq', 'essay', 'oral', 'practical'):
                 raise QuestionImportError('Question type must be mcq, essay, oral, or practical.')
+            if difficulty not in ('easy', 'moderate', 'difficult') or delivery_stage not in ('standard', 'oral_opening'):
+                raise QuestionImportError('Difficulty and delivery stage values are invalid.')
+            if delivery_stage == 'oral_opening' and (kind != 'oral' or scored):
+                raise QuestionImportError('Oral opening questions must be non-scored oral questions.')
             option_values = [value.strip() for value in options.replace(';', '\n').splitlines() if value.strip()]
             if kind == 'mcq':
                 if len(option_values) < 2 or len(set(option_values)) != len(option_values) or correct not in option_values:
@@ -68,7 +79,8 @@ def parse_questions(workbook_bytes):
                 'prompt': prompt,
                 'options': option_values,
                 'correct': correct,
-                'rubric': rubric,
+                'rubric': rubric, 'subject': subject, 'sub_subject': sub_subject,
+                'is_scored': scored, 'difficulty': difficulty, 'topic_group': topic_group, 'delivery_stage': delivery_stage,
             }
         except QuestionImportError as e:
             row_result['success'] = False
@@ -132,3 +144,6 @@ def export_questions_bytes(questions):
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()
+
+
+
