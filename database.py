@@ -768,9 +768,10 @@ def submissions(actor):
                    s.created_at::date AS exam_date,
                    s.essay_score AS essay_only_score, s.oral_practical_score
             FROM submissions s LEFT JOIN users u ON u.id=s.user_id
-            WHERE s.user_id=%s OR %s = 'Admin' OR (%s = 'Reviewer' AND u.project_assignment = ANY(%s))
+            WHERE s.user_id=%s OR %s = 'Admin'
+               OR (%s = 'Reviewer' AND (cardinality(%s::text[]) = 0 OR u.project_assignment = ANY(%s::text[])))
             ORDER BY s.id DESC
-        """, (actor, user['role'], user['role'], assigned_projects))]
+        """, (actor, user['role'], user['role'], assigned_projects, assigned_projects))]
 
 def delete_assessment(actor, submission_id):
     with connection() as c:
