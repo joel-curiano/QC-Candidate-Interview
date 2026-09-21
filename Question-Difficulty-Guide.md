@@ -13,8 +13,8 @@ This **Question Difficulty Guide** establishes a standardized, objective framewo
 1. **Internal Design Attribute**: Difficulty is an internal assessment-design attribute used by Admins and Reviewers to build balanced, stratified test sessions. Difficulty brackets are **never** displayed to candidates before, during, or after an assessment.
 2. **Fixed Scoring Structure**: Difficulty level **does not** alter point values or create unapproved score multipliers. Question types have assigned maximum points:
    - **Multiple Choice Question (MCQ)** = 1 point max
-   - **Essay Question** = 10 points max
-   - **Oral-Practical Question** = 10 points max
+   - **Essay Question** = 4 points max
+   - **Oral-Practical Question** = 4 points max
 3. **Objective Evaluation**: Difficulty is determined by cognitive complexity, required technical synthesis, and problem-solving steps—**not** by question text length, option length, or complex vocabulary alone.
 4. **Discipline Owner Validation**: Every question imported or added to the question bank must be assigned a difficulty bracket approved by a qualified discipline Subject Matter Expert (SME).
 
@@ -29,7 +29,7 @@ This **Question Difficulty Guide** establishes a standardized, objective framewo
 | **Number of Steps** | 1 step (direct retrieval or matching). | 2–3 logical steps (parameter lookup + application + verbal explanation or physical measurement). | Multi-step evaluation (root cause analysis, trade-off analysis, regulatory conflict resolution). |
 | **Code / Standard Reference** | Single explicit code clause or standard definition (e.g., ASME, API, AWS, NACE, NEC, ASTM). | Combining two clauses or interpreting tables/charts under standard conditions. | Cross-referencing multiple codes, specifications, project Quality Plans, and non-standard field conditions. |
 | **Question Types Supported** | MCQ, Essay, Oral-Practical | MCQ, Essay, Oral-Practical | MCQ, Essay, Oral-Practical |
-| **Point Allocation** | MCQ: 1 pt<br>Essay: 10 pts max<br>Oral-Practical: 10 pts max | MCQ: 1 pt<br>Essay: 10 pts max<br>Oral-Practical: 10 pts max | MCQ: 1 pt<br>Essay: 10 pts max<br>Oral-Practical: 10 pts max |
+| **Point Allocation** | MCQ: 1 pt<br>Essay: 4 pts max<br>Oral-Practical: 4 pts max | MCQ: 1 pt<br>Essay: 4 pts max<br>Oral-Practical: 4 pts max | MCQ: 1 pt<br>Essay: 4 pts max<br>Oral-Practical: 4 pts max |
 
 ---
 
@@ -37,26 +37,26 @@ This **Question Difficulty Guide** establishes a standardized, objective framewo
 
 ### 3.1 Easy (Direct Recall & Routine Single-Step Verification)
 - **Definition**: Questions testing basic technical literacy, standard terminology, essential variables, elementary safety rules, and direct pass/fail criteria.
-- **Essay Characteristics**: Brief listing of basic requirements, single-part responses, or direct identification of inspection tools/documents (scored out of 10 points max).
-- **Oral-Practical Characteristics**: Direct verbal responses on standard definitions/safety rules, single tool identification, or taking a single direct measurement on a reference block (scored out of 10 points max).
+- **Essay Characteristics**: Brief listing of basic requirements, single-part responses, or direct identification of inspection tools/documents (scored out of 4 points max).
+- **Oral-Practical Characteristics**: Direct verbal responses on standard definitions/safety rules, single tool identification, or taking a single direct measurement on a reference block (scored out of 4 points max).
 - **Target Assessment Ratio**: ~30% of standard assessment bank.
 
 ### 3.2 Moderate (Application & Multi-Step Field Scenarios)
 - **Definition**: Questions requiring candidates to apply codes, standards, and inspection procedures to typical field quality scenarios.
 - **Essay Characteristics**: 
   - Standard procedural essay prompts requiring candidates to describe a step-by-step field inspection workflow.
-  - Guided by a structured multi-part rubric (e.g. 4 key inspection stages rated up to 2.5 points each, totaling 10 points maximum).
+  - Guided by a structured multi-part rubric (e.g. 4 key inspection stages rated up to 1 point each, totaling 4 points maximum).
 - **Oral-Practical Characteristics**: 
-  - Combined verbal explanation and hands-on execution of a standard field inspection task (scored out of 10 points max).
+  - Combined verbal explanation and hands-on execution of a standard field inspection task (scored out of 4 points max).
   - Candidate verbally walks the reviewer through inspection steps while physically demonstrating tool selection, taking accurate measurements on a test coupon/specimen, evaluating results against code tables, and recording findings on an inspection sheet.
   - Evaluated on technical communication clarity, gauge handling precision, and correct code reference application.
 - **Target Assessment Ratio**: ~50% of standard assessment bank (Default level for legacy questions).
 
 ### 3.3 Difficult (Synthesis, Judgment & Non-Routine Troubleshooting)
 - **Definition**: Questions testing advanced technical judgment, root cause investigation, non-routine flaw disposition, or resolving conflicting technical requirements.
-- **Essay Characteristics**: Open-ended nonconformance investigation or failure mode analysis (scored out of 10 points max).
+- **Essay Characteristics**: Open-ended nonconformance investigation or failure mode analysis (scored out of 4 points max).
 - **Oral-Practical Characteristics**: 
-  - Complex live assessment combining hands-on multi-defect specimen evaluation, root cause identification, verbal defense of findings under reviewer cross-examination, and drafting a formal Nonconformance Report (NCR) with corrective action disposition (scored out of 10 points max).
+  - Complex live assessment combining hands-on multi-defect specimen evaluation, root cause identification, verbal defense of findings under reviewer cross-examination, and drafting a formal Nonconformance Report (NCR) with corrective action disposition (scored out of 4 points max).
 - **Target Assessment Ratio**: ~20% of standard assessment bank.
 
 ---
@@ -84,7 +84,7 @@ This **Question Difficulty Guide** establishes a standardized, objective framewo
 - **Classification Justification**: Requires looking up and applying ASME B31.3 visual acceptance criteria for a specific fluid service classification.
 
 #### Moderate (Essay)
-- **Type**: Essay (Max Points: 10)
+- **Type**: Essay (Max Points: 4)
 - **Prompt**: Describe the mandatory inspection steps a Welding QC Inspector must perform before, during, and after a production pipe weld on carbon steel piping. List the key verification records to be signed.
 - **Rubric**:
   - Award up to 2.5 points for Pre-weld checks: WPS/PQR availability, welder qualification (WQR), joint fit-up/bevel, cleanliness, tack weld quality, preheat.
@@ -94,7 +94,7 @@ This **Question Difficulty Guide** establishes a standardized, objective framewo
 - **Classification Justification**: Standard procedural application essay following a structured 4-part inspection workflow for routine welding operations.
 
 #### Moderate (Oral-Practical)
-- **Type**: Oral-Practical (Max Points: 10)
+- **Type**: Oral-Practical (Max Points: 4)
 - **Prompt**: Using the provided Bridge Cam gauge and welded pipe coupon, inspect the weld joint for root/face reinforcement height and undercut. Verbally explain how you verify on-site that the welder's qualification (WQR) covers this joint, log all measurements on the inspection report sheet, and state pass/fail against ASME B31.3.
 - **Rubric**:
   - Award up to 2.5 points for verbal explanation of WQR essential variable verification (P-No, F-No, thickness, position).
@@ -104,7 +104,7 @@ This **Question Difficulty Guide** establishes a standardized, objective framewo
 - **Classification Justification**: Combined oral-practical evaluation pairing verbal welder verification logic with hands-on gauge inspection.
 
 #### Difficult (Essay)
-- **Type**: Essay (Max Points: 10)
+- **Type**: Essay (Max Points: 4)
 - **Prompt**: Explain the primary causes of hydrogen-induced cracking (cold cracking) in carbon steel weldments. Detail three preventive measures, and outline how a QC Inspector must investigate and disposition a post-hydrotest delay crack detected on a thick-wall P-No. 5B alloy steel joint.
 - **Rubric**: 
   - Award up to 3 points for identifying 3 factors: diffusible hydrogen, susceptible microstructure (martensite), residual stress.
@@ -113,7 +113,7 @@ This **Question Difficulty Guide** establishes a standardized, objective framewo
 - **Classification Justification**: Synthesizes metallurgy, non-destructive testing, repair procedures, and root cause analysis in alloy steel welding.
 
 #### Difficult (Oral-Practical)
-- **Type**: Oral-Practical (Max Points: 10)
+- **Type**: Oral-Practical (Max Points: 4)
 - **Prompt**: Examine the provided cracked alloy steel weld specimen. Identify the defect type, perform excavation boundary measurements, verbally defend your root cause investigation and repair WPS requirements under reviewer questioning, and complete a formal Nonconformance Report (NCR).
 - **Rubric**:
   - Award up to 2.5 points for physical identification and measurement of defect boundaries.
@@ -145,12 +145,12 @@ This **Question Difficulty Guide** establishes a standardized, objective framewo
 - **Classification Justification**: Application of ASME Sec V table parameters based on flaw type and surface temperature.
 
 #### Moderate (Essay)
-- **Type**: Essay (Max Points: 10)
+- **Type**: Essay (Max Points: 4)
 - **Prompt**: Describe the step-by-step surface preparation, application, dwell time, cleaning, and developer steps required when performing solvent-removable visible dye penetrant testing (PT) on a stainless steel weldment.
 - **Classification Justification**: Standard procedural essay covering standard PT inspection protocol.
 
 #### Moderate (Oral-Practical)
-- **Type**: Oral-Practical (Max Points: 10)
+- **Type**: Oral-Practical (Max Points: 4)
 - **Prompt**: Perform a magnetic particle inspection (MT) on the provided weld plate using an AC yoke and dry magnetic powder. Verbally explain your yoke calibration check and light level requirements, measure identified indications, and log findings on the MT report.
 - **Rubric**:
   - Award up to 2.5 points for verbal explanation of yoke 10 lb lift test and white light intensity ($\ge 1000\,\text{lux}$).
@@ -182,7 +182,7 @@ This **Question Difficulty Guide** establishes a standardized, objective framewo
 - **Classification Justification**: Applied judgment evaluating field tolerance limits against piping code installation requirements.
 
 #### Moderate (Oral-Practical)
-- **Type**: Oral-Practical (Max Points: 10)
+- **Type**: Oral-Practical (Max Points: 4)
 - **Prompt**: Inspect the provided flange joint spool for gap alignment and face finish. Verbally explain how you verify hydrotest manifold pressure gauges and relief valve calibration, set up a calibrated torque wrench, apply the torque pattern, and complete the flange sign-off sheet.
 - **Rubric**:
   - Award up to 2.5 points for verbal explanation of hydrotest gauge calibration sticker verification and 2x test pressure range check.
@@ -196,7 +196,7 @@ This **Question Difficulty Guide** establishes a standardized, objective framewo
 ### 4.4 Civil QC
 
 #### Moderate (Oral-Practical)
-- **Type**: Oral-Practical (Max Points: 10)
+- **Type**: Oral-Practical (Max Points: 4)
 - **Prompt**: Using a rebar cover meter (profometer), measure concrete cover depth and rebar spacing on the provided concrete block. Verbally explain the concrete delivery receiving steps and slump rejection rules, and log findings against approved structural drawings.
 - **Rubric**:
   - Award up to 2.5 points for verbal explanation of concrete truck delivery checks (batch ticket, slump, air content, max drop height).
@@ -210,7 +210,7 @@ This **Question Difficulty Guide** establishes a standardized, objective framewo
 ### 4.5 Coating QC
 
 #### Moderate (Oral-Practical)
-- **Type**: Oral-Practical (Max Points: 10)
+- **Type**: Oral-Practical (Max Points: 4)
 - **Prompt**: Using a sling psychrometer and surface thermometer, determine ambient dew point and steel surface temperature. Then, use a magnetic Dry Film Thickness (DFT) gauge to perform an SSPC-PA2 DFT survey on the provided coated plate. Verbally explain if coating application can proceed and report DFT compliance.
 - **Rubric**:
   - Award up to 2.5 points for psychrometer operation, dew point calculation, and verifying steel temp $\ge \text{Dew Point} + 3^\circ\text{C}$.
@@ -224,7 +224,7 @@ This **Question Difficulty Guide** establishes a standardized, objective framewo
 ### 4.6 Electrical QC
 
 #### Moderate (Oral-Practical)
-- **Type**: Oral-Practical (Max Points: 10)
+- **Type**: Oral-Practical (Max Points: 4)
 - **Prompt**: Inspect the provided 480V motor control panel cable termination. Perform a Megger insulation resistance test on the phase conductors, verbally explain single-line diagram verification and cable glanding rules, and log test results.
 - **Rubric**:
   - Award up to 2.5 points for verbal explanation of single line diagram review, cable tray fill, and glanding requirements.
@@ -238,7 +238,7 @@ This **Question Difficulty Guide** establishes a standardized, objective framewo
 ### 4.7 Instrumentation QC
 
 #### Moderate (Oral-Practical)
-- **Type**: Oral-Practical (Max Points: 10)
+- **Type**: Oral-Practical (Max Points: 4)
 - **Prompt**: Perform a 5-point calibration check (0%, 25%, 50%, 75%, 100%) on the provided 4–20 mA pressure transmitter using a precision multimeter and pressure hand pump. Verbally explain HART communication setup and failed calibration escalation, and log output readings.
 - **Rubric**:
   - Award up to 2.5 points for verbal explanation of HART communicator configuration, master gauge calibration certificate check, and NCR handling.
@@ -279,16 +279,16 @@ flowchart TD
 - **Difficult**: Multi-variable scenario stem; distractor options reflect subtle real-world trade-offs or closely related code exceptions.
 
 ### 5.2 Essay Questions
-- **Scoring**: 10 points max.
-- **Easy**: Single-part recall or brief written definition (scored out of 10 points max).
-- **Moderate**: Describing a complete, routine inspection workflow (before, during, and after inspection), detailing acceptance criteria lookup, recording inspection evidence, and explaining standard nonconformance escalation steps (guided by a structured 4-part rubric valued up to 2.5 points each, totaling 10 points max).
-- **Difficult**: Non-routine defect troubleshooting, root cause analysis, resolving conflicting specification requirements, or developing an emergency quality mitigation plan (scored out of 10 points max).
+- **Scoring**: 4 points max.
+- **Easy**: Single-part recall or brief written definition (scored out of 4 points max).
+- **Moderate**: Describing a complete, routine inspection workflow (before, during, and after inspection), detailing acceptance criteria lookup, recording inspection evidence, and explaining standard nonconformance escalation steps (guided by a structured 4-part rubric valued up to 1 point each, totaling 4 points max).
+- **Difficult**: Non-routine defect troubleshooting, root cause analysis, resolving conflicting specification requirements, or developing an emergency quality mitigation plan (scored out of 4 points max).
 
 ### 5.3 Oral-Practical Questions
-- **Scoring**: 10 points max.
-- **Easy**: Combined basic verbal questions (definitions, document titles, safety rules) or taking a single direct measurement on a reference block with a basic tool (10 pts max).
-- **Moderate**: Combined verbal interview and physical specimen inspection. Candidate walks the reviewer through routine inspection logic while physically demonstrating tool selection, taking accurate measurements on a test coupon/specimen, evaluating findings against code tables, and recording results on an inspection sheet (10 pts max).
-- **Difficult**: High-complexity combined assessment. Candidate performs hands-on multi-defect specimen evaluation, identifies root cause factors, verbally defends technical recommendations under reviewer cross-examination, and drafts a formal Nonconformance Report (NCR) (10 pts max).
+- **Scoring**: 4 points max.
+- **Easy**: Combined basic verbal questions (definitions, document titles, safety rules) or taking a single direct measurement on a reference block with a basic tool (4 pts max).
+- **Moderate**: Combined verbal interview and physical specimen inspection. Candidate walks the reviewer through routine inspection logic while physically demonstrating tool selection, taking accurate measurements on a test coupon/specimen, evaluating findings against code tables, and recording results on an inspection sheet (4 pts max).
+- **Difficult**: High-complexity combined assessment. Candidate performs hands-on multi-defect specimen evaluation, identifies root cause factors, verbally defends technical recommendations under reviewer cross-examination, and drafts a formal Nonconformance Report (NCR) (4 pts max).
 
 ---
 
