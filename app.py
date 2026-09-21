@@ -374,8 +374,9 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
     password_key = f'{key}_password'
     confirm_key = f'{key}_confirm_password'
     generated_key = f'{key}_generated_password'
-    name_key = f'{key}_full_name'
-    username_key = f'{key}_username'
+    field_reset = st.session_state.get(f'{key}_reset', 0)
+    name_key = f'{key}_full_name_{field_reset}'
+    username_key = f'{key}_username_{field_reset}'
     username_taken_key = f'{key}_username_taken'
 
     def suggest_username():
@@ -462,8 +463,6 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
                     clear_read_caches()
                     if is_candidate:
                         st.session_state[f'{key}_saved_message'] = 'Candidate account saved successfully.'
-                        st.session_state[name_key] = ''
-                        st.session_state[username_key] = ''
                         st.session_state.pop(username_taken_key, None)
                         st.session_state[f'{key}_reset'] = st.session_state.get(f'{key}_reset', 0) + 1
                         st.rerun()
