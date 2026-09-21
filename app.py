@@ -1657,7 +1657,7 @@ else:
                         question_section.__exit__(None, None, None)
                     question_section_type = q['q_type']
                     section_title = QUESTION_TYPE_SECTION_LABELS.get(q['q_type'], 'Questions')
-                    question_section = st.expander(section_title, expanded=sub['status'] != 'Graded')
+                    question_section = st.expander(section_title, expanded=False)
                     question_section.__enter__()
                 question_type = {
                     'mcq': 'Multiple Choice Question', 'essay': 'Essay', 'oral_practical': 'Oral-Practical',
