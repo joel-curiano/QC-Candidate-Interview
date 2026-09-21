@@ -594,6 +594,13 @@ def candidate_result_pdf(sub):
     return output.getvalue()
 
 if hasattr(st, 'dialog'):
+    @st.dialog('Assessment Ready')
+    def candidate_start_dialog():
+        st.write('Your assessment is ready. Click the button below to review your details and start the test.')
+        if st.button('Click to Start Assessment Test', type='primary'):
+            st.session_state.candidate_start_prompt_seen = True
+            st.rerun()
+
     @st.dialog('Email delivery status')
     def send_test_email_dialog(recipient, name):
         status = st.status('Sending test email…', expanded=True)
@@ -738,6 +745,8 @@ if 'user' not in st.session_state:
                         st.session_state.clear()
                         st.session_state.user = user
                         st.session_state.login_token = login_token
+                        if user['role'] == 'Candidate':
+                            st.session_state.show_candidate_start_dialog = True
                         st.rerun()
                     else:
                         st.session_state.retry_after = time.time() + 3
@@ -766,6 +775,11 @@ if db.maintenance_mode() and user['role'] != 'Admin':
     st.session_state.clear()
     st.warning('The portal is temporarily unavailable while maintenance is in progress. Please try again later.')
     st.stop()
+if user['role'] == 'Candidate' and st.session_state.pop('show_candidate_start_dialog', False):
+    if hasattr(st, 'dialog'):
+        candidate_start_dialog()
+    else:
+        st.info('Your assessment is ready. Review your details below, then start the test.')
 st.sidebar.write(f"**{user['name']}**")
 st.sidebar.caption(user['role'])
 if user['role'] == 'Candidate':
@@ -805,7 +819,11 @@ if user['role'] == 'Candidate':
             )
             with st.form('candidate_details_form'):
                 st.text_input('Discipline', value=discipline, disabled=True, key='candidate_discipline_display')
-                designation = st.text_input('Job Title (Inspector, Supervisor, Technician...)', key='candidate_job_title')
+                designation = st.selectbox(
+                    'Job Title',
+                    ['Inspector', 'Supervisor', 'Technician'],
+                    key='candidate_job_title',
+                )
                 if st.form_submit_button('Start Multiple Choice Questions', type='primary'):
                     if not str(designation).strip():
                         st.error('Complete all candidate details before starting the assessment.')
@@ -852,33 +870,59 @@ if user['role'] == 'Candidate':
             is_mcq_expired = time.time() > mcq_deadline
             if is_mcq_expired:
                 st.warning('The 40-minute Multiple Choice time limit has expired. Selected answers will be saved as you continue.')
-            with st.form('multiple_choice_questions'):
-                page_responses = {}
-                for number, question in enumerate(mcq_questions, 1):
-                    page_responses[question['id']] = st.radio(
-                        f"{number}. {question['question_text']}", st.session_state.assessment_mcq_options[question['id']], index=None,
-                        key=f"answer_{question['id']}", disabled=is_mcq_expired)
-                st.info('You have six minutes for each Essay question. The countdown begins when you press the Continue to Essay Questions button.')
-                submit_label = 'Time expired: Proceed to Essay Questions' if is_mcq_expired else 'Continue to Essay Questions'
-                if st.form_submit_button(submit_label, type='primary'):
-                    if is_mcq_expired:
-                        for q in mcq_questions:
-                            ans = page_responses.get(q['id'])
-                            responses[q['id']] = ans if isinstance(ans, str) and ans.strip() else '[Unanswered - time expired]'
-                        st.session_state.assessment_phase = 'essay'
-                        st.rerun()
-                    elif any(not isinstance(answer, str) or not answer.strip() for answer in page_responses.values()):
-                        st.error('Answer every Multiple Choice Question before continuing.')
-                    else:
-                        responses.update(page_responses)
-                        st.session_state.assessment_phase = 'essay'
-                        st.rerun()
+            pending_unanswered = st.session_state.get('assessment_mcq_pending_unanswered', 0)
+            if pending_unanswered:
+                st.warning(
+                    f'You have {pending_unanswered} unanswered Multiple Choice question(s). '
+                    'Return to the questions to complete them, or proceed with those answers scored as zero.'
+                )
+                return_col, proceed_col = st.columns(2)
+                if return_col.button('Return to unanswered questions', type='primary'):
+                    st.session_state.pop('assessment_mcq_pending_unanswered', None)
+                    st.rerun()
+                if proceed_col.button('Proceed with unanswered questions'):
+                    for question in mcq_questions:
+                        answer = st.session_state.get(f"answer_{question['id']}")
+                        responses[question['id']] = answer if isinstance(answer, str) and answer.strip() else '[Unanswered]'
+                    st.session_state.assessment_mcq_unanswered_count = pending_unanswered
+                    st.session_state.pop('assessment_mcq_pending_unanswered', None)
+                    st.session_state.assessment_phase = 'essay'
+                    st.rerun()
+            else:
+                with st.form('multiple_choice_questions'):
+                    page_responses = {}
+                    for number, question in enumerate(mcq_questions, 1):
+                        page_responses[question['id']] = st.radio(
+                            f"{number}. {question['question_text']}", st.session_state.assessment_mcq_options[question['id']], index=None,
+                            key=f"answer_{question['id']}", disabled=is_mcq_expired)
+                    st.info('You have six minutes for each Essay question. The countdown begins when you press the Continue to Essay Questions button.')
+                    submit_label = 'Time expired: Proceed to Essay Questions' if is_mcq_expired else 'Continue to Essay Questions'
+                    if st.form_submit_button(submit_label, type='primary'):
+                        unanswered_count = sum(
+                            not isinstance(answer, str) or not answer.strip()
+                            for answer in page_responses.values()
+                        )
+                        if unanswered_count and not is_mcq_expired:
+                            st.session_state.assessment_mcq_pending_unanswered = unanswered_count
+                            st.rerun()
+                        else:
+                            for question in mcq_questions:
+                                answer = page_responses.get(question['id'])
+                                responses[question['id']] = (
+                                    answer if isinstance(answer, str) and answer.strip()
+                                    else '[Unanswered - time expired]'
+                                )
+                            st.session_state.assessment_mcq_unanswered_count = unanswered_count
+                            st.session_state.assessment_phase = 'essay'
+                            st.rerun()
             section.__exit__(None, None, None)
         else:
             section = st.expander('Essay Questions', expanded=True)
             section.__enter__()
             st.subheader('Essay Questions')
             st.info('Each Essay question has six minutes. Oral-Practical questions are completed and graded by a Reviewer.')
+            if unanswered_count := st.session_state.pop('assessment_mcq_unanswered_count', 0):
+                st.warning(f'{unanswered_count} Multiple Choice question(s) were left unanswered and will receive no score.')
             essay_index = st.session_state.setdefault('assessment_essay_index', 0)
             if essay_index >= len(essay_questions):
                 st.success('All Essay questions are complete. Submit the assessment when ready.')
@@ -1033,6 +1077,7 @@ else:
     elif page == 'Candidate Schedules':
         st.subheader('Candidate Schedules')
         saved_schedule = st.session_state.pop('candidate_schedule_saved', None)
+        sent_schedule = st.session_state.pop('candidate_schedule_sent', None)
         candidates = cached_candidate_accounts(user['id'])
         
         # Keep the filter controls to two per row so labels remain readable
@@ -1131,7 +1176,10 @@ else:
                             )
                             db.mark_invitation_sent(user['id'], candidate['id'])
                             clear_read_caches()
-                            st.success('Schedule and login credentials sent. The temporary password is now active.')
+                            st.session_state.candidate_schedule_sent = {
+                                'candidate_name': candidate['name'],
+                                'email': candidate['email'],
+                            }
                             st.session_state.pop('candidate_schedule_saved_id', None)
                             st.rerun()
                         except (EmailDeliveryError, OSError, ValueError) as exc:
@@ -1142,6 +1190,11 @@ else:
                 f"Schedule saved for {saved_schedule['candidate_name']}: "
                 f"{saved_schedule['test_date']} | {saved_schedule['discipline']} | "
                 f"Project: {saved_schedule['project_assignment']}"
+            )
+        if sent_schedule:
+            st.success(
+                f"Schedule and login credentials sent to {sent_schedule['candidate_name']} "
+                f"at {sent_schedule['email']}."
             )
     elif page == 'Projects':
         st.subheader('Projects')

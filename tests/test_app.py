@@ -46,8 +46,7 @@ def test_candidate_and_reviewer_flow(postgres_db):
     at.text_input[1].input(PASSWORD)
     next(b for b in at.button if b.label == 'Sign in').click().run()
     assert not at.exception
-    for field, value in {'Designation': 'Inspector'}.items():
-        next(widget for widget in at.text_input if widget.label == field).input(value)
+    next(widget for widget in at.selectbox if widget.label == 'Job Title').set_value('Inspector')
     next(b for b in at.button if b.label == 'Start Multiple Choice Questions').click().run()
     for radio in at.radio:
         if radio.label != 'Navigation':
