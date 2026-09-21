@@ -765,7 +765,7 @@ if now - last_refresh > 60:
     refreshed_user = db.refresh_login(user['id'], login_token)
     if not refreshed_user:
         st.session_state.clear()
-        st.session_state.timeout_message = 'You were signed out after 15 minutes of inactivity. Please sign in again.'
+        st.session_state.timeout_message = 'You were signed out after 30 minutes of inactivity. Please sign in again.'
         st.rerun()
     user = refreshed_user
     st.session_state.user = user
