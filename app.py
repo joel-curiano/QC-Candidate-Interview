@@ -249,7 +249,7 @@ def countdown_timer(label, deadline, key):
 
 
 @st.cache_resource(show_spinner=False)
-def initialize_database():
+def initialize_database(schema_version):
     db.init_db()
     db.invalidate_all_logins()
     return True
@@ -337,13 +337,63 @@ def question_options(question):
     return [str(option) for option in raw_options]
 
 
+DIFFICULTY_RATIOS = {'easy': 0.30, 'moderate': 0.50, 'difficult': 0.20}
+DIFFICULTY_TIE_ORDER = {'moderate': 0, 'easy': 1, 'difficult': 2}
+
+
+def difficulty_targets(question_count):
+    """Allocate a question count as closely as possible to the required difficulty mix."""
+    exact_targets = {
+        difficulty: question_count * ratio
+        for difficulty, ratio in DIFFICULTY_RATIOS.items()
+    }
+    targets = {difficulty: int(count) for difficulty, count in exact_targets.items()}
+    remaining = question_count - sum(targets.values())
+    ranked_difficulties = sorted(
+        DIFFICULTY_RATIOS,
+        key=lambda difficulty: (
+            -(exact_targets[difficulty] - targets[difficulty]),
+            DIFFICULTY_TIE_ORDER[difficulty],
+        ),
+    )
+    for difficulty in ranked_difficulties[:remaining]:
+        targets[difficulty] += 1
+    return targets
+
+
+def select_by_difficulty(pool, question_count, kind, rng):
+    """Select questions using the 30% easy, 50% moderate, 20% difficult mix."""
+    targets = difficulty_targets(question_count)
+    difficulty_pools = {
+        difficulty: [
+            question for question in pool
+            if question.get('difficulty', 'moderate') == difficulty
+        ]
+        for difficulty in DIFFICULTY_RATIOS
+    }
+    shortages = [
+        f'{targets[difficulty]} {difficulty} (only {len(difficulty_pools[difficulty])} available)'
+        for difficulty in DIFFICULTY_RATIOS
+        if len(difficulty_pools[difficulty]) < targets[difficulty]
+    ]
+    if shortages:
+        raise ValueError(
+            f"This discipline needs {', '.join(shortages)} {QUESTION_TYPE_LABELS[kind]} questions "
+            'to follow the 30% easy, 50% moderate, 20% difficult mix.'
+        )
+    selected = [
+        question
+        for difficulty in DIFFICULTY_RATIOS
+        for question in rng.sample(difficulty_pools[difficulty], targets[difficulty])
+    ]
+    rng.shuffle(selected)
+    return selected
+
+
 def select_assessment_questions(bank, settings, rng):
-    """Select reviewer-scored questions from the subject-topic coverage of selected MCQs."""
+    """Select questions with the required difficulty mix and MCQ subject-topic alignment."""
     pools = {kind: [question for question in bank if question['q_type'] == kind] for kind in QUESTION_TYPES}
-    missing = [kind for kind in QUESTION_TYPES if len(pools[kind]) < settings[kind]]
-    if missing:
-        raise ValueError('This discipline does not have enough questions for the assessment settings.')
-    selected = {'mcq': rng.sample(pools['mcq'], settings['mcq'])}
+    selected = {'mcq': select_by_difficulty(pools['mcq'], settings['mcq'], 'mcq', rng)}
     selected_subject_topics = {
         (question.get('subject', 'General'), question.get('topic_group', 'General'))
         for question in selected['mcq']
@@ -353,18 +403,13 @@ def select_assessment_questions(bank, settings, rng):
             question for question in pools[kind]
             if (question.get('subject', 'General'), question.get('topic_group', 'General')) in selected_subject_topics
         ]
-        if len(aligned_pool) < settings[kind]:
-            raise ValueError(
-                f"The selected Multiple Choice subjects and topics need at least {settings[kind]} aligned "
-                f"{QUESTION_TYPE_LABELS[kind]} questions."
-            )
-        selected[kind] = rng.sample(aligned_pool, settings[kind])
+        selected[kind] = select_by_difficulty(aligned_pool, settings[kind], kind, rng)
     return selected
 
 
 try:
     with st.spinner('Loading Competency Technical Assessment (CTA) Portal...'):
-        initialize_database()
+        initialize_database(2)
 except db.DatabaseError as exc:
     st.error(str(exc))
     st.stop()
@@ -682,6 +727,9 @@ if 'user' not in st.session_state:
                 else:
                     user = db.authenticate(username, password)
                     if user:
+                        if db.maintenance_mode() and user['role'] != 'Admin':
+                            st.warning('The portal is temporarily unavailable while maintenance is in progress. Please try again later.')
+                            st.stop()
                         login_token = secrets.token_urlsafe(32)
                         if not db.claim_login(user['id'], login_token):
                             st.error('This account is already logged in on another session.')
@@ -713,6 +761,11 @@ if now - last_refresh > 60:
     user = refreshed_user
     st.session_state.user = user
     st.session_state.last_login_refresh = now
+if db.maintenance_mode() and user['role'] != 'Admin':
+    db.release_login(user['id'], login_token)
+    st.session_state.clear()
+    st.warning('The portal is temporarily unavailable while maintenance is in progress. Please try again later.')
+    st.stop()
 st.sidebar.write(f"**{user['name']}**")
 st.sidebar.caption(user['role'])
 if user['role'] == 'Candidate':
@@ -876,7 +929,7 @@ else:
     pages = ['Create Candidate Account', 'Candidate Schedules']
     pages += ['Assessment Settings', 'Review Assessments']
     if user['role'] == 'Admin':
-        pages += ['Projects', 'Accounts']
+        pages += ['Projects', 'Accounts', 'Maintenance']
     pages += ['Question Bank']
     page = st.sidebar.radio('Navigation', pages)
     if user['role'] in ('Admin', 'Reviewer'):
@@ -910,7 +963,17 @@ else:
         db.release_login(user['id'], login_token)
         st.session_state.clear()
         st.rerun()
-    if page == 'Assessment Settings':
+    if page == 'Maintenance':
+        st.subheader('Maintenance Mode')
+        maintenance_enabled = db.maintenance_mode()
+        st.warning('When enabled, Candidates and Reviewers cannot sign in or use the portal. Administrators remain able to access this page and turn maintenance mode off.')
+        with st.form('maintenance_mode'):
+            enable_maintenance = st.checkbox('Make the portal unavailable to Candidates and Reviewers', value=maintenance_enabled)
+            if st.form_submit_button('Save Maintenance Mode', type='primary'):
+                db.set_maintenance_mode(user['id'], enable_maintenance)
+                st.success('Maintenance mode enabled.' if enable_maintenance else 'Maintenance mode disabled.')
+                st.rerun()
+    elif page == 'Assessment Settings':
         st.subheader('Assessment Settings')
         st.caption('Set question counts and the maximum points awarded per question type. Changes apply to new assessments.')
         current = cached_assessment_settings(user['id'])
@@ -1226,7 +1289,7 @@ else:
         if st.session_state.pop('question_bank_wiped', False):
             st.success('Question Bank wiped. Unanswered questions were removed and answered questions were archived.')
         
-        if user['role'] == 'Admin':
+        def render_question_bank_wipe():
             with st.expander('Wipe Question Bank'):
                 st.warning('This will delete all questions. Questions that have already been answered by candidates will be deactivated instead of deleted to preserve assessment records.')
                 if st.button('Wipe Question Bank', type='primary'):
@@ -1286,9 +1349,23 @@ else:
             use_container_width=True,
             disabled=not active_questions,
         )
-        with st.expander('Import questions from Excel'):
-            upload = st.file_uploader('Excel workbook', type=['xlsx'], help='Use the downloaded template. Existing questions are not changed.')
-            if upload is not None and st.button('Import questions', type='primary'):
+        def keep_question_import_open():
+            st.session_state.question_import_expanded = True
+
+        with st.expander(
+            'Import questions from Excel',
+            expanded=st.session_state.get('question_import_expanded', False),
+        ):
+            st.caption('Step 1 of 2: Select the completed Excel template. Step 2 of 2: Import the selected questions.')
+            upload = st.file_uploader(
+                '1. Select Excel file',
+                type=['xlsx'],
+                key='question_import_workbook',
+                help='Use the downloaded template. Existing questions are not changed.',
+                on_change=keep_question_import_open,
+            )
+            import_requested = st.button('2. Import Questions', type='primary', disabled=upload is None)
+            if upload is not None and import_requested:
                 if hasattr(st, 'dialog'):
                     import_dialog(upload.getvalue(), user['id'])
                 else:
@@ -1452,6 +1529,9 @@ else:
                                 st.rerun()
                             except ValueError as exc:
                                 st.error(str(exc))
+        if user['role'] == 'Admin':
+            st.divider()
+            render_question_bank_wipe()
     else:
         st.subheader('Assessment review')
         rows = cached_submissions(user['id'])

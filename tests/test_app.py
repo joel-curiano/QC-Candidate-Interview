@@ -22,12 +22,24 @@ def test_candidate_and_reviewer_flow(postgres_db):
     db.create_user('admin', 'Admin', PASSWORD, bootstrap=True)
     admin = db.authenticate('admin', PASSWORD)
     db.create_user('candidate', 'Candidate', PASSWORD, actor=admin['id'], email='candidate@example.com', test_date=date.today(), discipline='Welding QC', iqama_no='1234567890', employee_no='EMP-1')
-    for index in range(39):
-        db.add_question(admin['id'], 'Welding QC', 'mcq', f'Additional choice {index}', ['A', 'B'], 'A', '')
-    for index in range(4):
-        db.add_question(admin['id'], 'Welding QC', 'essay', f'Additional essay {index}', [], '', 'Award for evidence.')
-    for index in range(6):
-        db.add_question(admin['id'], 'Welding QC', 'oral_practical', f'Additional oral-practical {index}', [], '', 'Award for evidence.')
+    mcq_difficulties = ['easy'] * 6 + ['moderate'] * 10 + ['difficult'] * 4
+    for index, difficulty in enumerate(mcq_difficulties):
+        db.add_question(
+            admin['id'], 'Welding QC', 'mcq', f'Additional choice {index}', ['A', 'B'], 'A', '',
+            difficulty=difficulty,
+        )
+    essay_difficulties = ['easy'] + ['moderate'] * 3 + ['difficult']
+    for index, difficulty in enumerate(essay_difficulties):
+        db.add_question(
+            admin['id'], 'Welding QC', 'essay', f'Additional essay {index}', [], '', 'Award for evidence.',
+            difficulty=difficulty,
+        )
+    oral_practical_difficulties = ['easy'] * 2 + ['moderate'] * 3 + ['difficult']
+    for index, difficulty in enumerate(oral_practical_difficulties):
+        db.add_question(
+            admin['id'], 'Welding QC', 'oral_practical', f'Additional oral-practical {index}', [], '',
+            'Award for evidence.', difficulty=difficulty,
+        )
     candidate = db.authenticate('candidate', PASSWORD)
     at = AppTest.from_file(APP, default_timeout=15).run()
     at.text_input[0].input('candidate')

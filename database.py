@@ -146,6 +146,12 @@ def init_db():
     with connection() as c:
         c.execute(sql.SQL('SELECT pg_advisory_xact_lock({})').format(sql.Literal(DB_ADVISORY_LOCK_ID)))
         c.execute('CREATE TABLE IF NOT EXISTS schema_info (key TEXT PRIMARY KEY, value TEXT)')
+        c.execute("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        c.execute("INSERT INTO app_settings (key, value) VALUES ('maintenance_mode', 'false') ON CONFLICT (key) DO NOTHING")
+        # These columns are required for sign-in. Keep them outside the one-time
+        # question-bank migration so existing deployments receive the update.
+        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_token TEXT")
+        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_at TIMESTAMPTZ")
         initialized = c.execute("SELECT value FROM schema_info WHERE key='question_template_v1'").fetchone()
         
         if not initialized:
@@ -194,8 +200,6 @@ def init_db():
             c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS previous_schedules JSONB NOT NULL DEFAULT '[]'::jsonb")
             c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS project_assignment TEXT NOT NULL DEFAULT ''")
             c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS scheduled_discipline TEXT NOT NULL DEFAULT ''")
-            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_token TEXT")
-            c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_at TIMESTAMPTZ")
             c.execute("CREATE INDEX IF NOT EXISTS answers_question_idx ON answers(question_id)")
             c.execute("CREATE INDEX IF NOT EXISTS answers_submission_idx ON answers(submission_id)")
             c.execute("CREATE INDEX IF NOT EXISTS submissions_status_idx ON submissions(status)")
@@ -287,6 +291,22 @@ def release_login(user_id, token):
 def username_exists(username):
     with connection() as c:
         return c.execute('SELECT 1 FROM users WHERE username=%s LIMIT 1', (username.strip().lower(),)).fetchone() is not None
+
+
+def maintenance_mode():
+    with connection() as c:
+        row = c.execute("SELECT value FROM app_settings WHERE key='maintenance_mode'").fetchone()
+        return bool(row and row['value'].lower() == 'true')
+
+
+def set_maintenance_mode(actor, enabled):
+    with connection() as c:
+        require(c, actor, ('Admin',))
+        c.execute(
+            "INSERT INTO app_settings (key, value) VALUES ('maintenance_mode', %s) "
+            "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
+            ('true' if enabled else 'false',),
+        )
 
 
 def create_user(username, name, password, role='Candidate', actor=None, bootstrap=False, email='', test_date=None, discipline='', iqama_no='', employee_no='', mobile_no=''):
