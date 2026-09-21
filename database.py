@@ -284,6 +284,11 @@ def release_login(user_id, token):
     with connection() as c:
         c.execute("UPDATE users SET active_login_token=NULL, active_login_at=NULL WHERE id=%s AND active_login_token=%s", (user_id, token))
 
+def username_exists(username):
+    with connection() as c:
+        return c.execute('SELECT 1 FROM users WHERE username=%s LIMIT 1', (username.strip().lower(),)).fetchone() is not None
+
+
 def create_user(username, name, password, role='Candidate', actor=None, bootstrap=False, email='', test_date=None, discipline='', iqama_no='', employee_no='', mobile_no=''):
     username, name = username.strip().lower(), name.strip()
     if not username or not name or len(password) < 6:

@@ -4,6 +4,7 @@ import base64
 import io
 import json
 import logging
+import re
 import secrets
 import time
 from datetime import date
@@ -320,7 +321,7 @@ def filter_upcoming_candidates(candidates, name='All', discipline='All', iqama_n
         if (name == 'All' or normalized(candidate.get('name')) == name_filter)
         and (
             discipline == 'All'
-            or normalized(candidate.get('scheduled_discipline') or candidate.get('discipline')) == discipline_filter
+            or normalized(candidate.get('scheduled_discipline')) == discipline_filter
         )
         and (iqama_no == 'All' or normalized(candidate.get('iqama_no')) == iqama_filter)
     ]
@@ -373,6 +374,27 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
     password_key = f'{key}_password'
     confirm_key = f'{key}_confirm_password'
     generated_key = f'{key}_generated_password'
+    name_key = f'{key}_full_name'
+    username_key = f'{key}_username'
+    username_taken_key = f'{key}_username_taken'
+
+    def suggest_username():
+        full_name = st.session_state.get(name_key, '')
+        base_username = re.sub(r'[^a-z0-9]+', '.', full_name.lower()).strip('.')
+        if not base_username:
+            return
+        suggestion = base_username
+        if db.username_exists(suggestion):
+            while True:
+                suggestion = f'{base_username}{secrets.randbelow(1000):03d}'
+                if not db.username_exists(suggestion):
+                    break
+        st.session_state[username_key] = suggestion
+        st.session_state[username_taken_key] = False
+
+    def check_username_availability():
+        username = st.session_state.get(username_key, '').strip()
+        st.session_state[username_taken_key] = bool(username) and db.username_exists(username)
 
     def generate_account_password():
         generated = db.generate_password()
@@ -382,8 +404,10 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
 
     form_key = f'{key}_{st.session_state.get(f"{key}_reset", 0)}'
     with st.form(form_key):
-        name = st.text_input('Full name *')
-        username = st.text_input('Username *')
+        name = st.text_input('Full name *', key=name_key, on_change=suggest_username)
+        username = st.text_input('Username *', key=username_key, on_change=check_username_availability)
+        if st.session_state.get(username_taken_key):
+            st.warning('This username is already taken. Please choose another username.')
         
         is_candidate = allowed_roles == ['Candidate']
         account_email = st.text_input('Email *') if is_candidate or actor is not None or bootstrap else ''
@@ -412,6 +436,8 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
                     raise ValueError('Passwords do not match.')
                 if is_candidate and not all(value.strip() for value in (name, username, account_email, iqama_no)):
                     raise ValueError('Name, username, email, and Iqama No are required for Candidate accounts.')
+                if db.username_exists(username):
+                    raise ValueError('This username is already taken. Please choose another username.')
                 if role == 'Reviewer' and not account_email.strip():
                     raise ValueError('Reviewer email is required so login credentials can be sent.')
                 
@@ -839,7 +865,7 @@ if user['role'] == 'Candidate':
                         st.rerun()
             section.__exit__(None, None, None)
 else:
-    pages = ['Create Candidate Account', 'Create Candidate Schedules', 'Upcoming Candidate Schedules']
+    pages = ['Create Candidate Account', 'Candidate Schedules']
     pages += ['Assessment Settings', 'Review Assessments']
     if user['role'] == 'Admin':
         pages += ['Projects', 'Accounts']
@@ -933,8 +959,8 @@ else:
     elif page == 'Create Candidate Account':
         st.subheader('Create a candidate account')
         account_form('candidate_account', actor=user['id'], allowed_roles=['Candidate'])
-    elif page == 'Create Candidate Schedules':
-        st.subheader('Create Candidate Schedules')
+    elif page == 'Candidate Schedules':
+        st.subheader('Candidate Schedules')
         if saved_schedule := st.session_state.pop('candidate_schedule_saved', None):
             st.success(
                 f"Schedule saved for {saved_schedule['candidate_name']}: "
@@ -948,7 +974,7 @@ else:
         row1_col1, row1_col2 = st.columns(2)
         row2_col1, row2_col2 = st.columns(2)
         with row1_col1: search_name = st.selectbox('Filter by Name', ['All'] + sorted({c['name'] for c in candidates}), key='schedule_filter_name')
-        with row1_col2: search_discipline = st.selectbox('Filter by Discipline', ['All'] + sorted({c.get('scheduled_discipline') or c.get('discipline', '') for c in candidates if c.get('scheduled_discipline') or c.get('discipline')}), key='schedule_filter_discipline')
+        with row1_col2: search_discipline = st.selectbox('Filter by Scheduled Discipline', ['All'] + sorted({c['scheduled_discipline'] for c in candidates if c.get('scheduled_discipline')}), key='schedule_filter_discipline')
         with row2_col1: search_iqama = st.selectbox('Filter by Iqama', ['All'] + sorted({c['iqama_no'] for c in candidates if c.get('iqama_no')}), key='schedule_filter_iqama')
         with row2_col2: search_completion = st.selectbox('Assessment Completion Status', ['All', 'Complete', 'Incomplete'], key='schedule_filter_completion')
         
@@ -956,7 +982,7 @@ else:
         if search_name != 'All':
             filtered = [c for c in filtered if c['name'] == search_name]
         if search_discipline != 'All':
-            filtered = [c for c in filtered if (c.get('scheduled_discipline') or c.get('discipline', '')) == search_discipline]
+            filtered = [c for c in filtered if c.get('scheduled_discipline') == search_discipline]
         if search_iqama != 'All':
             filtered = [c for c in filtered if c['iqama_no'] == search_iqama]
         if search_completion != 'All':
@@ -965,7 +991,7 @@ else:
         if not filtered:
             st.info('No candidates found matching the filters.')
         else:
-            options = {c['id']: f"{c['name']} - {c['discipline']} - {c['iqama_no']} - {c.get('assessment_completion_status', 'Incomplete')}" for c in filtered}
+            options = {c['id']: f"{c['name']} - {c.get('scheduled_discipline', '')} - {c['iqama_no']} - {c.get('assessment_completion_status', 'Incomplete')}" for c in filtered}
             selected_id = st.selectbox('Select Candidate', options=list(options.keys()), format_func=lambda x: options[x])
             
             if selected_id:
@@ -998,7 +1024,13 @@ else:
                         index=project_options.index(current_project) if current_project in project_options else 0,
                         help='Use Unassigned for new applicants taking the CTA before a project is assigned.',
                     )
-                    if st.form_submit_button('Save Schedule', type='primary'):
+                    save_col, send_col = st.columns(2)
+                    with save_col:
+                        save_schedule = st.form_submit_button('Save Schedule', type='primary')
+                    saved_for_candidate = st.session_state.get('candidate_schedule_saved_id') == candidate['id']
+                    with send_col:
+                        send_schedule = st.form_submit_button('Send Schedule', disabled=not saved_for_candidate)
+                    if save_schedule:
                         try:
                             if not schedule_date:
                                 raise ValueError('Candidate test date is required.')
@@ -1016,24 +1048,44 @@ else:
                                 'discipline': scheduled_discipline,
                                 'project_assignment': project_assignment,
                             }
+                            st.session_state.candidate_schedule_saved_id = candidate['id']
                             st.rerun()
                         except ValueError as exc:
                             st.error(str(exc))
-                            
-    elif page == 'Upcoming Candidate Schedules':
-        st.subheader('Upcoming Candidate Schedules')
+                    if send_schedule:
+                        try:
+                            temporary_password = db.generate_password()
+                            db.set_candidate_temporary_password(user['id'], candidate['id'], temporary_password)
+                            send_candidate_invitation(
+                                candidate['email'], candidate['name'], candidate['username'],
+                                temporary_password, candidate['test_date'], candidate.get('scheduled_discipline') or candidate['discipline'],
+                            )
+                            db.mark_invitation_sent(user['id'], candidate['id'])
+                            clear_read_caches()
+                            st.success('Schedule and login credentials sent. The temporary password is now active.')
+                            st.session_state.pop('candidate_schedule_saved_id', None)
+                            st.rerun()
+                        except (EmailDeliveryError, OSError, ValueError) as exc:
+                            st.error(str(exc))
+
+        st.divider()
         candidates = cached_candidate_accounts(user['id'])
         
         today = date.today()
         scheduled_candidates = [c for c in candidates if c['test_date'] and c['test_date'] >= today]
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1: search_name = st.selectbox('Filter by Name', ['All'] + sorted({str(c['name']).strip() for c in scheduled_candidates if c.get('name')}), key='upc_name')
-        with col2: search_discipline = st.selectbox('Filter by Discipline', ['All'] + sorted({str(c.get('scheduled_discipline') or c.get('discipline', '')).strip() for c in scheduled_candidates if c.get('scheduled_discipline') or c.get('discipline')}), key='upc_disc')
+        with col2: search_discipline = st.selectbox('Filter by Scheduled Discipline', ['All'] + sorted({str(c['scheduled_discipline']).strip() for c in scheduled_candidates if c.get('scheduled_discipline')}), key='upc_disc')
         with col3: search_iqama = st.selectbox('Filter by Iqama', ['All'] + sorted({str(c['iqama_no']).strip() for c in scheduled_candidates if c.get('iqama_no')}), key='upc_iqama')
+        schedule_dates = sorted({c['test_date'] for c in scheduled_candidates if c.get('test_date')})
+        schedule_date_options = ['All'] + [scheduled_date.strftime('%A, %d %B %Y') for scheduled_date in schedule_dates]
+        with col4: search_schedule_date = st.selectbox('Filter by Schedule Date', schedule_date_options, key='schedule_filter_date')
         
         upcoming = filter_upcoming_candidates(scheduled_candidates, search_name, search_discipline, search_iqama)
-        st.caption(f'Showing {len(upcoming)} of {len(scheduled_candidates)} upcoming candidate(s).')
+        if search_schedule_date != 'All':
+            upcoming = [c for c in upcoming if c.get('test_date') and c['test_date'].strftime('%A, %d %B %Y') == search_schedule_date]
+        st.caption(f'Showing {len(upcoming)} of {len(scheduled_candidates)} scheduled candidate(s).')
         bulk_result = st.session_state.pop('bulk_invite_result', None)
         if bulk_result:
             if bulk_result.get('failed_count'):
@@ -1045,7 +1097,7 @@ else:
                 st.success(f"All {bulk_result['success_count']} invitations sent successfully.")
 
         if not upcoming:
-            st.info('No upcoming schedules match the filters.')
+            st.info('No schedules match the filters.')
         else:
             unsent_candidates = [c for c in upcoming if not c['invitation_sent_at'] and c.get('email')]
             if unsent_candidates:
