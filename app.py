@@ -1031,7 +1031,10 @@ else:
                     save_col, send_col = st.columns(2)
                     with save_col:
                         save_schedule = st.form_submit_button('Save Schedule', type='primary')
-                    saved_for_candidate = st.session_state.get('candidate_schedule_saved_id') == candidate['id']
+                    saved_for_candidate = (
+                        st.session_state.get('candidate_schedule_saved_id') == candidate['id']
+                        or bool(candidate.get('test_date'))
+                    )
                     with send_col:
                         send_schedule = st.form_submit_button('Send Schedule', disabled=not saved_for_candidate)
                     if save_schedule:
@@ -1078,108 +1081,6 @@ else:
                 f"{saved_schedule['test_date']} | {saved_schedule['discipline']} | "
                 f"Project: {saved_schedule['project_assignment']}"
             )
-        st.divider()
-        candidates = cached_candidate_accounts(user['id'])
-        
-        today = date.today()
-        scheduled_candidates = [c for c in candidates if c['test_date'] and c['test_date'] >= today]
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1: search_name = st.selectbox('Filter by Name', ['All'] + sorted({str(c['name']).strip() for c in scheduled_candidates if c.get('name')}), key='upc_name')
-        with col2: search_discipline = st.selectbox('Filter by Scheduled Discipline', ['All'] + sorted({str(c['scheduled_discipline']).strip() for c in scheduled_candidates if c.get('scheduled_discipline')}), key='upc_disc')
-        with col3: search_iqama = st.selectbox('Filter by Iqama', ['All'] + sorted({str(c['iqama_no']).strip() for c in scheduled_candidates if c.get('iqama_no')}), key='upc_iqama')
-        schedule_dates = sorted({c['test_date'] for c in scheduled_candidates if c.get('test_date')})
-        schedule_date_options = ['All'] + [scheduled_date.strftime('%A, %d %B %Y') for scheduled_date in schedule_dates]
-        with col4: search_schedule_date = st.selectbox('Filter by Schedule Date', schedule_date_options, key='schedule_filter_date')
-        
-        upcoming = filter_upcoming_candidates(scheduled_candidates, search_name, search_discipline, search_iqama)
-        if search_schedule_date != 'All':
-            upcoming = [c for c in upcoming if c.get('test_date') and c['test_date'].strftime('%A, %d %B %Y') == search_schedule_date]
-        st.caption(f'Showing {len(upcoming)} of {len(scheduled_candidates)} scheduled candidate(s).')
-        bulk_result = st.session_state.pop('bulk_invite_result', None)
-        if bulk_result:
-            if bulk_result.get('failed_count'):
-                st.warning(f"Sent {bulk_result['success_count']} invitations; {bulk_result['failed_count']} failed.")
-                with st.expander("View delivery failure details"):
-                    for err in bulk_result.get('errors', []):
-                        st.markdown(f"- {err}")
-            else:
-                st.success(f"All {bulk_result['success_count']} invitations sent successfully.")
-
-        if not upcoming:
-            st.info('No schedules match the filters.')
-        else:
-            unsent_candidates = [c for c in upcoming if not c['invitation_sent_at'] and c.get('email')]
-            if unsent_candidates:
-                if st.button(f'Send Schedule & Credentials to All Pending ({len(unsent_candidates)})', type='primary', key='bulk_send_invites'):
-                    success_count = 0
-                    failed_count = 0
-                    failed_errors = []
-                    progress_text = st.empty()
-                    for idx, c in enumerate(unsent_candidates, 1):
-                        progress_text.caption(f"Sending {idx} of {len(unsent_candidates)}: {c['name']}...")
-                        try:
-                            temp_pw = db.generate_password()
-                            db.set_candidate_temporary_password(user['id'], c['id'], temp_pw)
-                            send_candidate_invitation(
-                                c['email'], c['name'], c['username'],
-                                temp_pw, c['test_date'], c.get('scheduled_discipline') or c['discipline'],
-                            )
-                            db.mark_invitation_sent(user['id'], c['id'])
-                            success_count += 1
-                        except Exception as exc:
-                            failed_count += 1
-                            logger.exception("Failed to send candidate invitation to %s (%s)", c.get('name'), c.get('email'))
-                            failed_errors.append(f"**{c.get('name', 'Candidate')}** ({c.get('email', '')}): {exc}")
-                    clear_read_caches()
-                    progress_text.empty()
-                    st.session_state['bulk_invite_result'] = {
-                        'success_count': success_count,
-                        'failed_count': failed_count,
-                        'errors': failed_errors,
-                    }
-                    st.rerun()
-            for candidate in upcoming:
-                with st.expander(f"{candidate['name']} - {candidate['discipline']} - {candidate['iqama_no']} - {candidate['test_date']}"):
-                    st.write(f"**Email:** {candidate['email']}")
-                    if candidate['invitation_sent_at']:
-                        st.success('Invitation Sent')
-                    else:
-                        st.error('Invitation Not Sent')
-                    
-                    past = candidate.get('previous_schedules')
-                    if past:
-                        with st.popover("Past Schedules"):
-                            for p in past:
-                                rescheduled_on = str(p.get('scheduled_at') or '')[:10] or 'Unknown'
-                                st.caption(f"Date: {p.get('test_date', '')} (Re-scheduled: {rescheduled_on})")
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        if candidate['email'] and st.button('Send Schedule & Login Credentials', key=f"invite_{candidate['id']}", type='primary'):
-                            try:
-                                temporary_password = db.generate_password()
-                                db.set_candidate_temporary_password(user['id'], candidate['id'], temporary_password)
-                                send_candidate_invitation(
-                                    candidate['email'], candidate['name'], candidate['username'],
-                                    temporary_password, candidate['test_date'], candidate.get('scheduled_discipline') or candidate['discipline'],
-                                )
-                                db.mark_invitation_sent(user['id'], candidate['id'])
-                                clear_read_caches()
-                                st.success('Schedule and login credentials sent. The temporary password is now active.')
-                                st.rerun()
-                            except (EmailDeliveryError, OSError, ValueError) as exc:
-                                st.error(str(exc))
-                    with col2:
-                        if user['role'] == 'Admin':
-                            if st.button('Remove Schedule', key=f"remove_schedule_{candidate['id']}"):
-                                try:
-                                    db.remove_candidate_schedule(user['id'], candidate['id'])
-                                    clear_read_caches()
-                                    st.success('Schedule removed. Candidate account was kept.')
-                                    st.rerun()
-                                except ValueError as exc:
-                                    st.error(str(exc))
     elif page == 'Projects':
         st.subheader('Projects')
         projects = cached_projects(user['id'])
