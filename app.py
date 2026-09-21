@@ -403,8 +403,7 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
         st.session_state[generated_key] = generated
 
     form_key = f'{key}_{st.session_state.get(f"{key}_reset", 0)}'
-    if saved_message := st.session_state.pop(f'{key}_saved_message', None):
-        st.success(saved_message)
+    saved_message = st.session_state.pop(f'{key}_saved_message', None)
     name = st.text_input('Full name *', key=name_key, on_change=suggest_username)
     username = st.text_input('Username *', key=username_key, on_change=check_username_availability)
     if st.session_state.get(username_taken_key):
@@ -463,8 +462,8 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
                     clear_read_caches()
                     if is_candidate:
                         st.session_state[f'{key}_saved_message'] = 'Candidate account saved successfully.'
-                        st.session_state.pop(name_key, None)
-                        st.session_state.pop(username_key, None)
+                        st.session_state[name_key] = ''
+                        st.session_state[username_key] = ''
                         st.session_state.pop(username_taken_key, None)
                         st.session_state[f'{key}_reset'] = st.session_state.get(f'{key}_reset', 0) + 1
                         st.rerun()
@@ -475,6 +474,8 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
                     st.rerun()
             except ValueError as exc:
                 st.error(str(exc))
+    if saved_message:
+        st.success(saved_message)
     if not is_candidate and generated_key in st.session_state:
         st.caption('Copy this generated password and give it securely to the account owner:')
         st.code(st.session_state[generated_key], language=None)
@@ -969,12 +970,7 @@ else:
         account_form('candidate_account', actor=user['id'], allowed_roles=['Candidate'])
     elif page == 'Candidate Schedules':
         st.subheader('Candidate Schedules')
-        if saved_schedule := st.session_state.pop('candidate_schedule_saved', None):
-            st.success(
-                f"Schedule saved for {saved_schedule['candidate_name']}: "
-                f"{saved_schedule['test_date']} | {saved_schedule['discipline']} | "
-                f"Project: {saved_schedule['project_assignment']}"
-            )
+        saved_schedule = st.session_state.pop('candidate_schedule_saved', None)
         candidates = cached_candidate_accounts(user['id'])
         
         # Keep the filter controls to two per row so labels remain readable
@@ -1076,6 +1072,12 @@ else:
                         except (EmailDeliveryError, OSError, ValueError) as exc:
                             st.error(str(exc))
 
+        if saved_schedule:
+            st.success(
+                f"Schedule saved for {saved_schedule['candidate_name']}: "
+                f"{saved_schedule['test_date']} | {saved_schedule['discipline']} | "
+                f"Project: {saved_schedule['project_assignment']}"
+            )
         st.divider()
         candidates = cached_candidate_accounts(user['id'])
         
