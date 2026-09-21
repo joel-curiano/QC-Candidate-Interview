@@ -403,11 +403,14 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
         st.session_state[generated_key] = generated
 
     form_key = f'{key}_{st.session_state.get(f"{key}_reset", 0)}'
+    if saved_message := st.session_state.pop(f'{key}_saved_message', None):
+        st.success(saved_message)
+    name = st.text_input('Full name *', key=name_key, on_change=suggest_username)
+    username = st.text_input('Username *', key=username_key, on_change=check_username_availability)
+    if st.session_state.get(username_taken_key):
+        st.warning('This username is already taken. Please choose another username.')
+
     with st.form(form_key):
-        name = st.text_input('Full name *', key=name_key, on_change=suggest_username)
-        username = st.text_input('Username *', key=username_key, on_change=check_username_availability)
-        if st.session_state.get(username_taken_key):
-            st.warning('This username is already taken. Please choose another username.')
         
         is_candidate = allowed_roles == ['Candidate']
         account_email = st.text_input('Email *') if is_candidate or actor is not None or bootstrap else ''
@@ -458,10 +461,15 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
                 else:
                     st.session_state.pop(generated_key, None)
                     clear_read_caches()
-                    st.success('Account created.')
                     if is_candidate:
+                        st.session_state[f'{key}_saved_message'] = 'Candidate account saved successfully.'
+                        st.session_state.pop(name_key, None)
+                        st.session_state.pop(username_key, None)
+                        st.session_state.pop(username_taken_key, None)
                         st.session_state[f'{key}_reset'] = st.session_state.get(f'{key}_reset', 0) + 1
                         st.rerun()
+                    else:
+                        st.success('Account created.')
                 if bootstrap:
                     clear_read_caches()
                     st.rerun()
