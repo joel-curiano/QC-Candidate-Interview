@@ -407,9 +407,44 @@ def select_assessment_questions(bank, settings, rng):
     return selected
 
 
+ASSESSMENT_DRAFT_KEYS = (
+    'assessment_discipline', 'attempt_token', 'candidate_details', 'assessment_mcq_ids',
+    'assessment_essay_ids', 'assessment_reviewer_ids', 'assessment_mcq_options',
+    'assessment_mcq_deadline', 'assessment_essay_started_at', 'assessment_essay_index',
+    'assessment_counts', 'assessment_phase', 'assessment_responses',
+)
+
+
+def save_current_assessment_draft(candidate_id):
+    payload = {
+        key: st.session_state[key]
+        for key in ASSESSMENT_DRAFT_KEYS
+        if key in st.session_state
+    }
+    if payload.get('attempt_token'):
+        db.save_assessment_draft(candidate_id, payload)
+
+
+def save_assessment_answer(candidate_id, question_id):
+    answer = st.session_state.get(f'answer_{question_id}', '')
+    st.session_state.setdefault('assessment_responses', {})[question_id] = answer
+    save_current_assessment_draft(candidate_id)
+
+
+def restore_assessment_draft(draft):
+    for key in ASSESSMENT_DRAFT_KEYS:
+        if key in draft:
+            st.session_state[key] = draft[key]
+    for key in ('assessment_mcq_options', 'assessment_responses', 'assessment_essay_started_at'):
+        if isinstance(st.session_state.get(key), dict):
+            st.session_state[key] = {int(question_id): value for question_id, value in st.session_state[key].items()}
+    for question_id, answer in st.session_state.get('assessment_responses', {}).items():
+        st.session_state[f'answer_{question_id}'] = answer
+
+
 try:
     with st.spinner('Loading Competency Technical Assessment (CTA) Portal...'):
-        initialize_database(2)
+        initialize_database(4)
 except db.DatabaseError as exc:
     st.error(str(exc))
     st.stop()
@@ -475,6 +510,14 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
             password = st.text_input('Password (at least 6 characters)', type='password', key=password_key)
             confirm = st.text_input('Confirm password', type='password', key=confirm_key)
         role = st.selectbox('Role', allowed_roles or ['Candidate', 'Reviewer', 'Admin']) if actor else 'Candidate'
+        reviewer_disciplines = ['All Disciplines']
+        if role == 'Reviewer':
+            reviewer_disciplines = st.multiselect(
+                'Reviewer disciplines',
+                ['All Disciplines'] + cached_disciplines(),
+                default=['All Disciplines'],
+                help='Select All Disciplines to allow this Reviewer to assess candidates from every discipline.',
+            )
         if not is_candidate:
             st.form_submit_button('Generate random password', on_click=generate_account_password)
 
@@ -496,6 +539,7 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
                     employee_no=employee_no, mobile_no=mobile_no
                 )
                 if role == 'Reviewer':
+                    db.update_reviewer_disciplines(actor, candidate_id, reviewer_disciplines)
                     try:
                         send_reviewer_credentials(account_email.strip().lower(), name.strip(), username.strip().lower(), password)
                         st.session_state.pop(generated_key, None)
@@ -581,15 +625,14 @@ def candidate_result_pdf(sub):
     if sub['status'] != 'Graded':
         story.append(Paragraph('<b>Overall result:</b> Pending Review', styles['CATOverallResult']))
     else:
-        rows = [['Question type', 'Percentage', 'Status']]
+        rows = [['Question type', 'Weight', 'Weighted grade']]
         for kind, label in (('mcq', 'Multiple Choice'), ('essay', 'Essay'), ('oral_practical', 'Oral-Practical')):
-            pct = db.category_percentage(sub, kind)
-            rows.append([label, f'{pct:.1f}%', 'PASS' if pct >= 50 else 'FAIL'])
-        overall_pct = 100 * (sub['mcq_score'] + sub['essay_score'] + sub.get('oral_practical_score', 0)) / sub['max_possible_points'] if sub['max_possible_points'] else 0
+            rows.append([label, f"{db.GRADE_WEIGHTS[kind]}%", f"{db.weighted_category_percentage(sub, kind):.1f}%"])
+        overall_pct = db.final_percentage(sub)
         overall_status = 'PASS' if overall_pct >= 70 and all(db.category_percentage(sub, kind) >= 50 for kind in QUESTION_TYPES) else 'FAIL'
         overall_color = '#188038' if overall_status == 'PASS' else '#B51F2D'
         story += [Spacer(1, 4*mm), Paragraph('Results by question type', styles['CATResultHeading']), Table(rows, colWidths=[39*mm, 26.6*mm, 22.4*mm], style=TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#B51F2D')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('GRID',(0,0),(-1,-1),0.4,colors.HexColor('#D9DCDE')),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),8),('LEADING',(0,0),(-1,-1),10),('PADDING',(0,0),(-1,-1),4)])), Spacer(1, 5*mm), Paragraph(f'<b>Overall result:</b> {overall_pct:.1f}% - <font color="{overall_color}"><b>{overall_status}</b></font>', styles['CATOverallResult'])]
-    story += [Spacer(1, 6*mm), Paragraph('<b>How pass/fail is determined</b>', styles['CATExplainHeading']), Paragraph('The candidate must achieve at least 50% in every question type and at least 70% overall. The overall percentage is calculated from the accumulated points earned divided by the total possible points. Failing any one question type results in an overall FAIL, even when the overall percentage is 70% or higher. A result remains Pending Review until the Reviewer scores all Essay and Oral-Practical responses.', styles['CATExplainBody'])]
+    story += [Spacer(1, 6*mm), Paragraph('<b>How pass/fail is determined</b>', styles['CATExplainHeading']), Paragraph('The final grade is calculated from the weighted question-type grades: Multiple Choice 60%, Essay 20%, and Oral-Practical 20%. The candidate must achieve at least 50% in every question type and at least 70% in the final grade. A result remains Pending Review until the Reviewer scores all Essay and Oral-Practical responses.', styles['CATExplainBody'])]
     doc.build(story)
     return output.getvalue()
 
@@ -804,8 +847,13 @@ if user['role'] == 'Candidate':
             for key in list(st.session_state):
                 if isinstance(key, str) and (key.startswith('assessment_') or key.startswith('answer_') or key in ('candidate_details', 'candidate_discipline_display', 'candidate_job_title')):
                     del st.session_state[key]
-            st.session_state.assessment_discipline = discipline
-            st.session_state.attempt_token = secrets.token_hex(24)
+            draft = db.assessment_draft(user['id'])
+            if draft and draft.get('assessment_discipline') == discipline and draft.get('attempt_token'):
+                restore_assessment_draft(draft)
+                st.session_state.assessment_draft_restored = True
+            else:
+                st.session_state.assessment_discipline = discipline
+                st.session_state.attempt_token = secrets.token_hex(24)
 
         details = st.session_state.get('candidate_details')
         if not details:
@@ -850,6 +898,7 @@ if user['role'] == 'Candidate':
                             st.session_state.assessment_essay_index = 0
                             st.session_state.assessment_counts = {kind: settings[kind] for kind in QUESTION_TYPES}
                             st.session_state.assessment_phase = 'mcq'
+                            save_current_assessment_draft(user['id'])
                             st.rerun()
                         except (TypeError, ValueError, json.JSONDecodeError) as exc:
                             st.error(f'Unable to start the Competency Technical Assessment: {exc}')
@@ -859,6 +908,8 @@ if user['role'] == 'Candidate':
         mcq_questions = [question_map[qid] for qid in st.session_state.assessment_mcq_ids]
         essay_questions = [question_map[qid] for qid in st.session_state.assessment_essay_ids if question_map[qid]['q_type'] == 'essay']
         responses = st.session_state.setdefault('assessment_responses', {})
+        if st.session_state.pop('assessment_draft_restored', False):
+            st.success('Your saved assessment answers have been restored.')
         st.info(f"Complete {settings['mcq']} Multiple Choice Questions and {settings['essay']} Essay questions in the app. Oral-Practical questions ({settings['oral_practical']}) are completed and graded by a Reviewer.")
         if st.session_state.get('assessment_phase', 'mcq') == 'mcq':
             section = st.expander('Multiple Choice Questions', expanded=True)
@@ -887,34 +938,38 @@ if user['role'] == 'Candidate':
                     st.session_state.assessment_mcq_unanswered_count = pending_unanswered
                     st.session_state.pop('assessment_mcq_pending_unanswered', None)
                     st.session_state.assessment_phase = 'essay'
+                    save_current_assessment_draft(user['id'])
                     st.rerun()
             else:
-                with st.form('multiple_choice_questions'):
-                    page_responses = {}
-                    for number, question in enumerate(mcq_questions, 1):
-                        page_responses[question['id']] = st.radio(
-                            f"{number}. {question['question_text']}", st.session_state.assessment_mcq_options[question['id']], index=None,
-                            key=f"answer_{question['id']}", disabled=is_mcq_expired)
-                    st.info('You have six minutes for each Essay question. The countdown begins when you press the Continue to Essay Questions button.')
-                    submit_label = 'Time expired: Proceed to Essay Questions' if is_mcq_expired else 'Continue to Essay Questions'
-                    if st.form_submit_button(submit_label, type='primary'):
-                        unanswered_count = sum(
-                            not isinstance(answer, str) or not answer.strip()
-                            for answer in page_responses.values()
-                        )
-                        if unanswered_count and not is_mcq_expired:
-                            st.session_state.assessment_mcq_pending_unanswered = unanswered_count
-                            st.rerun()
-                        else:
-                            for question in mcq_questions:
-                                answer = page_responses.get(question['id'])
-                                responses[question['id']] = (
-                                    answer if isinstance(answer, str) and answer.strip()
-                                    else '[Unanswered - time expired]'
-                                )
-                            st.session_state.assessment_mcq_unanswered_count = unanswered_count
-                            st.session_state.assessment_phase = 'essay'
-                            st.rerun()
+                for number, question in enumerate(mcq_questions, 1):
+                    st.radio(
+                        f"{number}. {question['question_text']}",
+                        st.session_state.assessment_mcq_options[question['id']],
+                        index=None,
+                        key=f"answer_{question['id']}",
+                        disabled=is_mcq_expired,
+                        on_change=save_assessment_answer,
+                        args=(user['id'], question['id']),
+                    )
+                st.info('Each selected answer is saved automatically. You have six minutes for each Essay question after continuing.')
+                submit_label = 'Time expired: Proceed to Essay Questions' if is_mcq_expired else 'Continue to Essay Questions'
+                if st.button(submit_label, type='primary'):
+                    unanswered_count = sum(
+                        not isinstance(responses.get(question['id']), str) or not responses[question['id']].strip()
+                        for question in mcq_questions
+                    )
+                    if unanswered_count and not is_mcq_expired:
+                        st.session_state.assessment_mcq_pending_unanswered = unanswered_count
+                        save_current_assessment_draft(user['id'])
+                        st.rerun()
+                    else:
+                        for question in mcq_questions:
+                            if question['id'] not in responses or not str(responses[question['id']]).strip():
+                                responses[question['id']] = '[Unanswered - time expired]'
+                        st.session_state.assessment_mcq_unanswered_count = unanswered_count
+                        st.session_state.assessment_phase = 'essay'
+                        save_current_assessment_draft(user['id'])
+                        st.rerun()
             section.__exit__(None, None, None)
         else:
             section = st.expander('Essay Questions', expanded=True)
@@ -937,6 +992,7 @@ if user['role'] == 'Candidate':
                             st.session_state.assessment_mcq_ids + st.session_state.assessment_essay_ids + st.session_state.assessment_reviewer_ids,
                             point_settings={kind: settings[f'{kind}_points'] for kind in QUESTION_TYPES},
                             expected_counts=st.session_state.get('assessment_counts'))
+                        db.delete_assessment_draft(user['id'])
                         clear_read_caches()
                         db.release_login(user['id'], st.session_state.login_token)
                         st.session_state.clear()
@@ -946,28 +1002,36 @@ if user['role'] == 'Candidate':
                         st.error(str(exc))
             else:
                 question = essay_questions[essay_index]
-                started_at = st.session_state.setdefault('assessment_essay_started_at', {}).setdefault(question['id'], time.time())
+                essay_started_at = st.session_state.setdefault('assessment_essay_started_at', {})
+                if question['id'] not in essay_started_at:
+                    essay_started_at[question['id']] = time.time()
+                    save_current_assessment_draft(user['id'])
+                started_at = essay_started_at[question['id']]
                 deadline = started_at + ESSAY_TIME_LIMIT_SECONDS
                 expired = time.time() >= deadline
                 st.caption(f"Essay Question {essay_index + 1} of {len(essay_questions)}")
                 countdown_timer(f'Time remaining for Essay question {essay_index + 1} of {len(essay_questions)}', deadline, f'essay-{question["id"]}')
                 if expired:
                     st.warning('Essay time expired. Click below to proceed to the next question.')
-                with st.form(f'reviewer_scored_question_{question["id"]}'):
-                    current_val = responses.get(question['id'], '')
-                    answer = st.text_area(
-                        f"{essay_index + 1}. Essay: {question['question_text']}",
-                        value=current_val,
-                        placeholder='Type your answer here...', height=220, max_chars=20000,
-                        key=f"answer_{question['id']}", disabled=expired)
-                    btn_label = 'Time expired: Go to next question' if expired else 'Save answer and go to next question'
-                    if st.form_submit_button(btn_label, type='primary'):
-                        if expired and not answer.strip():
-                            responses[question['id']] = '[No response submitted - time expired]'
-                        else:
-                            responses[question['id']] = answer.strip()
-                        st.session_state.assessment_essay_index = essay_index + 1
-                        st.rerun()
+                current_val = responses.get(question['id'], '')
+                answer = st.text_area(
+                    f"{essay_index + 1}. Essay: {question['question_text']}",
+                    value=current_val,
+                    placeholder='Type your answer here...', height=220, max_chars=20000,
+                    key=f"answer_{question['id']}", disabled=expired,
+                    on_change=save_assessment_answer,
+                    args=(user['id'], question['id']),
+                )
+                st.caption('Your response is saved automatically while you work.')
+                btn_label = 'Time expired: Go to next question' if expired else 'Save answer and go to next question'
+                if st.button(btn_label, type='primary'):
+                    if expired and not answer.strip():
+                        responses[question['id']] = '[No response submitted - time expired]'
+                    else:
+                        responses[question['id']] = answer.strip()
+                    st.session_state.assessment_essay_index = essay_index + 1
+                    save_current_assessment_draft(user['id'])
+                    st.rerun()
             section.__exit__(None, None, None)
 else:
     pages = ['Create Candidate Account', 'Candidate Schedules']
@@ -1582,16 +1646,45 @@ else:
                                 st.rerun()
                             except ValueError as exc:
                                 st.error(str(exc))
+                    discipline_options = ['All Disciplines'] + cached_disciplines()
+                    current_disciplines = [
+                        discipline for discipline in staff.get('assigned_disciplines', ['All Disciplines'])
+                        if discipline in discipline_options
+                    ] or ['All Disciplines']
+                    with st.form(f"assign_disciplines_{staff['id']}"):
+                        assigned_disciplines = st.multiselect(
+                            'Reviewer disciplines',
+                            discipline_options,
+                            default=current_disciplines,
+                            help='All Disciplines gives this Reviewer access to every discipline.',
+                        )
+                        if st.form_submit_button('Save Reviewer Disciplines'):
+                            try:
+                                db.update_reviewer_disciplines(user['id'], staff['id'], assigned_disciplines)
+                                st.success('Reviewer disciplines saved.')
+                                st.rerun()
+                            except ValueError as exc:
+                                st.error(str(exc))
         if user['role'] == 'Admin':
             st.divider()
             render_question_bank_wipe()
     else:
         st.subheader('Assessment review')
+        if st.session_state.pop('show_finalized_assessment', False):
+            st.session_state.assessment_review_status = 'Graded'
+        finalized_assessment = st.session_state.pop('assessment_finalized', None)
+        if finalized_assessment:
+            st.success(f"Assessment finalized successfully for {finalized_assessment['candidate_name']}.")
         rows = cached_submissions(user['id'])
         left, right = st.columns(2)
         left.metric('Pending review', sum(r['status'] == 'Pending Review' for r in rows))
         right.metric('Graded', sum(r['status'] == 'Graded' for r in rows))
-        status = st.selectbox('Status', ['All', 'Pending Review', 'Graded'], index=1)
+        status = st.selectbox(
+            'Status',
+            ['All', 'Pending Review', 'Graded'],
+            index=1,
+            key='assessment_review_status',
+        )
         rows = [r for r in rows if status == 'All' or r['status'] == status]
         if not rows:
             st.info('No assessments match this view.')
@@ -1682,6 +1775,10 @@ else:
                 try:
                     db.grade(user['id'], sid, scores, comments, observed_responses)
                     clear_read_caches()
+                    st.session_state.assessment_finalized = {
+                        'candidate_name': sub['candidate_name'],
+                    }
+                    st.session_state.show_finalized_assessment = True
                     st.rerun()
                 except ValueError as exc:
                     st.error(str(exc))
@@ -1691,7 +1788,7 @@ else:
             with st.expander('Results by Question Type', expanded=True):
                 for kind, label in (('mcq', 'Multiple Choice'), ('essay', 'Essay'), ('oral_practical', 'Oral-Practical')):
                     grade = db.category_result(sub, kind)
-                    (st.success if grade.startswith('PASS') else st.error)(f'{label}: {grade}')
+                    st.info(f'{label}: {grade}')
             with st.expander('Final Result', expanded=True):
                 final_grade = db.result(sub)
                 (st.success if final_grade.startswith('PASS') else st.error)(f'Final Grade: {final_grade}')

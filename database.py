@@ -148,10 +148,16 @@ def init_db():
         c.execute('CREATE TABLE IF NOT EXISTS schema_info (key TEXT PRIMARY KEY, value TEXT)')
         c.execute("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         c.execute("INSERT INTO app_settings (key, value) VALUES ('maintenance_mode', 'false') ON CONFLICT (key) DO NOTHING")
+        c.execute("""CREATE TABLE IF NOT EXISTS assessment_drafts (
+            user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            payload JSONB NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
         # These columns are required for sign-in. Keep them outside the one-time
         # question-bank migration so existing deployments receive the update.
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_token TEXT")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_at TIMESTAMPTZ")
+        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_disciplines TEXT[] NOT NULL DEFAULT ARRAY['All Disciplines']::TEXT[]")
         initialized = c.execute("SELECT value FROM schema_info WHERE key='question_template_v1'").fetchone()
         
         if not initialized:
@@ -254,7 +260,7 @@ def generate_password(length=12):
 
 
 def require(c, user_id, roles):
-    user = c.execute('SELECT id,username,name,email,role,discipline,scheduled_discipline,iqama_no,employee_no,project_assignment,test_date,assigned_projects FROM users WHERE id=%s', (user_id,)).fetchone()
+    user = c.execute('SELECT id,username,name,email,role,discipline,scheduled_discipline,iqama_no,employee_no,project_assignment,test_date,assigned_projects,assigned_disciplines FROM users WHERE id=%s', (user_id,)).fetchone()
     if not user or user['role'] not in roles:
         raise ValueError('You do not have permission for this action.')
     return dict(user)
@@ -460,6 +466,20 @@ def update_staff_projects(actor, staff_id, projects):
             raise ValueError('Invalid staff account.')
         c.execute("UPDATE users SET assigned_projects=%s WHERE id=%s", (list(projects), staff_id))
 
+
+def update_reviewer_disciplines(actor, reviewer_id, disciplines):
+    assignments = list(dict.fromkeys(str(item).strip() for item in disciplines if str(item).strip()))
+    if not assignments:
+        raise ValueError('Assign at least one discipline to the Reviewer.')
+    with connection() as c:
+        require(c, actor, ('Admin',))
+        reviewer = c.execute(
+            "UPDATE users SET assigned_disciplines=%s WHERE id=%s AND role='Reviewer' RETURNING id",
+            (assignments, reviewer_id),
+        ).fetchone()
+        if not reviewer:
+            raise ValueError('Reviewer account not found.')
+
 def update_reviewer_email(actor, reviewer_id, email):
     email = email.strip().lower()
     if not email or '@' not in email or email.startswith('@') or email.endswith('@'):
@@ -490,7 +510,7 @@ def staff_accounts(actor):
     with connection() as c:
         require(c, actor, ('Admin',))
         return [dict(row) for row in c.execute(
-            "SELECT id,username,name,email,role,assigned_projects FROM users WHERE role IN ('Reviewer', 'Admin') ORDER BY role, name"
+            "SELECT id,username,name,email,role,assigned_projects,assigned_disciplines FROM users WHERE role IN ('Reviewer', 'Admin') ORDER BY role, name"
         )]
 
 def delete_user(actor, user_id):
@@ -757,10 +777,38 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         c.execute("UPDATE users SET test_date=NULL WHERE id=%s AND role='Candidate'", (actor,))
         return sid
 
+
+def assessment_draft(actor):
+    with connection() as c:
+        require(c, actor, ('Candidate',))
+        row = c.execute('SELECT payload FROM assessment_drafts WHERE user_id=%s', (actor,)).fetchone()
+        if not row:
+            return None
+        payload = row['payload']
+        return payload if isinstance(payload, dict) else json.loads(payload)
+
+
+def save_assessment_draft(actor, payload):
+    with connection() as c:
+        require(c, actor, ('Candidate',))
+        c.execute(
+            """INSERT INTO assessment_drafts(user_id, payload, updated_at) VALUES (%s, %s::jsonb, CURRENT_TIMESTAMP)
+               ON CONFLICT (user_id) DO UPDATE SET payload=EXCLUDED.payload, updated_at=CURRENT_TIMESTAMP""",
+            (actor, json.dumps(payload, default=str)),
+        )
+
+
+def delete_assessment_draft(actor):
+    with connection() as c:
+        require(c, actor, ('Candidate',))
+        c.execute('DELETE FROM assessment_drafts WHERE user_id=%s', (actor,))
+
+
 def submissions(actor):
     with connection() as c:
         user = require(c, actor, ('Candidate', 'Reviewer', 'Admin'))
         assigned_projects = user.get('assigned_projects') or []
+        assigned_disciplines = user.get('assigned_disciplines') or ['All Disciplines']
         return [dict(r) for r in c.execute("""
             SELECT s.*, u.name AS candidate_name, u.email, u.username, u.iqama_no, u.employee_no,
                    COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline) AS discipline,
@@ -769,9 +817,15 @@ def submissions(actor):
                    s.essay_score AS essay_only_score, s.oral_practical_score
             FROM submissions s LEFT JOIN users u ON u.id=s.user_id
             WHERE s.user_id=%s OR %s = 'Admin'
-               OR (%s = 'Reviewer' AND (cardinality(%s::text[]) = 0 OR u.project_assignment = ANY(%s::text[])))
+               OR (%s = 'Reviewer' AND (
+                    u.project_assignment = 'Unassigned'
+                    OR ((cardinality(%s::text[]) = 0 OR u.project_assignment = ANY(%s::text[]))
+                        AND ('All Disciplines' = ANY(%s::text[])
+                             OR COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline) = ANY(%s::text[])))
+               ))
             ORDER BY s.id DESC
-        """, (actor, user['role'], user['role'], assigned_projects, assigned_projects))]
+        """, (actor, user['role'], user['role'], assigned_projects, assigned_projects,
+              assigned_disciplines, assigned_disciplines))]
 
 def delete_assessment(actor, submission_id):
     with connection() as c:
@@ -809,10 +863,21 @@ def grade(actor, sid, scores, comments, observed_responses=None):
         c.execute("UPDATE submissions SET essay_score=%s,oral_practical_score=%s,status='Graded',reviewer_comments=%s,reviewer_id=%s,graded_at=CURRENT_TIMESTAMP WHERE id=%s",
                   (typed_scores['essay'], typed_scores['oral_practical'], comments.strip(), actor, sid))
 
+GRADE_WEIGHTS = {'mcq': 60, 'essay': 20, 'oral_practical': 20}
+
+
+def weighted_category_percentage(sub, kind):
+    return category_percentage(sub, kind) * GRADE_WEIGHTS[kind] / 100
+
+
+def final_percentage(sub):
+    return sum(weighted_category_percentage(sub, kind) for kind in QUESTION_TYPES)
+
+
 def result(sub):
     if sub['status'] != 'Graded':
         return 'Pending Review'
-    percentage = 100 * (sub['mcq_score'] + sub['essay_score'] + sub.get('oral_practical_score', 0)) / sub['max_possible_points'] if sub['max_possible_points'] else 0
+    percentage = final_percentage(sub)
     minimums = all(category_percentage(sub, kind) >= 50 for kind in QUESTION_TYPES)
     return f"{'PASS' if percentage >= 70 and minimums else 'FAIL'} ({percentage:.1f}%)"
 
@@ -822,8 +887,8 @@ def category_percentage(sub, kind):
 def category_result(sub, kind):
     if sub['status'] != 'Graded':
         return 'Pending Review'
-    pct = category_percentage(sub, kind)
-    return f"{'PASS' if pct >= 50 else 'FAIL'} ({pct:.1f}%)"
+    weighted_pct = weighted_category_percentage(sub, kind)
+    return f'{weighted_pct:.1f}% of {GRADE_WEIGHTS[kind]}%'
 
 def weakness_summary(submission):
     """Return deterministic taxonomy results from immutable answer snapshots."""
