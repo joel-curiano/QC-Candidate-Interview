@@ -176,6 +176,17 @@ def save_assessment_answer(candidate_id: int, question_id: int) -> None:
     save_current_assessment_draft(candidate_id)
 
 
+@st.fragment(run_every="30s")
+def assessment_heartbeat(candidate_id: int, user: dict, login_token: str) -> None:
+    """Keep an active assessment session alive and persist its current draft."""
+    refreshed_user = db.refresh_login(user["id"], login_token)
+    if not refreshed_user:
+        return
+    st.session_state.user = refreshed_user
+    st.session_state.last_login_refresh = time.time()
+    save_current_assessment_draft(candidate_id)
+
+
 def restore_assessment_draft(draft: dict) -> None:
     """Restore session state from a saved draft and rehydrate answer widgets."""
     for key in ASSESSMENT_DRAFT_KEYS:
@@ -505,6 +516,9 @@ if user["role"] == "Candidate" and st.session_state.pop("show_candidate_start_di
         _candidate_start_dialog()
     else:
         st.info("Your assessment is ready. Review your details below, then start the test.")
+
+if user["role"] == "Candidate" and st.session_state.get("assessment_phase"):
+    assessment_heartbeat(user["id"], user, login_token)
 
 try:
     st.logo("img/Icon/CAT Icon White Background.png", icon_image="img/Icon/CAT-Tab-Icon.png")
