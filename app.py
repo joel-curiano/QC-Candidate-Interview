@@ -1787,8 +1787,9 @@ else:
             st.subheader('CTA Results')
             with st.expander('Results by Question Type', expanded=True):
                 for kind, label in (('mcq', 'Multiple Choice'), ('essay', 'Essay'), ('oral_practical', 'Oral-Practical')):
-                    grade = db.category_result(sub, kind)
-                    st.info(f'{label}: {grade}')
+                    max_grade = db.GRADE_WEIGHTS[kind]
+                    score = db.weighted_category_percentage(sub, kind)
+                    st.info(f'{label} (Grade Weight {max_grade}%) : {score:.2f}%')
             with st.expander('Final Result', expanded=True):
                 final_grade = db.result(sub)
                 (st.success if final_grade.startswith('PASS') else st.error)(f'Final Grade: {final_grade}')
