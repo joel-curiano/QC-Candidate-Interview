@@ -186,7 +186,9 @@ def init_db():
             c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS project_location")
             c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS project_assignment")
             c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS discipline")
-            c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS oral_practical_score DOUBLE PRECISION NOT NULL DEFAULT 0")
+            c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS mcq_score")
+            c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS essay_score")
+            c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS oral_practical_score")
             c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS mcq_max DOUBLE PRECISION NOT NULL DEFAULT 0")
             c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS essay_max DOUBLE PRECISION NOT NULL DEFAULT 0")
             c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS oral_practical_max DOUBLE PRECISION NOT NULL DEFAULT 0")
@@ -763,13 +765,12 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         candidate_name = str(details.get('name', user['name'])).strip()
         if not candidate_name:
             raise ValueError('Candidate name is required.')
-        mcq_score = sum(q['max_points'] for q in qs if q['q_type'] == 'mcq' and responses[q['id']] == q['correct_answer'])
         status = 'Pending Review' if any(q['q_type'] in REVIEWER_SCORED_TYPES for q in qs) else 'Graded'
         project_assignment = str(details.get('project_assignment', '')).strip()
         max_points = sum(1 if q['q_type'] == 'mcq' else min(q['max_points'], 10) for q in qs)
         maxima = {kind: sum(1 if q['q_type'] == 'mcq' else min(q['max_points'], 10) for q in qs if q['q_type'] == kind) for kind in QUESTION_TYPES}
-        sid = c.execute("INSERT INTO submissions(designation,mcq_score,max_possible_points,mcq_max,essay_max,oral_practical_max,status,user_id,token,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP) RETURNING id",
-                        (str(details.get('designation', '')).strip(), mcq_score, max_points, maxima['mcq'], maxima['essay'], maxima['oral_practical'], status, actor, token)).fetchone()['id']
+        sid = c.execute("INSERT INTO submissions(designation,max_possible_points,mcq_max,essay_max,oral_practical_max,status,user_id,token,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP) RETURNING id",
+                        (str(details.get('designation', '')).strip(), max_points, maxima['mcq'], maxima['essay'], maxima['oral_practical'], status, actor, token)).fetchone()['id']
         for q in qs:
             score = q['max_points'] if q['q_type'] == 'mcq' and responses[q['id']] == q['correct_answer'] else 0
             c.execute('INSERT INTO answers(submission_id,question_id,submitted_answer,awarded_score,snapshot) VALUES (%s,%s,%s,%s,%s)',
@@ -814,8 +815,24 @@ def submissions(actor):
                    COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline) AS discipline,
                    u.project_assignment, u.test_date AS scheduled_test_date,
                    s.created_at::date AS exam_date,
-                   s.essay_score AS essay_only_score, s.oral_practical_score
+                   calculated.mcq_score AS calculated_mcq_score,
+                   calculated.essay_score AS calculated_essay_score,
+                   calculated.oral_practical_score AS calculated_oral_practical_score,
+                   calculated.mcq_max AS calculated_mcq_max,
+                   calculated.essay_max AS calculated_essay_max,
+                   calculated.oral_practical_max AS calculated_oral_practical_max
             FROM submissions s LEFT JOIN users u ON u.id=s.user_id
+            LEFT JOIN LATERAL (
+                SELECT
+                    COALESCE(SUM(CASE WHEN snapshot::json->>'q_type' = 'mcq' THEN awarded_score ELSE 0 END), 0) AS mcq_score,
+                    COALESCE(SUM(CASE WHEN snapshot::json->>'q_type' = 'essay' THEN awarded_score ELSE 0 END), 0) AS essay_score,
+                    COALESCE(SUM(CASE WHEN snapshot::json->>'q_type' = 'oral_practical' THEN awarded_score ELSE 0 END), 0) AS oral_practical_score,
+                    COALESCE(SUM(CASE WHEN snapshot::json->>'q_type' = 'mcq' THEN 1 ELSE 0 END), 0) AS mcq_max,
+                    COALESCE(SUM(CASE WHEN snapshot::json->>'q_type' = 'essay' THEN LEAST((snapshot::json->>'max_points')::double precision, 10) ELSE 0 END), 0) AS essay_max,
+                    COALESCE(SUM(CASE WHEN snapshot::json->>'q_type' = 'oral_practical' THEN LEAST((snapshot::json->>'max_points')::double precision, 10) ELSE 0 END), 0) AS oral_practical_max
+                FROM answers
+                WHERE answers.submission_id = s.id
+            ) calculated ON TRUE
             WHERE s.user_id=%s OR %s = 'Admin'
                OR (%s = 'Reviewer' AND (
                     u.project_assignment = 'Unassigned'
@@ -859,9 +876,8 @@ def grade(actor, sid, scores, comments, observed_responses=None):
             if not isinstance(response, str) or len(response) > 20000:
                 raise ValueError('Observed responses must be 20,000 characters or fewer.')
             c.execute("UPDATE answers SET submitted_answer=%s WHERE id=%s AND submission_id=%s", (response.strip(), answer_id, sid))
-        typed_scores = {kind: sum(scores[a['id']] for a in essays if json.loads(a['snapshot'])['q_type'] == kind) for kind in ('essay', 'oral_practical')}
-        c.execute("UPDATE submissions SET essay_score=%s,oral_practical_score=%s,status='Graded',reviewer_comments=%s,reviewer_id=%s,graded_at=CURRENT_TIMESTAMP WHERE id=%s",
-                  (typed_scores['essay'], typed_scores['oral_practical'], comments.strip(), actor, sid))
+        c.execute("UPDATE submissions SET status='Graded',reviewer_comments=%s,reviewer_id=%s,graded_at=CURRENT_TIMESTAMP WHERE id=%s",
+                  (comments.strip(), actor, sid))
 
 GRADE_WEIGHTS = {'mcq': 60, 'essay': 20, 'oral_practical': 20}
 
@@ -878,11 +894,12 @@ def result(sub):
     if sub['status'] != 'Graded':
         return 'Pending Review'
     percentage = final_percentage(sub)
-    minimums = all(category_percentage(sub, kind) >= 50 for kind in QUESTION_TYPES)
-    return f"{'PASS' if percentage >= 70 and minimums else 'FAIL'} ({percentage:.1f}%)"
+    return f"{'PASS' if percentage >= 70 else 'FAIL'} ({percentage:.1f}%)"
 
 def category_percentage(sub, kind):
-    return 100 * sub.get(f'{kind}_score', 0) / sub.get(f'{kind}_max', 0) if sub.get(f'{kind}_max', 0) else 0
+    score = sub.get(f'calculated_{kind}_score', sub.get(f'{kind}_score', 0))
+    maximum = sub.get(f'calculated_{kind}_max', sub.get(f'{kind}_max', 0))
+    return 100 * score / maximum if maximum else 0
 
 def category_result(sub, kind):
     if sub['status'] != 'Graded':

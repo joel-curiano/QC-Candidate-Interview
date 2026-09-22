@@ -14,7 +14,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import database as db
 from question_types import QUESTION_TYPES, QUESTION_TYPE_LABELS, QUESTION_TYPE_SECTION_LABELS, REVIEWER_SCORED_TYPES
-from email_service import EmailDeliveryError, send_candidate_invitation, send_candidate_result, send_reviewer_credentials, send_test_email
+from email_service import EmailDeliveryError, candidate_result_filename, send_candidate_invitation, send_candidate_result, send_reviewer_credentials, send_test_email
 from question_import import QuestionImportError, export_questions_bytes, parse_questions, template_bytes
 from result_export import excel_bytes
 
@@ -629,10 +629,10 @@ def candidate_result_pdf(sub):
         for kind, label in (('mcq', 'Multiple Choice'), ('essay', 'Essay'), ('oral_practical', 'Oral-Practical')):
             rows.append([label, f"{db.GRADE_WEIGHTS[kind]}%", f"{db.weighted_category_percentage(sub, kind):.1f}%"])
         overall_pct = db.final_percentage(sub)
-        overall_status = 'PASS' if overall_pct >= 70 and all(db.category_percentage(sub, kind) >= 50 for kind in QUESTION_TYPES) else 'FAIL'
+        overall_status = 'PASS' if overall_pct >= 70 else 'FAIL'
         overall_color = '#188038' if overall_status == 'PASS' else '#B51F2D'
-        story += [Spacer(1, 4*mm), Paragraph('Results by question type', styles['CATResultHeading']), Table(rows, colWidths=[39*mm, 26.6*mm, 22.4*mm], style=TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#B51F2D')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('GRID',(0,0),(-1,-1),0.4,colors.HexColor('#D9DCDE')),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),8),('LEADING',(0,0),(-1,-1),10),('PADDING',(0,0),(-1,-1),4)])), Spacer(1, 5*mm), Paragraph(f'<b>Overall result:</b> {overall_pct:.1f}% - <font color="{overall_color}"><b>{overall_status}</b></font>', styles['CATOverallResult'])]
-    story += [Spacer(1, 6*mm), Paragraph('<b>How pass/fail is determined</b>', styles['CATExplainHeading']), Paragraph('The final grade is calculated from the weighted question-type grades: Multiple Choice 60%, Essay 20%, and Oral-Practical 20%. The candidate must achieve at least 50% in every question type and at least 70% in the final grade. A result remains Pending Review until the Reviewer scores all Essay and Oral-Practical responses.', styles['CATExplainBody'])]
+        story += [Spacer(1, 4*mm), Paragraph('Results by question type', styles['CATResultHeading']), Table(rows, colWidths=[35*mm, 23*mm, 30*mm], style=TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#B51F2D')),('TEXTCOLOR',(0,0),(-1,0),colors.white),('GRID',(0,0),(-1,-1),0.4,colors.HexColor('#D9DCDE')),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),8),('LEADING',(0,0),(-1,-1),10),('PADDING',(0,0),(-1,-1),4)])), Spacer(1, 5*mm), Paragraph(f'<b>Overall result:</b> {overall_pct:.1f}% - <font color="{overall_color}"><b>{overall_status}</b></font>', styles['CATOverallResult'])]
+    story += [Spacer(1, 6*mm), Paragraph('<b>How pass/fail is determined</b>', styles['CATExplainHeading']), Paragraph('The final grade is calculated from the weighted question-type grades: Multiple Choice 60%, Essay 20%, and Oral-Practical 20%. The candidate must achieve at least 70% in the final grade. A result remains Pending Review until the Reviewer scores all Essay and Oral-Practical responses.', styles['CATExplainBody'])]
     doc.build(story)
     return output.getvalue()
 
@@ -1035,7 +1035,7 @@ if user['role'] == 'Candidate':
             section.__exit__(None, None, None)
 else:
     pages = ['Create Candidate Account', 'Candidate Schedules']
-    pages += ['Assessment Settings', 'Review Assessments']
+    pages += ['Review Assessments', 'Assessment Settings']
     if user['role'] == 'Admin':
         pages += ['Projects', 'Accounts', 'Maintenance']
     pages += ['Question Bank']
@@ -1722,7 +1722,8 @@ else:
             result_pdf = cached_candidate_result_pdf(json.dumps(sub, default=str))
             action_col1, action_col2 = st.columns(2)
             with action_col1:
-                st.download_button('Download Candidate Result', result_pdf, 'candidate-result.pdf', 'application/pdf', use_container_width=True)
+                result_filename = candidate_result_filename(sub.get('candidate_name', 'Candidate'))
+                st.download_button('Download Candidate Result', result_pdf, result_filename, 'application/pdf', use_container_width=True)
             with action_col2:
                 if st.button('Email Result to Candidate', type='primary', use_container_width=True):
                     if not sub.get('email'):

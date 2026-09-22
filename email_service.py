@@ -1,5 +1,6 @@
 """SMTP invitation delivery for scheduled candidate assessments."""
 import os
+import re
 import smtplib
 from datetime import date
 from email.message import EmailMessage
@@ -8,6 +9,13 @@ import streamlit as st
 
 class EmailDeliveryError(ValueError):
     """Safe, user-facing email configuration or delivery error."""
+
+
+def candidate_result_filename(name):
+    """Return a safe, readable filename for a candidate result PDF."""
+    clean_name = re.sub(r'[^A-Za-z0-9._ -]+', '', str(name or '').strip())
+    clean_name = re.sub(r'\s+', ' ', clean_name).strip(' .') or 'Candidate'
+    return f'candidate-result-{clean_name[:80]}.pdf'
 
 
 def _setting(name, default=''):
@@ -138,5 +146,5 @@ def send_candidate_result(email, name, pdf_bytes):
         f'Assessment portal: {app_url}\n\n'
         'Regards,\nQUALITY DEPARTMENT | C.A.T. INTERNATIONAL L.L.C.\n'
     )
-    message.add_attachment(pdf_bytes, maintype='application', subtype='pdf', filename='candidate-result.pdf')
+    message.add_attachment(pdf_bytes, maintype='application', subtype='pdf', filename=candidate_result_filename(name))
     _deliver(message, host)

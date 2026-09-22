@@ -86,7 +86,6 @@ def test_scoring_and_isolation(accounts):
     assert db.submit(accounts['alice'], 'Welding QC', responses, 'attempt') == sid
     assert db.submissions(accounts['bob']) == []
     sub = db.submissions(accounts['alice'])[0]
-    assert sub['mcq_score'] == 10
     assert db.result(sub) == 'Pending Review'
     with pytest.raises(ValueError):
         db.answer_details(accounts['alice'], sid)
@@ -100,7 +99,8 @@ def test_scoring_and_isolation(accounts):
     with pytest.raises(ValueError):
         db.grade(accounts['reviewer'], sid, {}, '')
     db.grade(accounts['reviewer'], sid, {essay['id']: 11}, 'Meets threshold')
-    assert db.result(db.submissions(accounts['alice'])[0]) == 'PASS (70.0%)'
+    graded = db.submissions(accounts['alice'])[0]
+    assert db.result(graded) == 'PASS (70.0%)'
     with pytest.raises(ValueError):
         db.grade(accounts['admin'], sid, {essay['id']: 0}, '')
 
