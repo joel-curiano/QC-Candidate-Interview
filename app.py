@@ -494,8 +494,8 @@ if user["role"] != "Candidate":
 
     # Prompt staff to use the sidebar navigation to reach the pages.
     st.info(
-        "Use the sidebar navigation to access Candidate Schedules, Question Bank, "
-        "Review Assessments, and other administrative pages."
+        "Use the sidebar to open Candidate Schedules, Question Bank, Review Assessments, "
+        "and other admin pages."
     )
     st.stop()
 

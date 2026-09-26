@@ -123,6 +123,24 @@ def test_mcq_only_and_wrong_answer(accounts):
     assert db.result(db.submissions(accounts['alice'])[0]) == 'FAIL (0.0%)'
     assert db.answer_details(accounts['admin'], sid)[0]['awarded_score'] == 0
 
+
+def test_wipe_questions_archives_used_questions_and_preserves_answer_references(accounts):
+    qs = db.questions('Welding QC')
+    responses = {q['id']: q['correct_answer'] if q['q_type'] == 'mcq' else 'Inspection evidence and closure.' for q in qs}
+    sid = db.submit(accounts['alice'], 'Welding QC', responses, 'archive-wipe')
+
+    db.wipe_questions(accounts['admin'])
+
+    with db.connection() as c:
+        archived = c.execute('SELECT * FROM archived_questions ORDER BY id').fetchall()
+        assert len(archived) == len(qs)
+        archived_ids = {row['source_question_id'] for row in archived}
+        assert archived_ids == {q['id'] for q in qs}
+        answer_question_ids = {row['question_id'] for row in c.execute('SELECT question_id FROM answers WHERE submission_id=%s', (sid,)).fetchall()}
+        assert answer_question_ids == {row['id'] for row in archived}
+        assert c.execute('SELECT COUNT(*) FROM questions WHERE id = ANY(%s)', ([q['id'] for q in qs],)).fetchone()[0] == 0
+
+
 def test_concurrent_duplicate_submission(accounts):
     from concurrent.futures import ThreadPoolExecutor
     qs = db.questions('Welding QC')

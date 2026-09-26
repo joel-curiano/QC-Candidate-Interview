@@ -36,8 +36,7 @@ st.caption("Add project-specific technical questions and rubrics before using th
 
 if st.session_state.pop("question_bank_wiped", False):
     st.success(
-        "Question Bank wiped. Unanswered questions were removed and "
-        "answered questions were archived."
+        "Question Bank wiped. Unanswered questions were removed. Questions already used in candidate submissions were archived and kept linked to historical assessment records."
     )
 
 # ---------------------------------------------------------------------------
@@ -259,7 +258,7 @@ else:
                 with col_btn2:
                     if not q["active"]:
                         if st.button(
-                            "Delete entirely (Removes candidate records)",
+                            "Delete permanently (removes linked submissions)",
                             key=f"hard_delete_{q['id']}",
                             type="primary",
                         ):
@@ -287,16 +286,14 @@ if user["role"] == "Admin":
     def _render_question_bank_wipe():
         with st.expander("Wipe Question Bank"):
             st.warning(
-                "This will delete all questions. Questions that have already been answered "
-                "by candidates will be deactivated instead of deleted to preserve assessment records."
+                "This clears the active question bank. Any question that has already appeared in a candidate submission is archived so historical assessment records remain linked to the original question."
             )
             if st.button("Wipe Question Bank", type="primary"):
                 if hasattr(st, "dialog"):
                     @st.dialog("Confirm Question Bank Wipe")
                     def _wipe_question_bank_dialog():
                         st.warning(
-                            "This removes all unanswered questions and archives every question "
-                            "that has already been used in a candidate assessment."
+                            "This removes all unanswered questions and archives only the questions that were already used in candidate assessments."
                         )
                         if st.button("Confirm Wipe Question Bank", type="primary"):
                             try:
@@ -311,8 +308,7 @@ if user["role"] == "Admin":
                     st.session_state["confirm_wipe_question_bank"] = True
             if st.session_state.get("confirm_wipe_question_bank"):
                 st.warning(
-                    "This removes all unanswered questions and archives every question "
-                    "that has already been used in a candidate assessment."
+                    "This removes all unanswered questions and archives only the questions that were already used in candidate assessments."
                 )
                 if st.button("Confirm Wipe Question Bank", type="primary"):
                     try:
@@ -325,23 +321,20 @@ if user["role"] == "Admin":
                         st.error(str(exc))
 
             st.error(
-                "The following option is destructive. It will completely remove archived "
-                "questions and delete the assessment records of any candidates who answered them."
+                "The following option is destructive. It permanently deletes archived question records and removes any candidate submission that references them."
             )
-            if st.button("Wipe archived questions and candidate records"):
+            if st.button("Permanently delete archived questions and linked submissions"):
                 if hasattr(st, "dialog"):
                     @st.dialog("Deleting Archived Questions")
                     def _wipe_archived_dialog():
                         st.warning(
-                            "This permanently deletes archived questions and every candidate "
-                            "assessment that used them."
+                            "This permanently deletes archived question records and any candidate submission that references them."
                         )
                         confirmed = st.checkbox(
-                            "I understand that archived questions and affected candidate records "
-                            "cannot be recovered."
+                            "I understand that archived question records and their linked candidate submissions cannot be recovered."
                         )
                         if st.button(
-                            "Wipe archived questions and candidate records",
+                            "Permanently delete archived questions and linked submissions",
                             type="primary",
                             disabled=not confirmed,
                         ):
@@ -364,8 +357,7 @@ if user["role"] == "Admin":
                                 clear_read_caches()
                                 progress_bar.empty()
                                 st.success(
-                                    f"Wipe complete. Deleted {deleted_count} archived questions "
-                                    "and their related candidate records."
+                                    f"Wipe complete. Deleted {deleted_count} archived question records and their linked submissions."
                                 )
                             except ValueError as exc:
                                 progress_bar.empty()
@@ -378,12 +370,11 @@ if user["role"] == "Admin":
 
             if st.session_state.get("confirm_wipe_archived_questions"):
                 confirmed = st.checkbox(
-                    "I understand that archived questions and affected candidate records "
-                    "cannot be recovered.",
+                    "I understand that archived question records and their linked candidate submissions cannot be recovered.",
                     key="confirm_wipe_archived_questions_acknowledged",
                 )
                 if st.button(
-                    "Confirm Wipe Archived Questions", type="primary", disabled=not confirmed
+                    "Confirm permanent archive wipe", type="primary", disabled=not confirmed
                 ):
                     progress_bar = st.progress(0, text="Preparing to delete...")
 
@@ -403,8 +394,7 @@ if user["role"] == "Admin":
                         progress_bar.empty()
                         st.session_state.pop("confirm_wipe_archived_questions", None)
                         st.success(
-                            f"Wipe complete. Deleted {deleted_count} archived questions "
-                            "and their related candidate records."
+                            f"Wipe complete. Deleted {deleted_count} archived question records and their linked submissions."
                         )
                     except ValueError as exc:
                         progress_bar.empty()

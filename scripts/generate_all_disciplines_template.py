@@ -1,15 +1,15 @@
 """
-Generate qc-question-template.xlsx with 1,300 Aramco-aligned QC questions across ALL 13 disciplines.
-13 Disciplines (100 questions per discipline):
-  60 MCQ, 20 Essay, 20 Oral-Practical (12 Oral, 8 Practical)
-Difficulty per question type: 40% Easy, 40% Moderate, 20% Difficult
-  MCQ (60 Qs): 24 Easy, 24 Moderate, 12 Difficult
-  Essay (20 Qs): 8 Easy, 8 Moderate, 4 Difficult
-  Oral-Practical (20 Qs): 8 Easy, 8 Moderate, 4 Difficult
-    - 12 Oral + 8 Practical split within the 20 Oral-Practical
+Generate qc-question-template.xlsx with 1,560 Aramco-aligned QC questions across ALL 13 disciplines.
+13 Disciplines (120 questions per discipline):
+  70 MCQ, 25 Essay, 25 Oral-Practical (15 Oral, 10 Practical)
+Difficulty per question type: 30% Easy, 50% Moderate, 20% Difficult
+  MCQ (70 Qs): 21 Easy, 35 Moderate, 14 Difficult
+  Essay (25 Qs): 8 Easy, 12 Moderate, 5 Difficult
+  Oral-Practical (25 Qs): 8 Easy, 12 Moderate, 5 Difficult
+    - 15 Oral + 10 Practical split within the 25 Oral-Practical
 All question types stored as 'oral_practical' per question_import.py validation.
 MCQ distractors are length-balanced to the correct answer.
-Subjects and topics pulled from disciplines.csv.
+Subjects and topics pulled from disciplines-subjects-topis.csv.
 """
 import sys
 import os
@@ -40,7 +40,7 @@ HEADERS = [
 # ---------------------------------------------------------------------------
 def load_discipline_topics():
     """Parse disciplines.csv and return {discipline: [(subject, topic), ...]}."""
-    csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "disciplines.csv")
+    csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "disciplines-subjects-topis.csv")
     result = {}
     with open(csv_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -70,10 +70,10 @@ def _balanced_options(correct, d1, d2, d3):
     return [correct, _pad(correct, d1), _pad(correct, d2), _pad(correct, d3)]
 
 # ===================================================================
-# WELDING QC — 60 MCQ + 20 Essay + 12 Oral + 8 Practical
+# WELDING QC — 70 MCQ + 25 Essay + 15 Oral + 10 Practical
 # ===================================================================
 WELDING_MCQ = [
-    # --- 24 Easy (Direct Recall / Remembering) ---
+    # --- 21 Easy (Direct Recall / Remembering) ---
     {"q": "Per ASME Section IX, which variable is classified as an essential variable for SMAW procedure qualification?",
      "opts": _balanced_options("A change in base metal P-Number grouping", "A change in the brand of welding machine", "A minor adjustment in ambient lighting level", "A change in the color of electrode coating"),
      "correct": "A change in base metal P-Number grouping", "diff": "easy",
@@ -146,18 +146,6 @@ WELDING_MCQ = [
      "opts": _balanced_options("To show the location and status of each weld joint", "To record daily weather conditions at the worksite", "To list all project personnel assigned to welding", "To calculate material cost estimates for weld metal"),
      "correct": "To show the location and status of each weld joint", "diff": "easy",
      "subj": "Documentation and turnover", "topic": "Weld map WPS and welder qualification records"},
-    {"q": "Which of the following is a supplementary essential variable in ASME Section IX for impact-tested WPS?",
-     "opts": _balanced_options("A change in PWHT temperature or time range values", "A change in the welding electrode brand manufacturer", "A change in the joint preparation grinding method", "A change in the type of cleaning brush material used"),
-     "correct": "A change in PWHT temperature or time range values", "diff": "easy",
-     "subj": "Codes and standards", "topic": "Approved WPS PQR and welder qualification controls"},
-    {"q": "What is the minimum interpass temperature requirement typically specified for carbon steel welding?",
-     "opts": _balanced_options("Not less than the specified preheat temperature value", "Always maintained at exactly room temperature 25°C", "There is no minimum interpass temperature required", "Interpass must always exceed 300°C for all joints"),
-     "correct": "Not less than the specified preheat temperature value", "diff": "easy",
-     "subj": "Installation and workmanship", "topic": "Preheat interpass temperature and welding parameter control"},
-    {"q": "Per AWS D1.1, what is the maximum allowable porosity for a groove weld in statically loaded structures?",
-     "opts": _balanced_options("Sum of piping porosity shall not exceed 10 mm in 25 mm", "Any amount of porosity is acceptable if weld is full", "Zero porosity is the only acceptable quality criteria", "Porosity up to 25 mm diameter is acceptable per joint"),
-     "correct": "Sum of piping porosity shall not exceed 10 mm in 25 mm", "diff": "easy",
-     "subj": "Testing and verification", "topic": "Visual examination and NDT acceptance"},
     {"q": "What does the F-Number in ASME Section IX classify?",
      "opts": _balanced_options("The filler metal grouping based on usability traits", "The base metal grade based on chemical composition", "The welding position such as flat or overhead weld", "The type of shielding gas used during welding arc"),
      "correct": "The filler metal grouping based on usability traits", "diff": "easy",
@@ -267,7 +255,51 @@ WELDING_MCQ = [
      "opts": _balanced_options("Unique weld number welder ID and WPS number at the joint", "Only the welder's name written with paint marker on pipe", "No markings are required if digital photos are taken of", "Project number only is sufficient for field traceability"),
      "correct": "Unique weld number welder ID and WPS number at the joint", "diff": "moderate",
      "subj": "Materials and traceability", "topic": "Weld joint and welder traceability"},
-    # --- 12 Difficult (Evaluating / Synthesizing) ---
+    {"q": "Per AWS D1.1, when back-gouging is required on a double-sided groove weld, what must the inspector verify before welding the second side?",
+     "opts": _balanced_options("Sound metal exposed with no defects visible after grinding", "The first side has cooled to ambient temperature only val", "Minimum 5 mm of root pass remains visible after gouging", "Back-gouging depth equals exactly half the wall thickness"),
+     "correct": "Sound metal exposed with no defects visible after grinding", "diff": "moderate",
+     "subj": "Installation and workmanship", "topic": "Joint preparation fit up and alignment"},
+    {"q": "A socket weld on a small bore pipe requires a gap between the pipe end and the socket shoulder. Per ASME B31.3, what is the typical required gap?",
+     "opts": _balanced_options("Approximately 1.6 mm (1/16 inch) gap before welding start", "Zero gap with full metal to metal contact at the shoulder", "Minimum 6 mm (1/4 inch) gap to allow thermal expansion", "No gap requirement exists for socket welds in any code"),
+     "correct": "Approximately 1.6 mm (1/16 inch) gap before welding start", "diff": "moderate",
+     "subj": "Installation and workmanship", "topic": "Joint preparation fit up and alignment"},
+    {"q": "An inspector finds an arc strike on the outside surface of a pressure pipe during visual inspection. Per ASME B31.3, what action is required?",
+     "opts": _balanced_options("Grind smooth and examine area by MT or PT for cracks val", "No action required if arc strike is less than 3 mm wide", "Apply paint over the arc strike and document in the log", "Accept the arc strike if the pipe wall thickness is met"),
+     "correct": "Grind smooth and examine area by MT or PT for cracks val", "diff": "moderate",
+     "subj": "Nonconformance and corrective action", "topic": "Weld defect reporting and repair authorization"},
+    {"q": "Per ASME Section IX, a welder qualifies on 25 mm thick plate in position 3G. What is the maximum thickness qualified for groove welding?",
+     "opts": _balanced_options("Unlimited thickness when test coupon exceeds 19 mm plate", "50 mm which is exactly twice the test coupon thickness val", "25 mm which is the same as the test coupon thickness only", "12.5 mm which is half of the test coupon thickness value"),
+     "correct": "Unlimited thickness when test coupon exceeds 19 mm plate", "diff": "moderate",
+     "subj": "Codes and standards", "topic": "Approved WPS PQR and welder qualification controls"},
+    {"q": "During GTAW root pass welding of stainless steel pipe, the purge gas oxygen level reads 3.5%. Per SAES-W-011, what is the required action?",
+     "opts": _balanced_options("Stop welding until oxygen level is reduced below 1% max", "Continue welding because 3.5% is within acceptable range", "Increase argon flow rate but continue welding root pass", "Switch to SMAW process which does not require purge gas"),
+     "correct": "Stop welding until oxygen level is reduced below 1% max", "diff": "moderate",
+     "subj": "Installation and workmanship", "topic": "Visual weld profile and defect prevention"},
+    {"q": "Per ASME Section IX, when a WPS qualified at 200 amps SMAW is used in production, what is the allowable amperage range?",
+     "opts": _balanced_options("Within the range recorded on the PQR supporting the WPS", "Any amperage the welder prefers based on field conditions", "Plus or minus 10% of the qualified amperage value only", "Exactly the qualified amperage with zero deviation perm"),
+     "correct": "Within the range recorded on the PQR supporting the WPS", "diff": "moderate",
+     "subj": "Testing and verification", "topic": "WPS compliance and consumable control checks"},
+    {"q": "A welded joint on carbon steel pipe is specified for 100% RT. The inspector discovers the welder is not listed on the active welder log. What is the correct action?",
+     "opts": _balanced_options("Stop welding immediately and verify welder qualification", "Allow welding to continue and check qualification later", "Accept the weld if RT results pass acceptance criteria val", "Issue a verbal warning and let the welder finish the pass"),
+     "correct": "Stop welding immediately and verify welder qualification", "diff": "moderate",
+     "subj": "Inspection planning", "topic": "Welding inspection plan and hold points"},
+    {"q": "Per AWS D1.1, what is the maximum convexity allowed for a fillet weld with a leg size of 10 mm?",
+     "opts": _balanced_options("Convexity shall not exceed 1.5 mm for 10 mm leg fillet", "Convexity up to 3 mm is acceptable for all fillet sizes", "No convexity limit exists if the throat is fully met val", "Convexity equal to the leg size (10 mm) is acceptable"),
+     "correct": "Convexity shall not exceed 1.5 mm for 10 mm leg fillet", "diff": "moderate",
+     "subj": "Installation and workmanship", "topic": "Visual weld profile and defect prevention"},
+    {"q": "During a hydrotest, the pressure gauge fluctuates between 95% and 100% of test pressure during the hold period. What should the QC inspector do?",
+     "opts": _balanced_options("Investigate cause of fluctuation before accepting result", "Accept the test since pressure remains above 90% of test", "Increase test pressure by 10% to compensate for the drop", "Terminate the test and drain the system immediately now"),
+     "correct": "Investigate cause of fluctuation before accepting result", "diff": "moderate",
+     "subj": "Testing and verification", "topic": "WPS compliance and consumable control checks"},
+    {"q": "Per SAES-W-011, what is the minimum preheat requirement for welding P-No. 4 (Cr-Mo) material with a thickness greater than 13 mm?",
+     "opts": _balanced_options("Minimum 150°C (300°F) preheat per SAES-W-011 requirement", "No preheat required if ambient temperature exceeds 10°C", "Minimum 50°C (120°F) preheat for all chromium alloy mat", "Preheat required only when humidity exceeds 80% at site"),
+     "correct": "Minimum 150°C (300°F) preheat per SAES-W-011 requirement", "diff": "moderate",
+     "subj": "Installation and workmanship", "topic": "Preheat interpass temperature and welding parameter control"},
+    {"q": "A WPS specifies E8018-B2 electrodes for Cr-Mo steel welding. The contractor proposes E7018 as a substitute. Per ASME IX, is this acceptable?",
+     "opts": _balanced_options("No because it changes the A-Number and F-Number grouping", "Yes because both are low hydrogen iron powder type coating", "Yes if the tensile strength exceeds the base metal minimum", "No unless the contractor obtains a verbal approval only"),
+     "correct": "No because it changes the A-Number and F-Number grouping", "diff": "moderate",
+     "subj": "Materials and traceability", "topic": "Filler metal identification storage and conditioning"},
+    # --- 14 Difficult (Evaluating / Synthesizing) ---
     {"q": "A thick-wall P-No. 5B alloy steel weld develops delayed cracking 48 hours after PWHT. What is the most likely root cause mechanism?",
      "opts": _balanced_options("Hydrogen-induced cold cracking from residual diffusible H2", "Hot cracking from excessive sulfur content in base metal", "Stress corrosion cracking from external chemical exposure", "Fatigue cracking from cyclic loading during the PWHT hold"),
      "correct": "Hydrogen-induced cold cracking from residual diffusible H2", "diff": "difficult",
@@ -316,6 +348,14 @@ WELDING_MCQ = [
      "opts": _balanced_options("Cut out the weld joint completely and re-weld with new spool", "Allow a third repair attempt with a different welder team", "Accept the weld with reduced pressure rating for service", "Perform UT in lieu of RT to potentially achieve acceptance"),
      "correct": "Cut out the weld joint completely and re-weld with new spool", "diff": "difficult",
      "subj": "Nonconformance and corrective action", "topic": "Repair cycle control and traceability"},
+    {"q": "Lamellar tearing is observed in a thick T-joint weldment on a structural steel plate. Per AWS D1.1, what is the primary metallurgical cause and required QC investigation?",
+     "opts": _balanced_options("Through-thickness sulfide inclusion layers causing stepwise cracks", "Surface contamination causing intergranular corrosion near weld", "Excessive preheat causing grain growth and brittle HAZ fracture", "Shielding gas contamination causing nitrogen porosity in weld"),
+     "correct": "Through-thickness sulfide inclusion layers causing stepwise cracks", "diff": "difficult",
+     "subj": "Nonconformance and corrective action", "topic": "Weld defect reporting and repair authorization"},
+    {"q": "An austenitic stainless steel weld on a vessel operating above 425°C shows signs of sensitization after service exposure. What metallurgical mechanism and QC preventive measure applies?",
+     "opts": _balanced_options("Chromium carbide precipitation at grain boundaries causing Cr depletion", "Sigma phase formation from excessive ferrite content in the weld area", "Hydrogen embrittlement from cathodic protection current over-protect", "Stress relaxation cracking from insufficient post-weld heat treatment"),
+     "correct": "Chromium carbide precipitation at grain boundaries causing Cr depletion", "diff": "difficult",
+     "subj": "Testing and verification", "topic": "Visual examination and NDT acceptance"},
 ]
 
 WELDING_ESSAY = [
@@ -382,12 +422,26 @@ WELDING_ESSAY = [
     {"q": "A critical pressure vessel weld passes RT but fails during hydrostatic testing with a through-wall leak. Conduct a comprehensive root cause analysis addressing NDT reliability, WPS adequacy, and fabrication sequence.",
      "rubric": "1. NDT Review (2.5 pts): RT technique, film quality, interpretation accuracy, possible missed defects.\n2. WPS Adequacy (2.5 pts): Essential variable compliance, heat input, filler metal suitability.\n3. Fabrication Sequence (2.5 pts): PWHT sequence, residual stress, distortion effects.\n4. Corrective Actions (2.5 pts): Root cause documentation, repair plan, prevention measures, retest requirements.",
      "diff": "difficult", "subj": "Nonconformance and corrective action", "topic": "Repair cycle control and traceability"},
+    {"q": "Describe the QC inspection requirements for socket weld joints on small bore piping per ASME B31.3 and SAES-W-011, including fit-up, welding, and acceptance criteria.",
+     "rubric": "1. Fit-up Requirements (2.5 pts): Gap verification (1.6 mm), pipe insertion depth, alignment check.\n2. Welding Controls (2.5 pts): Minimum two passes, fillet size per drawing, throat verification.\n3. Visual Acceptance (2.5 pts): Profile requirements, undercut limits, surface defect criteria.\n4. Documentation (2.5 pts): Weld log entry, NDT if specified, traceability records.",
+     "diff": "moderate", "subj": "Installation and workmanship", "topic": "Visual weld profile and defect prevention"},
+    {"q": "Explain the purge gas control requirements for GTAW welding of stainless steel piping systems per SAES-W-011, including monitoring, acceptance, and documentation.",
+     "rubric": "1. Purge Setup (2.5 pts): Dam placement, gas flow rate, system configuration.\n2. Oxygen Monitoring (2.5 pts): Analyzer calibration, maximum 1% O2, continuous monitoring.\n3. Root Pass Quality (2.5 pts): Discoloration limits, sugar formation rejection, acceptance criteria.\n4. Documentation (2.5 pts): Purge log records, O2 readings, welder sign-off.",
+     "diff": "moderate", "subj": "Installation and workmanship", "topic": "Joint preparation fit up and alignment"},
+    {"q": "Detail the step-by-step procedure for administering a welder performance qualification test per ASME Section IX and SAES-W-011, including test supervision and documentation.",
+     "rubric": "1. Test Preparation (2.5 pts): WPS selection, coupon material, position setup, ID verification.\n2. Test Supervision (2.5 pts): Inspector witness, essential variable monitoring, documentation.\n3. Specimen Testing (2.5 pts): Bend test preparation, RT alternative, acceptance criteria.\n4. Qualification Records (2.5 pts): WPQ form completion, range qualified, continuity tracking setup.",
+     "diff": "moderate", "subj": "Codes and standards", "topic": "Approved WPS PQR and welder qualification controls"},
+    {"q": "Describe the QC inspector's responsibilities for arc strike damage assessment on pressure piping per ASME B31.3 and SAES-W-011, including detection, evaluation, and corrective action.",
+     "rubric": "1. Detection (2.5 pts): Visual identification during field walkdown, size and location recording.\n2. Evaluation (2.5 pts): Grinding requirements, MT/PT examination, depth measurement.\n3. Corrective Action (2.5 pts): Wall thickness verification, engineering evaluation if needed, repair procedure.\n4. Prevention (2.5 pts): Welder awareness training, ground clamp placement rules, work practice controls.",
+     "diff": "moderate", "subj": "Nonconformance and corrective action", "topic": "Weld defect reporting and repair authorization"},
+    {"q": "Analyze a lamellar tearing scenario in a thick-plate structural T-joint weldment. Explain the metallurgical mechanism, through-thickness testing requirements, and the QC investigation protocol including corrective and preventive measures per AWS D1.1 and SAES-W-011.",
+     "rubric": "1. Metallurgical Mechanism (2.5 pts): Sulfide/oxide inclusion layers, through-thickness ductility limitation, Z-direction stress from weld shrinkage.\n2. Testing Requirements (2.5 pts): Through-thickness tensile testing (Z-direction), sulfur content limits, ultrasonic examination for pre-existing laminations.\n3. Investigation Protocol (2.5 pts): Root cause analysis, material certificate review, joint redesign evaluation.\n4. Corrective/Preventive Measures (2.5 pts): Buttering technique, joint redesign to reduce restraint, specification of Z-quality plate.",
+     "diff": "difficult", "subj": "Nonconformance and corrective action", "topic": "Weld defect reporting and repair authorization"},
 ]
 
 WELDING_ORAL_PRACTICAL = [
-    # --- 12 Oral Questions (8 easy=~3.3, 8 moderate=~3.3, 4 diff=~1.3 → split: 5 Easy, 5 Moderate, 2 Difficult for Oral) ---
-    # Actually: 20 total Oral-Practical, 8 Easy, 8 Moderate, 4 Difficult overall
-    # 12 Oral: 5 Easy, 5 Moderate, 2 Difficult
+    # --- 15 Oral: 5 Easy, 7 Moderate, 3 Difficult ---
+    # 25 total Oral-Practical, 8 Easy, 12 Moderate, 5 Difficult overall
     {"q": "Verbally explain to the reviewer the purpose of a Welding Procedure Specification (WPS) and identify three essential variables per ASME Section IX.",
      "rubric": "1. WPS Purpose (2.5 pts): Qualified instructions for production welding.\n2. Essential Variables (2.5 pts): Correctly names 3 (P-No., F-No., thickness, process, preheat).\n3. Consequence of Change (2.5 pts): Explains requalification requirement.\n4. Code Reference (2.5 pts): Correctly references ASME Section IX articles.",
      "diff": "easy", "subj": "Codes and standards", "topic": "Approved WPS PQR and welder qualification controls", "sub_type": "oral"},
@@ -424,7 +478,22 @@ WELDING_ORAL_PRACTICAL = [
     {"q": "Verbally explain how you would resolve conflicting welding requirements between ASME B31.3, SAES-W-011, and the project specification for a sour service application, defending your recommended resolution approach.",
      "rubric": "1. Conflict Identification (2.5 pts): Pinpoints specific conflicting clauses.\n2. Hierarchy Application (2.5 pts): Explains Aramco document precedence hierarchy.\n3. Resolution Strategy (2.5 pts): Technical query process, deviation mechanism.\n4. Defense Under Questioning (2.5 pts): Maintains technically sound position under challenge.",
      "diff": "difficult", "subj": "Codes and standards", "topic": "Controlled welding requirements and project document hierarchy", "sub_type": "oral"},
-    # --- 8 Practical Questions: 3 Easy, 3 Moderate, 2 Difficult ---
+    {"q": "Verbally explain the back-gouging inspection requirements for double-sided groove welds. Describe how you verify sound metal exposure and the acceptance criteria per ASME B31.3.",
+     "rubric": "1. Back-gouge Method (2.5 pts): Grinding or arc gouging technique, depth control.\n2. Sound Metal Verification (2.5 pts): Visual and MT/PT examination of gouged surface.\n3. Acceptance Criteria (2.5 pts): No defects remaining, profile requirements, minimum thickness.\n4. Documentation (2.5 pts): Inspection record, approval to proceed with second side welding.",
+     "diff": "moderate", "subj": "Installation and workmanship", "topic": "Joint preparation fit up and alignment", "sub_type": "oral"},
+    {"q": "Verbally explain the QC controls required for dissimilar metal welding between carbon steel and stainless steel per SAES-W-011 and ASME Section IX.",
+     "rubric": "1. WPS Requirements (2.5 pts): Separate PQR, filler metal selection (ERNiCr-3 or E309L).\n2. Preheat/PWHT (2.5 pts): Preheat per higher alloy requirement, PWHT considerations.\n3. Material Controls (2.5 pts): Contamination prevention, carbon migration awareness.\n4. NDT Requirements (2.5 pts): Additional examination requirements, PMI testing.",
+     "diff": "moderate", "subj": "Codes and standards", "topic": "Approved WPS PQR and welder qualification controls", "sub_type": "oral"},
+    {"q": "Verbally walk the reviewer through the socket weld inspection sequence for small bore piping per ASME B31.3, including fit-up gap verification, fillet sizing, and acceptance criteria.",
+     "rubric": "1. Gap Verification (2.5 pts): 1.6 mm gap requirement, measurement method, pipe insertion check.\n2. Weld Profile (2.5 pts): Minimum two passes, fillet leg size per drawing, throat measurement.\n3. Visual Acceptance (2.5 pts): Surface quality, undercut limits, profile compliance.\n4. Code References (2.5 pts): Correct ASME B31.3 and SAES-W-011 clause citations.",
+     "diff": "moderate", "subj": "Installation and workmanship", "topic": "Visual weld profile and defect prevention", "sub_type": "oral"},
+    {"q": "Using the provided purge gas monitoring equipment and pipe specimen, demonstrate how to set up, monitor, and verify argon purge gas oxygen levels during GTAW root pass welding of stainless steel pipe. Verbally explain rejection criteria for root pass discoloration.",
+     "rubric": "1. Equipment Setup (2.5 pts): Analyzer calibration check, dam placement, flow rate setting.\n2. O2 Monitoring (2.5 pts): Correct probe placement, stable reading below 1%, continuous monitoring.\n3. Discoloration Criteria (2.5 pts): Color chart reference, acceptance limits, sugar identification.\n4. Documentation (2.5 pts): Purge log completion with O2 readings and time stamps.",
+     "diff": "moderate", "subj": "Installation and workmanship", "topic": "Joint preparation fit up and alignment", "sub_type": "practical"},
+    {"q": "In an imaginary scenario, you discover multiple weld defects on a high-pressure Cr-Mo piping system: hydrogen-induced cracking in one joint, lack of fusion in another, and excessive hardness post-PWHT in a third. Verbally present your root cause analysis for each defect, defend your repair strategy under reviewer cross-examination, and explain how you would prevent recurrence across the remaining welds.",
+     "rubric": "1. Multi-Defect Analysis (2.5 pts): Correctly identifies distinct root causes for each defect type.\n2. Repair Strategy (2.5 pts): Proposes compliant repair WPS for each, correct repair sequence, re-PWHT plan.\n3. Cross-Examination Defense (2.5 pts): Maintains technically accurate position under reviewer challenges.\n4. Prevention Plan (2.5 pts): Systematic corrective actions addressing consumable control, WPS compliance, and PWHT monitoring.",
+     "diff": "difficult", "subj": "Nonconformance and corrective action", "topic": "Repair cycle control and traceability", "sub_type": "oral"},
+    # --- 10 Practical Questions: 3 Easy, 5 Moderate, 2 Difficult ---
     {"q": "Using the provided fillet weld gauge set, measure the leg size and throat of three fillet welds on the test coupon. Record measurements on the inspection report sheet.",
      "rubric": "1. Gauge Selection (2.5 pts): Selects correct gauge type for fillet measurement.\n2. Measurement Technique (2.5 pts): Proper placement, reads leg and throat correctly.\n3. Recording (2.5 pts): Accurate documentation of three measurements.\n4. Pass/Fail Determination (2.5 pts): Correctly evaluates against specified weld size.",
      "diff": "easy", "subj": "Testing and verification", "topic": "Visual examination and NDT acceptance", "sub_type": "practical"},
@@ -443,6 +512,12 @@ WELDING_ORAL_PRACTICAL = [
     {"q": "Using the provided PWHT chart recorder output, evaluate the heat treatment cycle for compliance with the WPS and SAES-W-011 requirements.",
      "rubric": "1. Heating Rate (2.5 pts): Reads and evaluates heating rate against code maximum.\n2. Soak Temperature (2.5 pts): Verifies temperature range within specified band.\n3. Hold Time (2.5 pts): Confirms minimum hold time achieved per thickness.\n4. Cooling Rate (2.5 pts): Evaluates controlled cooling rate compliance.",
      "diff": "moderate", "subj": "Testing and verification", "topic": "PWHT monitoring and hardness testing where required", "sub_type": "practical"},
+    {"q": "Using the provided micrometer and angle gauge, perform a pipe end bevel preparation inspection. Measure the bevel angle, root face, and root gap on three joints and verify compliance against the approved WPS. Complete the fit-up inspection report.",
+     "rubric": "1. Instrument Selection (2.5 pts): Correct gauge types, calibration verification.\n2. Measurement Technique (2.5 pts): Proper placement, accurate angle and linear measurement.\n3. WPS Comparison (2.5 pts): Evaluates each dimension against WPS tolerance range.\n4. Report Completion (2.5 pts): Accurate documentation with clear pass/fail per joint.",
+     "diff": "moderate", "subj": "Installation and workmanship", "topic": "Joint preparation fit up and alignment", "sub_type": "practical"},
+    {"q": "Perform a welding consumable receiving inspection on a delivery of E7018 electrodes. Verify batch certificates, check physical condition, confirm storage requirements per AWS D1.1, and complete the material receiving report.",
+     "rubric": "1. Certificate Review (2.5 pts): Batch number match, AWS classification, mechanical properties verification.\n2. Physical Inspection (2.5 pts): Coating condition, damage assessment, packaging integrity.\n3. Storage Setup (2.5 pts): Oven temperature setting, holding conditions, identification tagging.\n4. Report Completion (2.5 pts): Receiving log with acceptance status, batch traceability entry.",
+     "diff": "moderate", "subj": "Materials and traceability", "topic": "Filler metal identification storage and conditioning", "sub_type": "practical"},
     {"q": "Examine the provided cracked alloy steel weld specimen. Identify the defect type, perform excavation boundary measurements, defend your root cause analysis under reviewer questioning, and complete a formal NCR.",
      "rubric": "1. Defect Identification (2.5 pts): Physical identification and boundary measurement.\n2. Root Cause Defense (2.5 pts): Hydrogen, preheat deficiency, martensitic microstructure.\n3. Repair Proposal (2.5 pts): Compliant repair WPS, preheat/DHT, re-NDT sequence.\n4. NCR Completion (2.5 pts): Drafts complete Nonconformance Report with disposition.",
      "diff": "difficult", "subj": "Nonconformance and corrective action", "topic": "Weld defect reporting and repair authorization", "sub_type": "practical"},
@@ -461,7 +536,7 @@ def _get_disc_subjects_topics(disc_name):
     return DISC_TOPICS.get(disc_name, [("General", "General")])
 
 def _make_discipline_questions(disc_name, std_ref, desc):
-    """Generate 100 questions for a non-Welding discipline with real technical content."""
+    """Generate 120 questions for a non-Welding discipline with real technical content."""
     st_list = _get_disc_subjects_topics(disc_name)
     # Ensure we have enough subject/topic pairs - cycle through them
     while len(st_list) < 24:
@@ -471,13 +546,13 @@ def _make_discipline_questions(disc_name, std_ref, desc):
     essays = []
     oral_pracs = []
     
-    # ---- 60 MCQs: 24 Easy, 24 Moderate, 12 Difficult ----
-    # Distribute across subjects/topics from disciplines.csv
-    for i in range(60):
+    # ---- 70 MCQs: 21 Easy, 35 Moderate, 14 Difficult ----
+    # Distribute across subjects/topics from disciplines-subjects-topis.csv
+    for i in range(70):
         subj, topic = st_list[i % len(st_list)]
-        if i < 24:
+        if i < 21:
             diff = "easy"
-        elif i < 48:
+        elif i < 56:
             diff = "moderate"
         else:
             diff = "difficult"
@@ -563,8 +638,8 @@ def _make_discipline_questions(disc_name, std_ref, desc):
             "difficulty": diff, "topic": f"{disc_name} - {topic}"
         })
     
-    # ---- 20 Essays: 8 Easy, 8 Moderate, 4 Difficult ----
-    for i in range(20):
+    # ---- 25 Essays: 8 Easy, 12 Moderate, 5 Difficult ----
+    for i in range(25):
         subj, topic = st_list[i % len(st_list)]
         if i < 8:
             diff = "easy"
@@ -573,7 +648,7 @@ def _make_discipline_questions(disc_name, std_ref, desc):
                      f"2. Key Documents (2.5 pts): Identifies mandatory documents and records.\n"
                      f"3. Acceptance Criteria (2.5 pts): States applicable pass/fail criteria.\n"
                      f"4. Safety Considerations (2.5 pts): Identifies relevant safety requirements.")
-        elif i < 16:
+        elif i < 20:
             diff = "moderate"
             q_text = f"Describe the complete step-by-step QC inspection workflow for {topic.lower()} per {std_ref}, including pre-inspection, field verification, acceptance evaluation, and documentation."
             rubric = (f"1. Pre-Inspection (2.5 pts): Document review, equipment readiness, material verification.\n"
@@ -597,13 +672,13 @@ def _make_discipline_questions(disc_name, std_ref, desc):
             "difficulty": diff, "topic": f"{disc_name} - {topic}"
         })
     
-    # ---- 20 Oral-Practical: 12 Oral + 8 Practical ----
-    # Oral: 5 Easy, 5 Moderate, 2 Difficult
-    # Practical: 3 Easy, 3 Moderate, 2 Difficult
-    # Total: 8 Easy, 8 Moderate, 4 Difficult
+    # ---- 25 Oral-Practical: 15 Oral + 10 Practical ----
+    # Oral: 5 Easy, 7 Moderate, 3 Difficult
+    # Practical: 3 Easy, 5 Moderate, 2 Difficult
+    # Total: 8 Easy, 12 Moderate, 5 Difficult
     
-    # 12 Oral Questions
-    for i in range(12):
+    # 15 Oral Questions
+    for i in range(15):
         subj, topic = st_list[i % len(st_list)]
         if i < 5:
             diff = "easy"
@@ -612,7 +687,7 @@ def _make_discipline_questions(disc_name, std_ref, desc):
                      f"2. Safety Awareness (2.5 pts): Identifies relevant safety controls.\n"
                      f"3. Documentation (2.5 pts): Names required records and reports.\n"
                      f"4. Communication (2.5 pts): Clear, structured verbal response.")
-        elif i < 10:
+        elif i < 12:
             diff = "moderate"
             q_text = f"Verbally walk the reviewer through the complete inspection sequence for {topic.lower()} per {std_ref}. Explain hold points, acceptance criteria, and NCR escalation procedures."
             rubric = (f"1. Inspection Sequence (2.5 pts): Correct step-by-step procedure explanation.\n"
@@ -636,9 +711,9 @@ def _make_discipline_questions(disc_name, std_ref, desc):
             "difficulty": diff, "topic": f"{disc_name} - {topic}",
         })
     
-    # 8 Practical Questions
-    for i in range(8):
-        subj, topic = st_list[(12 + i) % len(st_list)]
+    # 10 Practical Questions: 3 Easy, 5 Moderate, 2 Difficult
+    for i in range(10):
+        subj, topic = st_list[(15 + i) % len(st_list)]
         if i < 3:
             diff = "easy"
             q_text = f"Using calibrated inspection instruments, perform a basic quality verification for {topic.lower()} per {disc_name} procedures. Demonstrate proper instrument handling and record results."
@@ -646,7 +721,7 @@ def _make_discipline_questions(disc_name, std_ref, desc):
                      f"2. Measurement Technique (2.5 pts): Demonstrates correct measurement method.\n"
                      f"3. Result Recording (2.5 pts): Accurately documents measurements.\n"
                      f"4. Pass/Fail Judgment (2.5 pts): Correctly evaluates against acceptance criteria.")
-        elif i < 6:
+        elif i < 8:
             diff = "moderate"
             q_text = f"Perform a comprehensive field inspection for {topic.lower()} per {std_ref}. Verbally explain your procedure while physically demonstrating instrument use, taking measurements, and completing the inspection report."
             rubric = (f"1. Verbal Explanation (2.5 pts): Clear procedural walkthrough with code references.\n"
@@ -693,7 +768,7 @@ DISCIPLINE_CONFIG = {
 
 
 def build_all_questions():
-    """Build the complete 1,300 question bank."""
+    """Build the complete 1,560 question bank (120 per discipline x 13)."""
     all_questions = []
     
     # ---- Welding QC: hand-crafted questions ----

@@ -18,6 +18,18 @@ This **Question Difficulty Guide** establishes a standardized, objective framewo
 3. **Objective Evaluation**: Difficulty is determined by cognitive complexity, required technical synthesis, and problem-solving steps—**not** by question text length, option length, or complex vocabulary alone.
 4. **Discipline Owner Validation**: Every question imported or added to the question bank must be assigned a difficulty bracket approved by a qualified discipline Subject Matter Expert (SME).
 
+### Required Difficulty Distribution
+
+For each question type separately, use this target distribution:
+
+| Question Type | Easy | Moderate | Difficult (Hard) |
+| :--- | ---: | ---: | ---: |
+| MCQ | 30% | 50% | 20% |
+| Essay | 30% | 50% | 20% |
+| Oral-Practical | 30% | 50% | 20% |
+
+Apply the distribution independently to MCQs, Essays, and Oral-Practical questions. Do not use the combined total across all types to hide an imbalance in one type. For small batches where exact percentages are impossible, use the nearest whole-number allocation. “Hard” is the user-facing description; store it as `difficult`.
+
 ---
 
 ## 2. Difficulty Classification Matrix
@@ -36,28 +48,31 @@ This **Question Difficulty Guide** establishes a standardized, objective framewo
 ## 3. Classification Definitions & Criteria
 
 ### 3.1 Easy (Direct Recall & Routine Single-Step Verification)
+- **Aramco Alignment**: Test direct recall of an approved Saudi Aramco requirement, terminology, document, safety rule, or acceptance criterion whenever one applies.
 - **Definition**: Questions testing basic technical literacy, standard terminology, essential variables, elementary safety rules, and direct pass/fail criteria.
 - **Essay Characteristics**: Brief listing of basic requirements, single-part responses, or direct identification of inspection tools/documents (scored out of 4 points max).
-- **Oral-Practical Characteristics**: Direct verbal responses on standard definitions/safety rules, single tool identification, or taking a single direct measurement on a reference block (scored out of 4 points max).
-- **Target Assessment Ratio**: ~30% of standard assessment bank.
+- **Oral-Practical Characteristics**: Direct verbal responses on standard definitions/safety rules, single tool identification, or interpreting a single measurement in a role-play or imaginary scenario (scored out of 4 points max).
+- **Target Distribution**: 30% Easy for each question type.
 
 ### 3.2 Moderate (Application & Multi-Step Field Scenarios)
+- **Aramco Alignment**: Apply the relevant Saudi Aramco requirement together with the governing international code, project specification, or approved procedure. State which requirement governs when requirements differ.
 - **Definition**: Questions requiring candidates to apply codes, standards, and inspection procedures to typical field quality scenarios.
 - **Essay Characteristics**: 
   - Standard procedural essay prompts requiring candidates to describe a step-by-step field inspection workflow.
   - Guided by a structured multi-part rubric (e.g. 4 key inspection stages rated up to 1 point each, totaling 4 points maximum).
 - **Oral-Practical Characteristics**: 
-  - Combined verbal explanation and hands-on execution of a standard field inspection task (scored out of 4 points max).
-  - Candidate verbally walks the reviewer through inspection steps while physically demonstrating tool selection, taking accurate measurements on a test coupon/specimen, evaluating results against code tables, and recording findings on an inspection sheet.
+  - Combined verbal explanation and role-play walkthrough of a standard inspection task using an imaginary scenario (scored out of 4 points max).
+  - Candidate explains the inspection steps, selects or describes the appropriate tool, interprets supplied or hypothetical measurements, evaluates results against code tables, and records findings on an inspection sheet or stated report format.
   - Evaluated on technical communication clarity, gauge handling precision, and correct code reference application.
-- **Target Assessment Ratio**: ~50% of standard assessment bank (Default level for legacy questions).
+- **Target Distribution**: 50% Moderate for each question type (default level for legacy questions).
 
 ### 3.3 Difficult (Synthesis, Judgment & Non-Routine Troubleshooting)
+- **Aramco Alignment**: Synthesize applicable Saudi Aramco requirements with project quality plans, approved procedures, inspection records, and relevant international codes. Resolve conflicts using the stated contractual hierarchy.
 - **Definition**: Questions testing advanced technical judgment, root cause investigation, non-routine flaw disposition, or resolving conflicting technical requirements.
 - **Essay Characteristics**: Open-ended nonconformance investigation or failure mode analysis (scored out of 4 points max).
 - **Oral-Practical Characteristics**: 
-  - Complex live assessment combining hands-on multi-defect specimen evaluation, root cause identification, verbal defense of findings under reviewer cross-examination, and drafting a formal Nonconformance Report (NCR) with corrective action disposition (scored out of 4 points max).
-- **Target Assessment Ratio**: ~20% of standard assessment bank.
+  - Complex assessment using a role-play or imaginary multi-defect scenario. The candidate evaluates findings, identifies root causes, verbally defends the disposition under reviewer questioning, and drafts a formal Nonconformance Report (NCR) with corrective action disposition (scored out of 4 points max).
+- **Target Distribution**: 20% Difficult (Hard) for each question type.
 
 ---
 
@@ -251,6 +266,16 @@ This **Question Difficulty Guide** establishes a standardized, objective framewo
 
 ## 5. Question Type Guidelines
 
+### 5.0 Saudi Aramco alignment requirements
+
+- Identify the applicable current Saudi Aramco reference before drafting the question, such as SAES, SAMSS, SAEP, SATIP, GI, a company specification, or an approved project specification.
+- Use an international code only when it is referenced by, delegated through, or clearly applicable alongside the Saudi Aramco requirement.
+- Do not claim that a value, tolerance, test method, hold point, or acceptance criterion is an Aramco requirement unless the source has been verified by the discipline SME.
+- Record the document identifier and revision or edition in the answer key, reviewer notes, or approved question metadata when the requirement is revision-sensitive.
+- If the answer depends on a project-specific deviation, concession, waiver, or approved procedure, state that condition in the question.
+- Where Saudi Aramco requirements and an international code differ, state the governing document or contractual hierarchy explicitly. Do not create an ambiguous question based on an unstated precedence rule.
+- Questions without verified Saudi Aramco alignment must be marked **Not Approved for Use** and excluded from candidate assessments.
+
 ```mermaid
 flowchart TD
     A[Draft Question] --> B{Determine Question Type}
@@ -274,9 +299,12 @@ flowchart TD
 
 ### 5.1 Multiple Choice Questions (MCQs)
 - **Scoring**: 1 point max.
-- **Easy**: Direct question stem; 1 correct answer; 3 distractor options that are clearly distinct.
+- **Easy**: Direct question stem; 1 correct answer; 3 distractor options that are clearly distinct but closely matched in length and level of detail.
 - **Moderate**: Scenario-based stem; distractor options include common calculation errors or misinterpretations of adjacent code clauses.
 - **Difficult**: Multi-variable scenario stem; distractor options reflect subtle real-world trade-offs or closely related code exceptions.
+- **Option length parity**: Distractors must be approximately the same length as the correct answer. As a generation target, keep each option within about 20% of the correct option's word count where practical. Keep grammar, units, precision, specificity, and visual detail parallel so the correct answer is not revealed by its length or completeness.
+
+Before approval, rewrite any option that is noticeably shorter, longer, more qualified, or more technically specific than the others unless that difference is unavoidable and does not reveal the answer.
 
 ### 5.2 Essay Questions
 - **Scoring**: 4 points max.
@@ -286,17 +314,20 @@ flowchart TD
 
 ### 5.3 Oral-Practical Questions
 - **Scoring**: 4 points max.
-- **Easy**: Combined basic verbal questions (definitions, document titles, safety rules) or taking a single direct measurement on a reference block with a basic tool (4 pts max).
-- **Moderate**: Combined verbal interview and physical specimen inspection. Candidate walks the reviewer through routine inspection logic while physically demonstrating tool selection, taking accurate measurements on a test coupon/specimen, evaluating findings against code tables, and recording results on an inspection sheet (4 pts max).
-- **Difficult**: High-complexity combined assessment. Candidate performs hands-on multi-defect specimen evaluation, identifies root cause factors, verbally defends technical recommendations under reviewer cross-examination, and drafts a formal Nonconformance Report (NCR) (4 pts max).
+- **Easy**: Combined basic verbal questions (definitions, document titles, safety rules) or one direct measurement or interpretation within a role-play or imaginary scenario (4 pts max).
+- **Moderate**: Combined verbal interview and practical inspection role-play. The imaginary scenario supplies the relevant facts or measurements. The candidate demonstrates or describes tool selection, interprets results, evaluates findings against code tables, and records results on an inspection sheet or stated report format (4 pts max).
+- **Difficult**: High-complexity role-play or imaginary multi-defect scenario. The candidate evaluates findings, identifies root cause factors, verbally defends technical recommendations under reviewer questioning, and drafts a formal Nonconformance Report (NCR) (4 pts max).
+
+Practical questions must use role-play or imaginary scenarios only. The prompt must identify the candidate's role, the other roles involved, the situation, the supplied facts or hypothetical measurements, and the expected decision or report. The rubric must assess technical reasoning and decisions, not access to physical equipment or a real field site.
 
 ---
 
 ## 6. Question Bank Governance & Maintenance
 
 1. **Required Metadata**: Every question stored in `questions` table or imported via `qc-question-template.xlsx` must include the `difficulty` field (`easy`, `moderate`, `difficult`).
-2. **Default Behavior**: Questions with missing or legacy difficulty settings will default to `moderate` until reviewed by a qualified SME.
-3. **Database Constraint**: `questions.difficulty` is enforced by database validation to accept only `'easy'`, `'moderate'`, or `'difficult'`.
-4. **Periodic Recalibration**: 
+2. **Aramco Reference**: Every production question must retain its applicable Saudi Aramco reference, revision or edition where relevant, and SME verification status in the reviewer key or approved question source. Questions without verified alignment must not be used in an assessment.
+3. **Default Behavior**: Questions with missing or legacy difficulty settings will default to `moderate` until reviewed by a qualified SME. This default does not confirm Aramco alignment.
+4. **Database Constraint**: `questions.difficulty` is enforced by database validation to accept only `'easy'`, `'moderate'`, or `'difficult'`.
+5. **Periodic Recalibration**: 
    - Item performance metrics (facility index / pass rate per question) should be reviewed annually.
    - If an "Easy" question has a pass rate below 40%, or a "Difficult" question has a pass rate above 90%, the item must be flagged for SME difficulty re-evaluation.
