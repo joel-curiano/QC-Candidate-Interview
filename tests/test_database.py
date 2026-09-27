@@ -43,6 +43,21 @@ def test_candidate_login_requires_scheduled_date(accounts):
     db.create_user('future', 'Future Candidate', PASSWORD, actor=accounts['admin'], email='future@example.com', test_date=date.today() + timedelta(days=1))
     assert db.authenticate('future', PASSWORD) is None
 
+
+def test_verified_login_replaces_orphaned_session_token(accounts):
+    user_id = accounts['reviewer']
+    assert db.claim_login(user_id, 'first-token')
+    assert db.login_is_active(user_id, 'first-token')
+
+    assert db.claim_login(user_id, 'replacement-token')
+    assert not db.login_is_active(user_id, 'first-token')
+    assert db.login_is_active(user_id, 'replacement-token')
+
+    db.release_login(user_id, 'first-token')
+    assert db.login_is_active(user_id, 'replacement-token')
+    db.release_login(user_id, 'replacement-token')
+    assert not db.login_is_active(user_id, 'replacement-token')
+
 def test_change_password_requires_current_password(accounts):
     with pytest.raises(ValueError, match='Current password is incorrect'):
         db.change_password(accounts['alice'], 'wrong-password', 'new-password')

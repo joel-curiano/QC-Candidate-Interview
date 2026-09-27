@@ -12,7 +12,8 @@ from shared import (
     render_logo,
     require_login,
     sidebar_nav,
-    cached_submissions,
+    cached_submission_page,
+    cached_submission_status_counts,
     clear_read_caches,
     result_table,
     format_result_datetime,
@@ -42,10 +43,10 @@ finalized_assessment = st.session_state.pop("assessment_finalized", None)
 if finalized_assessment:
     st.success(f"Assessment finalized successfully for {finalized_assessment['candidate_name']}.")
 
-rows = cached_submissions(user["id"])
+status_counts = cached_submission_status_counts(user["id"])
 left, right = st.columns(2)
-left.metric("Pending review", sum(r["status"] == "Pending Review" for r in rows))
-right.metric("Graded", sum(r["status"] == "Graded" for r in rows))
+left.metric("Pending review", status_counts.get("Pending Review", 0))
+right.metric("Graded", status_counts.get("Graded", 0))
 
 status = st.selectbox(
     "Status",
@@ -53,13 +54,21 @@ status = st.selectbox(
     index=1,
     key="assessment_review_status",
 )
-rows = [r for r in rows if status == "All" or r["status"] == status]
+if st.session_state.get("assessment_review_filter") != status:
+    st.session_state.assessment_review_filter = status
+    st.session_state.ar_page = 1
 
-if not rows:
+page_size = 15
+selected_status = None if status == "All" else status
+total_rows = (
+    status_counts.get(selected_status, 0)
+    if selected_status
+    else sum(status_counts.values())
+)
+
+if not total_rows:
     st.info("No assessments match this view.")
     st.stop()
-
-table = result_table(rows)
 
 st.markdown(
     """<style>
@@ -72,9 +81,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Paginate summary list.
-page_size = 15
-total_pages = max(1, (len(table) + page_size - 1) // page_size)
+# Paginate summary list in the database.
+total_pages = max(1, (total_rows + page_size - 1) // page_size)
+st.session_state.ar_page = min(st.session_state.get("ar_page", 1), total_pages)
 if total_pages > 1:
     p_col1, p_col2 = st.columns([1, 3])
     with p_col1:
@@ -84,11 +93,15 @@ if total_pages > 1:
     with p_col2:
         st.caption(
             f"Showing submissions {(page_num - 1) * page_size + 1} "
-            f"to {min(page_num * page_size, len(table))} of {len(table)}"
+            f"to {min(page_num * page_size, total_rows)} of {total_rows}"
         )
-    page_table = table[(page_num - 1) * page_size: page_num * page_size]
 else:
-    page_table = table
+    page_num = 1
+
+_, rows = cached_submission_page(
+    user["id"], selected_status, page_size, (page_num - 1) * page_size
+)
+page_table = result_table(rows)
 
 for result_row in page_table:
     summary = f"{result_row['Candidate']} · {result_row['Discipline']} · {result_row['Status']}"
@@ -107,6 +120,7 @@ sid = st.selectbox(
 sub = next(r for r in rows if r["id"] == sid)
 
 
+@st.cache_data(show_spinner=False)
 def _candidate_result_pdf(sub: dict) -> bytes:
     """Build a branded PDF result report in memory."""
     from reportlab.lib import colors

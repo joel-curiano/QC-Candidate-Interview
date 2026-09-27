@@ -42,6 +42,7 @@ STARTER_DISCIPLINES = (
     'Mechanical QC', 'NDT QC', 'Piping QC', 'Welding QC',
     'Pipeline QC', 'PQCS',
 )
+RUNTIME_SCHEMA_VERSION = '5'
 
 
 
@@ -146,6 +147,11 @@ def init_db():
     with connection() as c:
         c.execute(sql.SQL('SELECT pg_advisory_xact_lock({})').format(sql.Literal(DB_ADVISORY_LOCK_ID)))
         c.execute('CREATE TABLE IF NOT EXISTS schema_info (key TEXT PRIMARY KEY, value TEXT)')
+        runtime_version = c.execute(
+            "SELECT value FROM schema_info WHERE key='runtime_schema_version'"
+        ).fetchone()
+        if runtime_version and runtime_version['value'] == RUNTIME_SCHEMA_VERSION:
+            return
         c.execute("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         c.execute("INSERT INTO app_settings (key, value) VALUES ('maintenance_mode', 'false') ON CONFLICT (key) DO NOTHING")
         c.execute("""CREATE TABLE IF NOT EXISTS assessment_drafts (
@@ -299,6 +305,13 @@ def init_db():
                 'INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points,subject,sub_subject,is_scored,difficulty,topic_group,delivery_stage) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                 civil_questions,
             )
+        c.execute("CREATE INDEX IF NOT EXISTS submissions_user_status_id_idx ON submissions(user_id, status, id DESC)")
+        c.execute("CREATE INDEX IF NOT EXISTS users_role_project_discipline_idx ON users(role, project_assignment, scheduled_discipline)")
+        c.execute(
+            "INSERT INTO schema_info (key, value) VALUES ('runtime_schema_version', %s) "
+            "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
+            (RUNTIME_SCHEMA_VERSION,),
+        )
 
 
 def password_hash(password, salt=None):
@@ -332,11 +345,28 @@ def has_users():
         return bool(c.execute('SELECT 1 FROM users LIMIT 1').fetchone())
 
 def claim_login(user_id, token):
+    """Assign a new login token after credentials have been verified.
+
+    Replacing an existing token recovers sessions orphaned by a browser refresh.
+    Pages validate this token so the older session becomes invalid immediately.
+    """
     with connection() as c:
-        row = c.execute("""UPDATE users SET active_login_token=%s
-                          WHERE id=%s AND active_login_token IS NULL
-                          RETURNING id""", (token, user_id)).fetchone()
+        row = c.execute(
+            "UPDATE users SET active_login_token=%s WHERE id=%s RETURNING id",
+            (token, user_id),
+        ).fetchone()
         return bool(row)
+
+
+def login_is_active(user_id, token):
+    if not token:
+        return False
+    with connection() as c:
+        return c.execute(
+            "SELECT 1 FROM users WHERE id=%s AND active_login_token=%s",
+            (user_id, token),
+        ).fetchone() is not None
+
 
 def invalidate_all_logins():
     """Invalidate sessions when the Streamlit process starts."""
@@ -641,6 +671,68 @@ def questions(discipline=None, include_inactive=False):
         rows = c.execute(query, params).fetchall()
     return [dict(q) for q in rows]
 
+
+def question_counts():
+    """Return active question counts grouped by discipline."""
+    with connection() as c:
+        rows = c.execute(
+            "SELECT discipline, COUNT(*) AS question_count "
+            "FROM questions WHERE active=1 GROUP BY discipline ORDER BY discipline"
+        ).fetchall()
+    return {row['discipline']: row['question_count'] for row in rows}
+
+
+def question_count(discipline=None, question_type=None):
+    """Return the active question count for the selected filters."""
+    if question_type is not None and question_type not in QUESTION_TYPES:
+        raise ValueError('Invalid question type.')
+    conditions = ['active=1']
+    params = []
+    if discipline is not None:
+        conditions.append('discipline=%s')
+        params.append(discipline)
+    if question_type:
+        conditions.append('q_type=%s')
+        params.append(question_type)
+    with connection() as c:
+        return c.execute(
+            f"SELECT COUNT(*) AS question_count FROM questions WHERE {' AND '.join(conditions)}",
+            params,
+        ).fetchone()['question_count']
+
+
+def question_page(discipline=None, question_type=None, limit=20, offset=0):
+    """Return one filtered page of active questions and its total row count."""
+    if question_type is not None and question_type not in QUESTION_TYPES:
+        raise ValueError('Invalid question type.')
+    limit = max(1, min(int(limit), 100))
+    offset = max(0, int(offset))
+    conditions = ['q.active=1']
+    params = []
+    if discipline is not None:
+        conditions.append('q.discipline=%s')
+        params.append(discipline)
+    if question_type:
+        conditions.append('q.q_type=%s')
+        params.append(question_type)
+    where_clause = ' AND '.join(conditions)
+    with connection() as c:
+        total = c.execute(
+            f'SELECT COUNT(*) AS question_count FROM questions q WHERE {where_clause}',
+            params,
+        ).fetchone()['question_count']
+        rows = c.execute(
+            f'''SELECT q.*, EXISTS(
+                    SELECT 1 FROM answers a WHERE a.question_id=q.id
+                ) AS is_used
+                FROM questions q
+                WHERE {where_clause}
+                ORDER BY q.discipline, q.id
+                LIMIT %s OFFSET %s''',
+            [*params, limit, offset],
+        ).fetchall()
+    return total, [dict(row) for row in rows]
+
 def disciplines():
     with connection() as c:
         rows = c.execute('SELECT DISTINCT discipline FROM questions ORDER BY discipline').fetchall()
@@ -866,10 +958,16 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         
         sid = c.execute("INSERT INTO submissions(designation,max_possible_points,mcq_max,essay_max,oral_practical_max,status,user_id,token,created_at,confidentiality_acceptance_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP,%s) RETURNING id",
                         (str(details.get('designation', '')).strip(), max_points, maxima['mcq'], maxima['essay'], maxima['oral_practical'], status, actor, token, acc_id)).fetchone()['id']
+        answer_rows = []
         for q in qs:
             score = q['max_points'] if q['q_type'] == 'mcq' and responses[q['id']] == q['correct_answer'] else 0
-            c.execute('INSERT INTO answers(submission_id,question_id,submitted_answer,awarded_score,snapshot) VALUES (%s,%s,%s,%s,%s)',
-                      (sid, q['id'], responses.get(q['id'], ''), score, json.dumps(dict(q))))
+            answer_rows.append(
+                (sid, q['id'], responses.get(q['id'], ''), score, json.dumps(dict(q)))
+            )
+        c.cursor().executemany(
+            'INSERT INTO answers(submission_id,question_id,submitted_answer,awarded_score,snapshot) VALUES (%s,%s,%s,%s,%s)',
+            answer_rows,
+        )
         c.execute("UPDATE users SET test_date=NULL WHERE id=%s AND role='Candidate'", (actor,))
         return sid
 
@@ -941,6 +1039,94 @@ def submissions(actor):
             ORDER BY s.id DESC
         """, (actor, user['role'], user['role'], assigned_projects, assigned_projects,
               assigned_disciplines, assigned_disciplines))]
+
+
+def submission_status_counts(actor):
+    """Return visible submission counts without aggregating answer details."""
+    with connection() as c:
+        user = require(c, actor, ('Candidate', 'Reviewer', 'Admin'))
+        assigned_projects = user.get('assigned_projects') or []
+        assigned_disciplines = user.get('assigned_disciplines') or ['All Disciplines']
+        rows = c.execute("""
+            SELECT s.status, COUNT(*) AS submission_count
+            FROM submissions s
+            LEFT JOIN users u ON u.id=s.user_id
+            WHERE s.user_id=%s OR %s='Admin'
+               OR (%s='Reviewer' AND (
+                    COALESCE(NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')='Unassigned'
+                    OR ((cardinality(%s::text[])=0 OR u.project_assignment=ANY(%s::text[]))
+                        AND ('All Disciplines'=ANY(%s::text[])
+                             OR COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline)=ANY(%s::text[])))
+               ))
+            GROUP BY s.status
+        """, (actor, user['role'], user['role'], assigned_projects, assigned_projects,
+              assigned_disciplines, assigned_disciplines)).fetchall()
+    return {row['status']: row['submission_count'] for row in rows}
+
+
+def submission_page(actor, status=None, limit=15, offset=0):
+    """Return a filtered submission page with calculated score summaries."""
+    if status not in (None, 'Pending Review', 'Graded'):
+        raise ValueError('Invalid assessment status.')
+    limit = max(1, min(int(limit), 100))
+    offset = max(0, int(offset))
+    with connection() as c:
+        user = require(c, actor, ('Candidate', 'Reviewer', 'Admin'))
+        assigned_projects = user.get('assigned_projects') or []
+        assigned_disciplines = user.get('assigned_disciplines') or ['All Disciplines']
+        visibility_params = (
+            actor, user['role'], user['role'], assigned_projects, assigned_projects,
+            assigned_disciplines, assigned_disciplines,
+        )
+        status_sql = ' AND s.status=%s' if status else ''
+        query_params = [*visibility_params]
+        if status:
+            query_params.append(status)
+        visibility_sql = """
+            (s.user_id=%s OR %s='Admin'
+             OR (%s='Reviewer' AND (
+                  COALESCE(NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')='Unassigned'
+                  OR ((cardinality(%s::text[])=0 OR u.project_assignment=ANY(%s::text[]))
+                      AND ('All Disciplines'=ANY(%s::text[])
+                           OR COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline)=ANY(%s::text[])))
+             )))
+        """
+        total = c.execute(
+            f'''SELECT COUNT(*) AS submission_count
+                FROM submissions s LEFT JOIN users u ON u.id=s.user_id
+                WHERE {visibility_sql}{status_sql}''',
+            query_params,
+        ).fetchone()['submission_count']
+        rows = c.execute(f'''
+            SELECT s.*, u.name AS candidate_name, u.email, u.username, u.iqama_no, u.employee_no,
+                   COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline) AS discipline,
+                   u.project_assignment, u.test_date AS scheduled_test_date,
+                   s.created_at::date AS exam_date,
+                   calculated.mcq_score AS calculated_mcq_score,
+                   calculated.essay_score AS calculated_essay_score,
+                   calculated.oral_practical_score AS calculated_oral_practical_score,
+                   calculated.mcq_max AS calculated_mcq_max,
+                   calculated.essay_max AS calculated_essay_max,
+                   calculated.oral_practical_max AS calculated_oral_practical_max,
+                   ca.agreement_version AS conf_agreement_version,
+                   ca.acceptance_time AS conf_acceptance_time
+            FROM submissions s
+            LEFT JOIN users u ON u.id=s.user_id
+            LEFT JOIN confidentiality_acceptances ca ON ca.id=s.confidentiality_acceptance_id
+            LEFT JOIN LATERAL (
+                SELECT
+                    COALESCE(SUM(CASE WHEN snapshot::json->>'q_type'='mcq' THEN awarded_score ELSE 0 END), 0) AS mcq_score,
+                    COALESCE(SUM(CASE WHEN snapshot::json->>'q_type'='essay' THEN awarded_score ELSE 0 END), 0) AS essay_score,
+                    COALESCE(SUM(CASE WHEN snapshot::json->>'q_type'='oral_practical' THEN awarded_score ELSE 0 END), 0) AS oral_practical_score,
+                    COALESCE(SUM(CASE WHEN snapshot::json->>'q_type'='mcq' THEN 1 ELSE 0 END), 0) AS mcq_max,
+                    COALESCE(SUM(CASE WHEN snapshot::json->>'q_type'='essay' THEN LEAST((snapshot::json->>'max_points')::double precision, 10) ELSE 0 END), 0) AS essay_max,
+                    COALESCE(SUM(CASE WHEN snapshot::json->>'q_type'='oral_practical' THEN LEAST((snapshot::json->>'max_points')::double precision, 10) ELSE 0 END), 0) AS oral_practical_max
+                FROM answers WHERE answers.submission_id=s.id
+            ) calculated ON TRUE
+            WHERE {visibility_sql}{status_sql}
+            ORDER BY s.id DESC LIMIT %s OFFSET %s
+        ''', [*query_params, limit, offset]).fetchall()
+    return total, [dict(row) for row in rows]
 
 def delete_assessment(actor, submission_id):
     with connection() as c:

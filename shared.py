@@ -143,6 +143,21 @@ def cached_questions(discipline=None, include_inactive: bool = False) -> list:
 
 
 @st.cache_data(ttl=30, show_spinner=False)
+def cached_question_counts() -> dict:
+    return db.question_counts()
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_question_count(discipline=None, question_type=None) -> int:
+    return db.question_count(discipline, question_type)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_question_page(discipline=None, question_type=None, limit=20, offset=0):
+    return db.question_page(discipline, question_type, limit, offset)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
 def cached_assessment_settings(actor_id: int) -> dict:
     return db.assessment_settings(actor_id)
 
@@ -162,6 +177,21 @@ def cached_submissions(actor_id: int) -> list:
     return db.submissions(actor_id)
 
 
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_submission_status_counts(actor_id: int) -> dict:
+    return db.submission_status_counts(actor_id)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_submission_page(actor_id: int, status=None, limit=15, offset=0):
+    return db.submission_page(actor_id, status, limit, offset)
+
+
+@st.cache_data(ttl=20, show_spinner=False)
+def cached_maintenance_mode() -> bool:
+    return db.maintenance_mode()
+
+
 @st.cache_data(ttl=600, show_spinner=False)
 def cached_has_users() -> bool:
     return db.has_users()
@@ -172,10 +202,16 @@ def clear_read_caches() -> None:
     cached_has_users.clear()
     cached_disciplines.clear()
     cached_questions.clear()
+    cached_question_counts.clear()
+    cached_question_count.clear()
+    cached_question_page.clear()
     cached_assessment_settings.clear()
     cached_projects.clear()
     cached_candidate_accounts.clear()
     cached_submissions.clear()
+    cached_submission_status_counts.clear()
+    cached_submission_page.clear()
+    cached_maintenance_mode.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -195,8 +231,14 @@ def require_login() -> dict:
 
     user = st.session_state.user
     login_token = st.session_state.login_token
+    if not db.login_is_active(user["id"], login_token):
+        st.session_state.clear()
+        st.warning("Your login session was refreshed or replaced. Please sign in again.")
+        st.switch_page("app.py")
+        st.stop()
+
     # Enforce maintenance mode for non-Admin roles.
-    if db.maintenance_mode() and user["role"] != "Admin":
+    if cached_maintenance_mode() and user["role"] != "Admin":
         db.release_login(user["id"], login_token)
         st.session_state.clear()
         st.warning(
@@ -337,4 +379,3 @@ def result_table(rows: list) -> list:
         }
         for r in rows
     ]
-

@@ -7,6 +7,7 @@ from shared import (
     render_logo,
     require_login,
     sidebar_nav,
+    clear_read_caches,
 )
 
 st.set_page_config(
@@ -38,6 +39,7 @@ with st.form("maintenance_mode"):
     )
     if st.form_submit_button("Save Maintenance Mode", type="primary"):
         db.set_maintenance_mode(user["id"], enable_maintenance)
+        clear_read_caches()
         st.success(
             "Maintenance mode enabled." if enable_maintenance else "Maintenance mode disabled."
         )

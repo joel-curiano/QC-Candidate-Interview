@@ -6,6 +6,7 @@ __pycache__/
 .codex/
 .codex-*/
 outputs/
+output/
 
 
 *.db
@@ -31,4 +32,4 @@ qc-question-template*.xlsx
 qc-question-template*.xlsx.inspect.ndjson
 
 # Local scripts and generated script artifacts
-/scripts/
+scripts/

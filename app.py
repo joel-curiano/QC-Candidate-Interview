@@ -35,6 +35,7 @@ from email_service import EmailDeliveryError, send_reviewer_credentials
 from shared import (
     cached_disciplines,
     cached_has_users,
+    cached_maintenance_mode,
     cached_questions,
     cached_assessment_settings,
     clear_read_caches,
@@ -121,13 +122,12 @@ inject_global_styles()
 @st.cache_resource(show_spinner=False)
 def initialize_database(schema_version):
     db.init_db()
-    db.invalidate_all_logins()
     return True
 
 
 try:
     with st.spinner("Loading Competency Technical Assessment (CTA) Portal..."):
-        initialize_database(4)
+        initialize_database(5)
 except db.DatabaseError as exc:
     st.error(str(exc))
     st.stop()
@@ -168,18 +168,21 @@ def save_current_assessment_draft(candidate_id: int) -> None:
     }
     if payload.get("attempt_token"):
         db.save_assessment_draft(candidate_id, payload)
+        st.session_state.assessment_draft_dirty = False
 
 
 def save_assessment_answer(candidate_id: int, question_id: int) -> None:
     answer = st.session_state.get(f"answer_{question_id}", "")
     st.session_state.setdefault("assessment_responses", {})[question_id] = answer
+    st.session_state.assessment_draft_dirty = True
     save_current_assessment_draft(candidate_id)
 
 
 @st.fragment(run_every="30s")
 def assessment_draft_heartbeat(candidate_id: int) -> None:
     """Persist the active assessment draft periodically."""
-    save_current_assessment_draft(candidate_id)
+    if st.session_state.get("assessment_draft_dirty"):
+        save_current_assessment_draft(candidate_id)
 
 
 def restore_assessment_draft(draft: dict) -> None:
@@ -411,7 +414,7 @@ if "user" not in st.session_state:
             if st.form_submit_button("Sign in", type="primary"):
                 user = db.authenticate(username, password)
                 if user:
-                    if db.maintenance_mode() and user["role"] != "Admin":
+                    if cached_maintenance_mode() and user["role"] != "Admin":
                         st.warning(
                             "The portal is temporarily unavailable while maintenance is "
                             "in progress. Please try again later."
@@ -448,7 +451,12 @@ if not login_token:
     st.error("Your login session is invalid. Please sign in again.")
     st.stop()
 
-if db.maintenance_mode() and user["role"] != "Admin":
+if not db.login_is_active(user["id"], login_token):
+    st.session_state.clear()
+    st.warning("Your login session was refreshed or replaced. Please sign in again.")
+    st.stop()
+
+if cached_maintenance_mode() and user["role"] != "Admin":
     db.release_login(user["id"], login_token)
     st.session_state.clear()
     st.warning(
