@@ -90,7 +90,7 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
             mobile_no = st.text_input("Mobile No")
 
         if is_candidate:
-            password = confirm = db.generate_password()
+            password = confirm = db.generate_password(length=6, alphanumeric_only=True)
             st.info("Login credentials will be generated and emailed after the assessment is scheduled.")
         else:
             password = st.text_input(

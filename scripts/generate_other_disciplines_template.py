@@ -155,8 +155,32 @@ DISCIPLINES_CONFIG = [
 # Generate questions for all 8 disciplines
 ALL_QUESTIONS = []
 
-# Add Piping QC questions
-ALL_QUESTIONS.extend(create_discipline_questions("Piping QC", piping_topics))
+# Load Piping QC authored questions from question bank
+piping_bank_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "question_bank", "piping_qc.json")
+if os.path.exists(piping_bank_file):
+    import json
+    with open(piping_bank_file, "r", encoding="utf-8") as f:
+        p_data = json.load(f)
+    for q in p_data.get("questions", []):
+        q_type = q["type"]
+        opts = q.get("options", [])
+        correct_val = opts[q["answer"]] if q_type == "mcq" and q.get("answer") is not None else ""
+        rubric_val = "\n".join(q.get("rubric", [])) if isinstance(q.get("rubric"), list) else str(q.get("rubric", ""))
+        ALL_QUESTIONS.append({
+            "discipline": "Piping QC",
+            "type": q_type,
+            "question": q["question"],
+            "options": opts,
+            "correct": correct_val,
+            "rubric": rubric_val,
+            "subject": "Piping Inspection & Verification",
+            "sub_subject": q.get("topic", "Piping Inspection"),
+            "difficulty": q.get("difficulty", "moderate"),
+            "topic": q.get("topic", "Piping Inspection")
+        })
+    print(f"Loaded {len(p_data.get('questions', []))} authored Piping QC questions from question_bank.")
+else:
+    ALL_QUESTIONS.extend(create_discipline_questions("Piping QC", piping_topics))
 
 # Generate remaining 7 disciplines dynamically matching 100 questions per discipline
 OTHER_DISCIPLINES = [
@@ -211,7 +235,7 @@ def main():
     for q in ALL_QUESTIONS:
         d = q["discipline"]
         if d not in disc_counts:
-            disc_counts[d] = {"mcq": 0, "essay": 0, "practical": 0, "easy": 0, "total": 0}
+            disc_counts[d] = {"mcq": 0, "essay": 0, "practical": 0, "oral_practical": 0, "easy": 0, "total": 0}
         disc_counts[d]["total"] += 1
         disc_counts[d][q["type"]] += 1
         if q["difficulty"] == "easy":
@@ -220,7 +244,8 @@ def main():
     print("\n--- Summary Breakdown Per Discipline ---")
     for d, c in disc_counts.items():
         easy_pct = (c["easy"] / c["total"]) * 100
-        print(f"{d:25s}: Total={c['total']}, MCQ={c['mcq']}, Essay={c['essay']}, Practical={c['practical']}, Easy={c['easy']} ({easy_pct:.1f}%)")
+        prac_cnt = c.get("oral_practical", 0) or c.get("practical", 0)
+        print(f"{d:25s}: Total={c['total']}, MCQ={c['mcq']}, Essay={c['essay']}, Practical={prac_cnt}, Easy={c['easy']} ({easy_pct:.1f}%)")
 
     # Build Excel Workbook matching HEADERS in question_import.py
     wb = openpyxl.Workbook()

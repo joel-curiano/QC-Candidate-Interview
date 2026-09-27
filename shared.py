@@ -182,13 +182,12 @@ def clear_read_caches() -> None:
 # Session / authentication helpers
 # ---------------------------------------------------------------------------
 def require_login() -> dict:
-    """Enforce login and session freshness. Returns the active user dict.
+    """Enforce login and return the active user dict.
 
-    Process flow:
-      1. Redirect to login (app.py root) if session is absent or invalid.
-      2. Refresh the server-side login heartbeat every 60 s.
-      3. Enforce maintenance mode for non-Admin users.
-    """
+        Process flow:
+            1. Redirect to login (app.py root) if session is absent or invalid.
+            2. Enforce maintenance mode for non-Admin users.
+        """
     if "user" not in st.session_state or not st.session_state.get("login_token"):
         st.session_state.clear()
         st.switch_page("app.py")
@@ -196,23 +195,6 @@ def require_login() -> dict:
 
     user = st.session_state.user
     login_token = st.session_state.login_token
-    now = time.time()
-    last_refresh = st.session_state.get("last_login_refresh", 0)
-
-    # Refresh login heartbeat every 60 seconds.
-    if now - last_refresh > 60:
-        refreshed = db.refresh_login(user["id"], login_token)
-        if not refreshed:
-            st.session_state.clear()
-            st.session_state.timeout_message = (
-                "You were signed out after 30 minutes of inactivity. Please sign in again."
-            )
-            st.switch_page("app.py")
-            st.stop()
-        user = refreshed
-        st.session_state.user = user
-        st.session_state.last_login_refresh = now
-
     # Enforce maintenance mode for non-Admin roles.
     if db.maintenance_mode() and user["role"] != "Admin":
         db.release_login(user["id"], login_token)
@@ -234,6 +216,16 @@ def sidebar_nav(user: dict) -> None:
         st.sidebar.image("img/Icon/CAT Icon White Background.png", use_container_width=True)
     st.sidebar.write(f"**{user['name']}**")
     st.sidebar.caption(user["role"])
+
+    if user["role"] == "Reviewer":
+        st.markdown(
+            """<style>
+            [data-testid="stSidebarNav"] a[href$="/Projects"] { display: none !important; }
+            [data-testid="stSidebarNav"] a[href$="/Accounts"] { display: none !important; }
+            [data-testid="stSidebarNav"] a[href$="/Maintenance"] { display: none !important; }
+            </style>""",
+            unsafe_allow_html=True,
+        )
 
     if user["role"] in ("Admin", "Reviewer"):
         with st.sidebar.expander("Change password"):

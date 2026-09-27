@@ -80,6 +80,14 @@ def test_generated_password_meets_requirements():
     assert any(not char.isalnum() for char in password)
     assert password != db.generate_password()
 
+    # Test candidate alphanumeric passwords
+    cand_password = db.generate_password(length=6, alphanumeric_only=True)
+    assert len(cand_password) == 6
+    assert any(char.islower() for char in cand_password)
+    assert any(char.isupper() for char in cand_password)
+    assert any(char.isdigit() for char in cand_password)
+    assert all(char.isalnum() for char in cand_password)
+
 
 def test_scoring_and_isolation(accounts):
     sid, responses = attempt(accounts)
@@ -103,6 +111,18 @@ def test_scoring_and_isolation(accounts):
     assert db.result(graded) == 'PASS (70.0%)'
     with pytest.raises(ValueError):
         db.grade(accounts['admin'], sid, {essay['id']: 0}, '')
+
+def test_reviewer_can_see_legacy_unassigned_candidate(accounts):
+    attempt(accounts, 'legacy-unassigned')
+    db.update_staff_projects(accounts['admin'], accounts['reviewer'], ['Project A'])
+    db.update_reviewer_disciplines(accounts['admin'], accounts['reviewer'], ['Welding QC'])
+    with db.connection() as c:
+        c.execute(
+            "UPDATE users SET project_assignment='', scheduled_discipline='Welding QC' WHERE id=%s",
+            (accounts['alice'],),
+        )
+
+    assert [sub['user_id'] for sub in db.submissions(accounts['reviewer'])] == [accounts['alice']]
 
 def test_validation_and_snapshots(accounts):
     qs = db.questions('Welding QC')

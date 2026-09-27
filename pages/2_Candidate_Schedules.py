@@ -179,7 +179,7 @@ else:
 
             if send_schedule:
                 try:
-                    temporary_password = db.generate_password()
+                    temporary_password = db.generate_password(length=6, alphanumeric_only=True)
                     db.set_candidate_temporary_password(
                         user["id"], candidate["id"], temporary_password
                     )

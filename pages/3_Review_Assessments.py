@@ -205,9 +205,27 @@ def _candidate_result_pdf(sub: dict) -> bytes:
             "Multiple Choice 60%, Essay 20%, and Oral-Practical 20%. "
             "The candidate must achieve at least 70% in the final grade. "
             "A result remains Pending Review until the Reviewer scores all Essay and Oral-Practical responses.",
-            styles["CATExplainBody"],
         ),
     ]
+    
+    # Confidentiality Agreement Section
+    story += [
+        Spacer(1, 6 * mm),
+        Paragraph("<b>Confidentiality Agreement</b>", styles["CATExplainHeading"]),
+    ]
+    conf_notice = (
+        "This result and all related assessment information are confidential and remain subject to the "
+        "confidentiality agreement accepted at first login. Do not forward, publish, copy, record, photograph, "
+        "or share this result or any assessment questions or answers with anyone who is not authorized to handle the assessment."
+    )
+    if sub.get("conf_agreement_version"):
+        accepted_time = format_result_datetime(sub.get("conf_acceptance_time", ""))
+        conf_notice += (
+            f"<br/><br/>This notice confirms the existing agreement (Version {sub.get('conf_agreement_version')}, "
+            f"accepted {accepted_time}) and does not require another acceptance."
+        )
+    story.append(Paragraph(conf_notice, styles["CATExplainBody"]))
+
     doc.build(story)
     return output.getvalue()
 
@@ -228,7 +246,7 @@ try:
             else:
                 try:
                     send_candidate_result(
-                        sub["email"], sub.get("candidate_name", "Candidate"), result_pdf
+                        sub["email"], sub.get("candidate_name", "Candidate"), result_pdf, sub.get("conf_agreement_version")
                     )
                     st.success(f"Result emailed to {sub['email']}.")
                 except (EmailDeliveryError, OSError, ValueError) as exc:

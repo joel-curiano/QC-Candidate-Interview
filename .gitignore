@@ -23,3 +23,12 @@ pytest-cache-files-*/
 .mypy_cache/
 .ruff_cache/
 *.py[cod]
+
+# Question files and folders
+*question*
+*Question*
+qc-question-template*.xlsx
+qc-question-template*.xlsx.inspect.ndjson
+
+# Local scripts and generated script artifacts
+/scripts/

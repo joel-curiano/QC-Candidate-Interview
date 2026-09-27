@@ -177,13 +177,8 @@ def save_assessment_answer(candidate_id: int, question_id: int) -> None:
 
 
 @st.fragment(run_every="30s")
-def assessment_heartbeat(candidate_id: int, user: dict, login_token: str) -> None:
-    """Keep an active assessment session alive and persist its current draft."""
-    refreshed_user = db.refresh_login(user["id"], login_token)
-    if not refreshed_user:
-        return
-    st.session_state.user = refreshed_user
-    st.session_state.last_login_refresh = time.time()
+def assessment_draft_heartbeat(candidate_id: int) -> None:
+    """Persist the active assessment draft periodically."""
     save_current_assessment_draft(candidate_id)
 
 
@@ -367,12 +362,46 @@ if not cached_has_users():
 # ---------------------------------------------------------------------------
 if "user" not in st.session_state:
     hide_login_sidebar()
-    if timeout_message := st.session_state.pop("timeout_message", None):
-        st.error(timeout_message)
     if st.session_state.pop("password_changed", False):
         st.success("Password changed. Sign in with your new password.")
     if st.session_state.pop("assessment_submitted", False):
         st.success("Assessment submitted successfully. You have been logged out.")
+
+    if st.session_state.get("pending_conf_user"):
+        user = st.session_state.pending_conf_user
+        agreement = db.active_confidentiality_agreement()
+        if not agreement:
+            st.error("No active confidentiality agreement found. Please contact an administrator.")
+            if st.button("Cancel"):
+                st.session_state.clear()
+                st.rerun()
+            st.stop()
+        
+        st.subheader("Confidentiality Agreement")
+        st.info("You must accept this confidentiality agreement before accessing the application.")
+        st.markdown(f"**Version {agreement['version']}**")
+        st.text_area("Agreement", value=agreement["agreement_text"], height=300, disabled=True)
+        
+        ack = st.checkbox("I acknowledge and accept the confidentiality agreement.")
+        col1, col2 = st.columns(2)
+        if col1.button("Accept and continue", type="primary", disabled=not ack):
+            login_token = secrets.token_urlsafe(32)
+            if not db.claim_login(user["id"], login_token):
+                st.error("This account is already logged in on another session.")
+                st.stop()
+            db.record_confidentiality_acceptance(
+                user["id"], user["role"], agreement["version"], agreement["text_fingerprint"], login_token
+            )
+            st.session_state.clear()
+            st.session_state.user = user
+            st.session_state.login_token = login_token
+            if user["role"] == "Candidate":
+                st.session_state.show_candidate_start_dialog = True
+            st.rerun()
+        if col2.button("Decline and sign out"):
+            st.session_state.clear()
+            st.rerun()
+        st.stop()
 
     login_container = st.empty()
     with login_container.container():
@@ -380,35 +409,37 @@ if "user" not in st.session_state:
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
             if st.form_submit_button("Sign in", type="primary"):
-                if time.time() < st.session_state.get("retry_after", 0):
-                    st.error("Please wait a few seconds before trying again.")
-                else:
-                    user = db.authenticate(username, password)
-                    if user:
-                        if db.maintenance_mode() and user["role"] != "Admin":
-                            st.warning(
-                                "The portal is temporarily unavailable while maintenance is "
-                                "in progress. Please try again later."
-                            )
-                            st.stop()
-                        login_token = secrets.token_urlsafe(32)
-                        if not db.claim_login(user["id"], login_token):
-                            st.error("This account is already logged in on another session.")
-                            st.stop()
-                        login_container.empty()
-                        st.session_state.clear()
-                        st.session_state.user = user
-                        st.session_state.login_token = login_token
-                        if user["role"] == "Candidate":
-                            st.session_state.show_candidate_start_dialog = True
+                user = db.authenticate(username, password)
+                if user:
+                    if db.maintenance_mode() and user["role"] != "Admin":
+                        st.warning(
+                            "The portal is temporarily unavailable while maintenance is "
+                            "in progress. Please try again later."
+                        )
+                        st.stop()
+                    
+                    has_accepted = db.check_confidentiality_acceptance(user["id"])
+                    if not has_accepted:
+                        st.session_state.pending_conf_user = user
                         st.rerun()
-                    else:
-                        st.session_state.retry_after = time.time() + 3
-                        st.error("Invalid username or password.")
+                        
+                    login_token = secrets.token_urlsafe(32)
+                    if not db.claim_login(user["id"], login_token):
+                        st.error("This account is already logged in on another session.")
+                        st.stop()
+                    login_container.empty()
+                    st.session_state.clear()
+                    st.session_state.user = user
+                    st.session_state.login_token = login_token
+                    if user["role"] == "Candidate":
+                        st.session_state.show_candidate_start_dialog = True
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password.")
     st.stop()
 
 # ---------------------------------------------------------------------------
-# Session validation and heartbeat
+# Session validation
 # ---------------------------------------------------------------------------
 user = st.session_state.user
 login_token = st.session_state.get("login_token")
@@ -416,20 +447,6 @@ if not login_token:
     st.session_state.clear()
     st.error("Your login session is invalid. Please sign in again.")
     st.stop()
-
-now = time.time()
-last_refresh = st.session_state.get("last_login_refresh", 0)
-if now - last_refresh > 60:
-    refreshed_user = db.refresh_login(user["id"], login_token)
-    if not refreshed_user:
-        st.session_state.clear()
-        st.session_state.timeout_message = (
-            "You were signed out after 30 minutes of inactivity. Please sign in again."
-        )
-        st.rerun()
-    user = refreshed_user
-    st.session_state.user = user
-    st.session_state.last_login_refresh = now
 
 if db.maintenance_mode() and user["role"] != "Admin":
     db.release_login(user["id"], login_token)
@@ -452,6 +469,16 @@ if user["role"] != "Candidate":
         st.sidebar.image("img/Icon/CAT Icon White Background.png", use_container_width=True)
     st.sidebar.write(f"**{user['name']}**")
     st.sidebar.caption(user["role"])
+
+    if user["role"] == "Reviewer":
+        st.markdown(
+            """<style>
+            [data-testid="stSidebarNav"] a[href$="/Projects"] { display: none !important; }
+            [data-testid="stSidebarNav"] a[href$="/Accounts"] { display: none !important; }
+            [data-testid="stSidebarNav"] a[href$="/Maintenance"] { display: none !important; }
+            </style>""",
+            unsafe_allow_html=True,
+        )
 
     # Change password expander
     if user["role"] in ("Admin", "Reviewer"):
@@ -518,7 +545,7 @@ if user["role"] == "Candidate" and st.session_state.pop("show_candidate_start_di
         st.info("Your assessment is ready. Review your details below, then start the test.")
 
 if user["role"] == "Candidate" and st.session_state.get("assessment_phase"):
-    assessment_heartbeat(user["id"], user, login_token)
+    assessment_draft_heartbeat(user["id"])
 
 try:
     st.logo("img/Icon/CAT Icon White Background.png", icon_image="img/Icon/CAT-Tab-Icon.png")
@@ -581,6 +608,7 @@ if not details:
     st.subheader("Candidate Details")
     st.info(
         "**Candidate instructions**\n\n"
+        "- Assessment questions and answers are confidential. Do not discuss, copy, photograph, record, or share them with anyone outside the assessment.\n"
         "- Be presentable and maintain a professional appearance and conduct throughout the "
         "assessment, including the Oral-Practical portion.\n"
         "- You have 40 minutes to answer all Multiple Choice Questions. The countdown begins "

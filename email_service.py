@@ -82,8 +82,9 @@ def send_candidate_invitation(email, name, username, temporary_password, test_da
         'Please be presentable and maintain a professional appearance and conduct throughout the '
         'assessment, including the oral and practical portions.\n\n'
         'On the scheduled date, open the assessment portal, enter the credentials above, and '
-        'follow the on-screen instructions. Please keep these credentials confidential and do '
-        'not forward this email.\n\n'
+        'follow the on-screen instructions. Assessment questions and answers are confidential. Do not discuss, '
+        'copy, photograph, record, or share them with anyone outside the assessment. Please keep these '
+        'credentials confidential and do not forward this email.\n\n'
         'If your schedule or candidate information is incorrect, contact your assessment '
         'coordinator before the test date.\n\n'
         'Regards,\nCompetency Technical Assessment (CTA)\n'
@@ -132,17 +133,28 @@ def send_test_email(email, name='Administrator'):
     _deliver(message, host)
 
 
-def send_candidate_result(email, name, pdf_bytes):
+def send_candidate_result(email, name, pdf_bytes, conf_version=None):
     """Email a generated candidate result PDF as an attachment."""
     host, sender, app_url = _email_settings()
     message = EmailMessage()
     message['Subject'] = 'QC Candidate Assessment Result'
     message['From'] = sender
     message['To'] = email
+    
+    conf_notice = (
+        'Confidentiality reminder: This email, the attached result, and all assessment information are confidential '
+        'and remain subject to the confidentiality agreement you accepted when you first signed in. '
+        'Do not forward, publish, copy, record, photograph, or share this result or any assessment questions or answers '
+        'with anyone who is not authorized to handle the assessment.'
+    )
+    if conf_version:
+        conf_notice += f'\n(Accepted agreement version: {conf_version}. This email is a reminder of the existing agreement and does not require a second acceptance.)'
+
     message.set_content(
         f'Dear {name},\n\n'
         'Please find attached your Competency Technical Assessment (CTA) result. '
         'The report includes your result by question type, overall result, and the pass/fail rules used by the portal.\n\n'
+        f'{conf_notice}\n\n'
         f'Assessment portal: {app_url}\n\n'
         'Regards,\nQUALITY DEPARTMENT | C.A.T. INTERNATIONAL L.L.C.\n'
     )
