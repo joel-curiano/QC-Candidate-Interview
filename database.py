@@ -39,7 +39,7 @@ except (ValueError, TypeError):
 
 STARTER_DISCIPLINES = (
     'Cathodic Protection QC', 'Civil QC', 'Coating QC', 'Telecom QC', 'Electrical QC', 'E&I QC', 'Instrumentation QC',
-    'Mechanical QC', 'NDT QC', 'Piping QC', 'Welding QC',
+    'Mechanical QC', 'NDT QC', 'Non-Metallic Piping QC', 'Piping QC', 'Welding QC',
     'Pipeline QC', 'PQCS',
 )
 RUNTIME_SCHEMA_VERSION = '5'
