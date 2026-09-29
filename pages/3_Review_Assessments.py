@@ -280,6 +280,10 @@ with st.form(f"grading_{sid}"):
     observed_responses = {}
     question_section = None
     question_section_type = None
+    oral_practical_number = 0
+    essay_number = 0
+    oral_practical_numbers = {}
+    scored_question_numbers = {}
 
     for a in answers:
         q = json.loads(a["snapshot"])
@@ -300,11 +304,16 @@ with st.form(f"grading_{sid}"):
 
         if q["q_type"] in REVIEWER_SCORED_TYPES:
             if q["q_type"] == "essay":
+                essay_number += 1
+                scored_question_numbers[a["id"]] = ("Essay", essay_number)
                 st.text_area(
                     "Candidate response", value=a["submitted_answer"], disabled=True,
                     height=160, key=f"response_{a['id']}",
                 )
             else:
+                oral_practical_number += 1
+                oral_practical_numbers[a["id"]] = oral_practical_number
+                scored_question_numbers[a["id"]] = ("Oral-Practical", oral_practical_number)
                 observed_responses[a["id"]] = st.text_area(
                     "Observed response", value=a["submitted_answer"], height=120,
                     key=f"observed_response_{a['id']}", disabled=sub["status"] == "Graded",
@@ -312,10 +321,15 @@ with st.form(f"grading_{sid}"):
             st.info(f"Scoring guidance: {q['rubric']}")
             score_max = min(q["max_points"], 10)
             scores[a["id"]] = st.number_input(
-                f"Points for answer #{a['id']} (max {int(score_max)})",
+                f"Points for {scored_question_numbers[a['id']][0]} question {scored_question_numbers[a['id']][1]} (max {int(score_max)})",
                 min_value=0, max_value=int(score_max),
-                value=min(int(a["awarded_score"]), int(score_max)),
-                step=1, disabled=sub["status"] == "Graded",
+                value=(
+                    min(int(a["awarded_score"]), int(score_max))
+                    if sub["status"] == "Graded"
+                    else None
+                ),
+                step=1, key=f"review_score_{sid}_{a['id']}",
+                disabled=sub["status"] == "Graded",
             )
         else:
             st.caption(f"Correct answer: {q['correct_answer']} · Awarded: {a['awarded_score']:g}")
@@ -325,11 +339,57 @@ with st.form(f"grading_{sid}"):
 
     comments = st.text_area(
         "Reviewer feedback", value=sub["reviewer_comments"] or "",
-        disabled=sub["status"] == "Graded",
+        key=f"review_comments_{sid}", disabled=sub["status"] == "Graded",
     )
     if st.form_submit_button(
         "Finalize grade", disabled=sub["status"] == "Graded", type="primary"
     ):
+        unanswered_oral_numbers = [
+            ("Oral-Practical", number, "observed response")
+            for answer_id, number in oral_practical_numbers.items()
+            if not str(observed_responses.get(answer_id, "")).strip()
+        ]
+        ungraded_numbers = [
+            (kind, number, "score")
+            for answer_id, (kind, number) in scored_question_numbers.items()
+            if scores.get(answer_id) is None
+        ]
+        pending_items = unanswered_oral_numbers + ungraded_numbers
+        if pending_items:
+            st.session_state[f"pending_review_blanks_{sid}"] = pending_items
+            st.rerun()
+        else:
+            try:
+                db.grade(user["id"], sid, scores, comments, observed_responses)
+                clear_read_caches()
+                st.session_state.assessment_finalized = {"candidate_name": sub["candidate_name"]}
+                st.session_state.show_finalized_assessment = True
+                st.rerun()
+            except ValueError as exc:
+                st.error(str(exc))
+
+questionnaire.__exit__(None, None, None)
+
+pending_review_blanks = st.session_state.get(f"pending_review_blanks_{sid}")
+if pending_review_blanks:
+    blank_descriptions = [
+        f"{kind} question {number} ({field} blank)"
+        for kind, number, field in pending_review_blanks
+    ]
+    st.warning(
+        "Incomplete grading: "
+        + "; ".join(blank_descriptions)
+        + ". Return to grading to complete these fields, or finalize with blank scores set to zero."
+    )
+    return_col, proceed_col = st.columns(2)
+    if return_col.button("Return to grading", key=f"return_review_grade_{sid}", type="primary"):
+        st.session_state.pop(f"pending_review_blanks_{sid}", None)
+        st.rerun()
+    if proceed_col.button("Finalize with blank scores set to zero", key=f"proceed_review_grade_{sid}"):
+        st.session_state.pop(f"pending_review_blanks_{sid}", None)
+        for answer_id, score in list(scores.items()):
+            if score is None:
+                scores[answer_id] = 0
         try:
             db.grade(user["id"], sid, scores, comments, observed_responses)
             clear_read_caches()
@@ -338,8 +398,6 @@ with st.form(f"grading_{sid}"):
             st.rerun()
         except ValueError as exc:
             st.error(str(exc))
-
-questionnaire.__exit__(None, None, None)
 
 if sub["status"] == "Graded":
     st.subheader("CTA Results")

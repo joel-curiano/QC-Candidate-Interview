@@ -682,6 +682,45 @@ essay_questions = [
 ]
 responses = st.session_state.setdefault("assessment_responses", {})
 
+def is_unanswered(question_id):
+    answer = st.session_state.get(f"answer_{question_id}", responses.get(question_id, ""))
+    if not isinstance(answer, str) or not answer.strip():
+        return True
+    return answer.strip() in {
+        "[Unanswered]",
+        "[Unanswered - time expired]",
+        "[No response submitted - time expired]",
+    }
+
+
+def submit_candidate_assessment():
+    for question in essay_questions:
+        if question["id"] not in responses or not str(responses[question["id"]]).strip():
+            responses[question["id"]] = "[No response submitted - time expired]"
+    try:
+        db.submit(
+            user["id"],
+            discipline,
+            responses,
+            st.session_state.attempt_token,
+            st.session_state.candidate_details,
+            (
+                st.session_state.assessment_mcq_ids
+                + st.session_state.assessment_essay_ids
+                + st.session_state.assessment_reviewer_ids
+            ),
+            point_settings={kind: settings[f"{kind}_points"] for kind in QUESTION_TYPES},
+            expected_counts=st.session_state.get("assessment_counts"),
+        )
+        db.delete_assessment_draft(user["id"])
+        clear_read_caches()
+        db.release_login(user["id"], st.session_state.login_token)
+        st.session_state.clear()
+        st.session_state.assessment_submitted = True
+        st.rerun()
+    except ValueError as exc:
+        st.error(str(exc))
+
 if st.session_state.pop("assessment_draft_restored", False):
     st.success("Your saved assessment answers have been restored.")
 
@@ -711,10 +750,19 @@ if st.session_state.get("assessment_phase", "mcq") == "mcq":
             "Selected answers will be saved as you continue."
         )
 
-    pending_unanswered = st.session_state.get("assessment_mcq_pending_unanswered", 0)
+    pending_unanswered = st.session_state.get("assessment_mcq_pending_unanswered", [])
+    if isinstance(pending_unanswered, int):
+        pending_unanswered = [
+            number
+            for number, question in enumerate(mcq_questions, 1)
+            if is_unanswered(question["id"])
+        ]
+        st.session_state.assessment_mcq_pending_unanswered = pending_unanswered
     if pending_unanswered:
         st.warning(
-            f"You have {pending_unanswered} unanswered Multiple Choice question(s). "
+            "These Multiple Choice questions are unanswered: "
+            + ", ".join(str(number) for number in pending_unanswered)
+            + ". "
             "Return to the questions to complete them, or proceed with those answers scored as zero."
         )
         return_col, proceed_col = st.columns(2)
@@ -754,11 +802,14 @@ if st.session_state.get("assessment_phase", "mcq") == "mcq":
         )
         if st.button(submit_label, type="primary"):
             unanswered_count = sum(
-                not isinstance(responses.get(q["id"]), str) or not responses[q["id"]].strip()
-                for q in mcq_questions
+                is_unanswered(q["id"]) for q in mcq_questions
             )
             if unanswered_count and not is_mcq_expired:
-                st.session_state.assessment_mcq_pending_unanswered = unanswered_count
+                st.session_state.assessment_mcq_pending_unanswered = [
+                    number
+                    for number, question in enumerate(mcq_questions, 1)
+                    if is_unanswered(question["id"])
+                ]
                 save_current_assessment_draft(user["id"])
                 st.rerun()
             else:
@@ -791,33 +842,32 @@ else:
 
     if essay_index >= len(essay_questions):
         st.success("All Essay questions are complete. Submit the assessment when ready.")
-        if st.button("Submit assessment", type="primary"):
-            for q in essay_questions:
-                if q["id"] not in responses or not responses[q["id"]].strip():
-                    responses[q["id"]] = "[No response submitted - time expired]"
-            try:
-                db.submit(
-                    user["id"],
-                    discipline,
-                    responses,
-                    st.session_state.attempt_token,
-                    st.session_state.candidate_details,
-                    (
-                        st.session_state.assessment_mcq_ids
-                        + st.session_state.assessment_essay_ids
-                        + st.session_state.assessment_reviewer_ids
-                    ),
-                    point_settings={kind: settings[f"{kind}_points"] for kind in QUESTION_TYPES},
-                    expected_counts=st.session_state.get("assessment_counts"),
-                )
-                db.delete_assessment_draft(user["id"])
-                clear_read_caches()
-                db.release_login(user["id"], st.session_state.login_token)
-                st.session_state.clear()
-                st.session_state.assessment_submitted = True
+        essay_unanswered_numbers = [
+            number
+            for number, question in enumerate(essay_questions, 1)
+            if is_unanswered(question["id"])
+        ]
+        pending_essay_unanswered = st.session_state.get("assessment_essay_pending_unanswered")
+        if pending_essay_unanswered:
+            st.warning(
+                "These Essay questions are unanswered: "
+                + ", ".join(str(number) for number in pending_essay_unanswered)
+                + ". Return to the first unanswered question, or proceed with blank answers."
+            )
+            return_col, proceed_col = st.columns(2)
+            if return_col.button("Return to unanswered questions", type="primary"):
+                st.session_state.assessment_essay_index = pending_essay_unanswered[0] - 1
+                st.session_state.pop("assessment_essay_pending_unanswered", None)
                 st.rerun()
-            except ValueError as exc:
-                st.error(str(exc))
+            if proceed_col.button("Proceed with blank answers"):
+                st.session_state.pop("assessment_essay_pending_unanswered", None)
+                submit_candidate_assessment()
+        elif st.button("Submit assessment", type="primary"):
+            if essay_unanswered_numbers:
+                st.session_state.assessment_essay_pending_unanswered = essay_unanswered_numbers
+                st.rerun()
+            else:
+                submit_candidate_assessment()
     else:
         question = essay_questions[essay_index]
         essay_started_at = st.session_state.setdefault("assessment_essay_started_at", {})
