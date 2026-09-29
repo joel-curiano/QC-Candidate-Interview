@@ -281,9 +281,9 @@ def select_by_difficulty(pool, question_count, kind, rng):
     return selected
 
 
-def select_assessment_questions(bank, settings, rng):
+def select_assessment_questions(bank, settings, rng, candidate_role='All'):
     """Select questions with the required difficulty mix and MCQ subject-topic alignment."""
-    pools = {kind: [q for q in bank if q["q_type"] == kind] for kind in QUESTION_TYPES}
+    pools = {kind: [q for q in bank if q["q_type"] == kind and q.get('candidate_role', 'All') in ('All', candidate_role)] for kind in QUESTION_TYPES}
     selected = {"mcq": select_by_difficulty(pools["mcq"], settings["mcq"], "mcq", rng)}
     selected_subject_topics = {
         (q.get("subject", "General"), q.get("topic_group", "General"))
@@ -474,7 +474,7 @@ if user["role"] != "Candidate":
     try:
         st.logo("img/Icon/CAT Icon White Background.png", icon_image="img/Icon/CAT-Tab-Icon.png")
     except AttributeError:
-        st.sidebar.image("img/Icon/CAT Icon White Background.png", use_container_width=True)
+        st.sidebar.image("img/Icon/CAT Icon White Background.png", width="stretch")
     st.sidebar.write(f"**{user['name']}**")
     st.sidebar.caption(user["role"])
 
@@ -558,7 +558,7 @@ if user["role"] == "Candidate" and st.session_state.get("assessment_phase"):
 try:
     st.logo("img/Icon/CAT Icon White Background.png", icon_image="img/Icon/CAT-Tab-Icon.png")
 except AttributeError:
-    st.sidebar.image("img/Icon/CAT Icon White Background.png", use_container_width=True)
+    st.sidebar.image("img/Icon/CAT Icon White Background.png", width="stretch")
 st.sidebar.write(f"**{user['name']}**")
 st.sidebar.caption(user["role"])
 
@@ -644,7 +644,7 @@ if not details:
                 }
                 rng = secrets.SystemRandom()
                 try:
-                    selected = select_assessment_questions(bank, settings, rng)
+                    selected = select_assessment_questions(bank, settings, rng, str(designation).strip())
                     selected_mcqs = selected["mcq"]
                     st.session_state.assessment_mcq_ids = [q["id"] for q in selected["mcq"]]
                     st.session_state.assessment_essay_ids = [q["id"] for q in selected["essay"]]

@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS qc_portal.questions (
     difficulty TEXT NOT NULL DEFAULT 'moderate' CHECK (difficulty IN ('easy', 'moderate', 'difficult')),
     topic_group TEXT NOT NULL DEFAULT 'General',
     delivery_stage TEXT NOT NULL DEFAULT 'standard' CHECK (delivery_stage IN ('standard', 'oral_opening')),
+    candidate_role TEXT NOT NULL DEFAULT 'All' CHECK (candidate_role IN ('All', 'Inspector', 'Supervisor', 'Technician')),
     CHECK (delivery_stage = 'standard' OR (q_type = 'oral_practical' AND is_scored = FALSE))
 );
 CREATE TABLE IF NOT EXISTS qc_portal.archived_questions (
@@ -63,6 +64,7 @@ CREATE TABLE IF NOT EXISTS qc_portal.archived_questions (
     difficulty TEXT NOT NULL DEFAULT 'moderate' CHECK (difficulty IN ('easy', 'moderate', 'difficult')),
     topic_group TEXT NOT NULL DEFAULT 'General',
     delivery_stage TEXT NOT NULL DEFAULT 'standard' CHECK (delivery_stage IN ('standard', 'oral_opening')),
+    candidate_role TEXT NOT NULL DEFAULT 'All' CHECK (candidate_role IN ('All', 'Inspector', 'Supervisor', 'Technician')),
     archived_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CHECK (delivery_stage = 'standard' OR (q_type = 'oral_practical' AND is_scored = FALSE))
 );

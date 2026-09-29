@@ -148,13 +148,13 @@ def cached_question_counts() -> dict:
 
 
 @st.cache_data(ttl=30, show_spinner=False)
-def cached_question_count(discipline=None, question_type=None) -> int:
-    return db.question_count(discipline, question_type)
+def cached_question_count(discipline=None, question_type=None, candidate_role=None) -> int:
+    return db.question_count(discipline, question_type, candidate_role)
 
 
 @st.cache_data(ttl=30, show_spinner=False)
-def cached_question_page(discipline=None, question_type=None, limit=20, offset=0):
-    return db.question_page(discipline, question_type, limit, offset)
+def cached_question_page(discipline=None, question_type=None, limit=20, offset=0, candidate_role=None):
+    return db.question_page(discipline, question_type, limit, offset, candidate_role)
 
 
 @st.cache_data(ttl=30, show_spinner=False)
@@ -255,7 +255,7 @@ def sidebar_nav(user: dict) -> None:
     try:
         st.logo("img/Icon/CAT Icon White Background.png", icon_image="img/Icon/CAT-Tab-Icon.png")
     except AttributeError:
-        st.sidebar.image("img/Icon/CAT Icon White Background.png", use_container_width=True)
+        st.sidebar.image("img/Icon/CAT Icon White Background.png", width="stretch")
     st.sidebar.write(f"**{user['name']}**")
     st.sidebar.caption(user["role"])
 

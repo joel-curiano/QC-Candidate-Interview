@@ -16,7 +16,7 @@ HEADERS = [
     'Multiple Choice options',
     'Correct answer',
     'Scoring rubric',
-    'Subject', 'Sub-subject', 'Scored question', 'Difficulty', 'Topic group', 'Delivery stage',
+    'Subject', 'Sub-subject', 'Scored question', 'Difficulty', 'Topic group', 'Delivery stage', 'Candidate role',
 ]
 
 
@@ -56,9 +56,9 @@ def parse_questions(workbook_bytes):
         if len(values) < len(HEADERS):
             values.extend([''] * (len(HEADERS) - len(values)))
         discipline, kind, prompt, options, correct, rubric = map(_text, values[:6])
-        metadata = list(row[6:12]) + ['', '', '', '', '', '']
-        subject, sub_subject, scored, difficulty, topic_group, delivery_stage = map(_text, metadata[:6])
-        subject = subject or 'General'; sub_subject = sub_subject or 'General'; difficulty = difficulty or 'moderate'; topic_group = topic_group or 'General'; scored = scored.lower() not in ('no', 'false', '0', 'non-scored'); delivery_stage = delivery_stage or 'standard'
+        metadata = list(row[6:13]) + ['', '', '', '', '', '', '']
+        subject, sub_subject, scored, difficulty, topic_group, delivery_stage, candidate_role = map(_text, metadata[:7])
+        subject = subject or 'General'; sub_subject = sub_subject or 'General'; difficulty = difficulty or 'moderate'; topic_group = topic_group or 'General'; scored = scored.lower() not in ('no', 'false', '0', 'non-scored'); delivery_stage = delivery_stage or 'standard'; candidate_role = candidate_role or 'All'
         
         row_result = {'row_number': row_number, 'success': True, 'error': None, 'question': None, 'prompt': prompt}
         try:
@@ -68,6 +68,8 @@ def parse_questions(workbook_bytes):
                 raise QuestionImportError('Question type must be mcq, essay, or oral_practical.')
             if difficulty not in ('easy', 'moderate', 'difficult') or delivery_stage not in ('standard', 'oral_opening'):
                 raise QuestionImportError('Difficulty and delivery stage values are invalid.')
+            if candidate_role not in ('All', 'Inspector', 'Supervisor', 'Technician'):
+                raise QuestionImportError('Candidate role must be All, Inspector, Supervisor, or Technician.')
             if delivery_stage == 'oral_opening' and (kind != 'oral_practical' or scored):
                 raise QuestionImportError('Oral opening questions must be non-scored Oral-Practical questions.')
             option_separator = '\n' if '\n' in options or '\r' in options else ';'
@@ -84,7 +86,7 @@ def parse_questions(workbook_bytes):
                 'options': option_values,
                 'correct': correct,
                 'rubric': rubric, 'subject': subject, 'sub_subject': sub_subject,
-                'is_scored': scored, 'difficulty': difficulty, 'topic_group': topic_group, 'delivery_stage': delivery_stage,
+                'is_scored': scored, 'difficulty': difficulty, 'topic_group': topic_group, 'delivery_stage': delivery_stage, 'candidate_role': candidate_role,
             }
         except QuestionImportError as e:
             row_result['success'] = False
@@ -104,8 +106,8 @@ def template_bytes():
     sheet.title = 'Questions'
     sheet.append(HEADERS)
     sheet.freeze_panes = 'A2'
-    sheet.auto_filter.ref = 'A1:L1'
-    widths = [22, 20, 65, 45, 35, 65, 22, 28, 18, 16, 40, 18]
+    sheet.auto_filter.ref = 'A1:M1'
+    widths = [22, 20, 65, 45, 35, 65, 22, 28, 18, 16, 40, 18, 20]
     for index, width in enumerate(widths, 1):
         sheet.column_dimensions[chr(64 + index)].width = width
     for cell in sheet[1]:
@@ -140,7 +142,7 @@ def export_questions_bytes(questions):
             '\n'.join(str(option) for option in options),
             question.get('correct_answer', '') or '',
             question.get('rubric', '') or '', question.get('subject', 'General'), question.get('sub_subject', 'General'),
-            'yes' if question.get('is_scored', True) else 'no', question.get('difficulty', 'moderate'), question.get('topic_group', 'General'), question.get('delivery_stage', 'standard'),
+            'yes' if question.get('is_scored', True) else 'no', question.get('difficulty', 'moderate'), question.get('topic_group', 'General'), question.get('delivery_stage', 'standard'), question.get('candidate_role', 'All'),
         ])
         for cell in sheet[sheet.max_row]:
             if isinstance(cell.value, str):

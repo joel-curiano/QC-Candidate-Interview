@@ -56,13 +56,13 @@ template_column.download_button(
     template_bytes(),
     "qc-question-template.xlsx",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    use_container_width=True,
+    width="stretch",
 )
 with export_column:
     active_count = sum(cached_question_counts().values())
     if st.button(
         f"Prepare question export ({active_count})",
-        use_container_width=True,
+        width="stretch",
         disabled=active_count == 0,
     ):
         with st.spinner("Preparing Excel export..."):
@@ -73,7 +73,7 @@ with export_column:
             export_bytes,
             "qc-existing-questions.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
+            width="stretch",
         )
 
 
@@ -182,7 +182,7 @@ with st.expander(
                             f"Import finished: {result['success_count']} succeeded, "
                             f"{result['fail_count']} failed."
                         )
-                    st.dataframe(result["rows"], use_container_width=True)
+                    st.dataframe(result["rows"], width="stretch")
 
                 if st.button("Close"):
                     close_question_import()
@@ -204,7 +204,7 @@ with st.expander(
                 stage.success("Import finished.")
                 st.dataframe(
                     [{"Row": r["row_number"], "Status": r["success"], "Error": r["error"] or ""} for r in final_results],
-                    use_container_width=True,
+                    width="stretch",
                 )
             except (QuestionImportError, ValueError) as exc:
                 stage.error(str(exc))
@@ -228,8 +228,14 @@ discipline_labels = {
 
 type_options = {k: v for k, v in QUESTION_TYPE_LABELS.items()}
 type_options_all = {"": "All types", **type_options}
+candidate_role_options = {
+    "": "All candidate roles",
+    "Inspector": "Inspector",
+    "Supervisor": "Supervisor",
+    "Technician": "Technician",
+}
 
-filter_col1, filter_col2 = st.columns(2)
+filter_col1, filter_col2, filter_col3 = st.columns(3)
 with filter_col1:
     filter_discipline = st.selectbox(
         "Discipline",
@@ -244,14 +250,23 @@ with filter_col2:
         format_func=lambda k: type_options_all[k],
         key="qb_filter_type",
     )
-filter_signature = (filter_discipline, filter_type)
+with filter_col3:
+    filter_candidate_role = st.selectbox(
+        "Candidate role",
+        list(candidate_role_options),
+        format_func=lambda role: candidate_role_options[role],
+        key="qb_filter_candidate_role",
+    )
+filter_signature = (filter_discipline, filter_type, filter_candidate_role)
 if st.session_state.get("qb_filter_signature") != filter_signature:
     st.session_state.qb_filter_signature = filter_signature
     st.session_state.qb_page = 1
 
 page_size = 20
 selected_discipline = None if filter_discipline == "All" else filter_discipline
-total_questions = cached_question_count(selected_discipline, filter_type or None)
+total_questions = cached_question_count(
+    selected_discipline, filter_type or None, filter_candidate_role or None
+)
 st.caption(f"{total_questions} question(s) match the current filters.")
 
 if not total_questions:
@@ -263,7 +278,7 @@ else:
         p_col1, p_col2 = st.columns([1, 3])
         with p_col1:
             page_num = st.number_input(
-                "Page", min_value=1, max_value=total_pages, value=1, step=1, key="qb_page"
+                "Page", min_value=1, max_value=total_pages, step=1, key="qb_page"
             )
         with p_col2:
             st.caption(
@@ -279,6 +294,7 @@ else:
         filter_type or None,
         page_size,
         (page_num - 1) * page_size,
+        candidate_role=filter_candidate_role or None,
     )
 
     for q in page_questions:
@@ -288,6 +304,7 @@ else:
             f"{'Active' if q['active'] else 'Archived'}"
         ):
             st.write(q["question_text"])
+            st.caption(f"Candidate role: {q.get('candidate_role', 'All')}")
             if q["q_type"] == "mcq":
                 options_list = json.loads(q["options"]) if q.get("options") else []
                 for opt in options_list:
@@ -348,12 +365,22 @@ if user["role"] == "Admin":
                             "This removes all unanswered questions and archives only the questions that were already used in candidate assessments."
                         )
                         if st.button("Confirm Wipe Question Bank", type="primary"):
+                            progress_bar = st.progress(0, text="Preparing question bank wipe...")
+
+                            def wipe_progress(current, total, text):
+                                progress_bar.progress(
+                                    current / total if total > 0 else 1.0,
+                                    text=text,
+                                )
+
                             try:
-                                db.wipe_questions(user["id"])
+                                db.wipe_questions(user["id"], progress_callback=wipe_progress)
                                 clear_read_caches()
+                                progress_bar.empty()
                                 st.session_state["question_bank_wiped"] = True
                                 st.rerun()
                             except ValueError as exc:
+                                progress_bar.empty()
                                 st.error(str(exc))
                     _wipe_question_bank_dialog()
                 else:
@@ -363,13 +390,23 @@ if user["role"] == "Admin":
                     "This removes all unanswered questions and archives only the questions that were already used in candidate assessments."
                 )
                 if st.button("Confirm Wipe Question Bank", type="primary"):
+                    progress_bar = st.progress(0, text="Preparing question bank wipe...")
+
+                    def wipe_progress(current, total, text):
+                        progress_bar.progress(
+                            current / total if total > 0 else 1.0,
+                            text=text,
+                        )
+
                     try:
-                        db.wipe_questions(user["id"])
+                        db.wipe_questions(user["id"], progress_callback=wipe_progress)
                         clear_read_caches()
+                        progress_bar.empty()
                         st.session_state.pop("confirm_wipe_question_bank", None)
                         st.session_state["question_bank_wiped"] = True
                         st.rerun()
                     except ValueError as exc:
+                        progress_bar.empty()
                         st.error(str(exc))
 
             st.error(

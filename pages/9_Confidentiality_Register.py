@@ -68,7 +68,7 @@ if user_filter:
 
 st.dataframe(
     filtered_df[["username", "name", "role_at_acceptance", "agreement_version", "acceptance_time"]].sort_values("acceptance_time", ascending=False),
-    use_container_width=True,
+    width="stretch",
     hide_index=True,
     column_config={
         "username": "Username",

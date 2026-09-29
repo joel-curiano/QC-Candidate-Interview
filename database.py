@@ -42,7 +42,7 @@ STARTER_DISCIPLINES = (
     'Mechanical QC', 'NDT QC', 'Non-Metallic Piping QC', 'Piping QC', 'Welding QC',
     'Pipeline QC', 'PQCS',
 )
-RUNTIME_SCHEMA_VERSION = '5'
+RUNTIME_SCHEMA_VERSION = '7'
 
 
 
@@ -201,6 +201,7 @@ def init_db():
             difficulty TEXT NOT NULL DEFAULT 'moderate' CHECK (difficulty IN ('easy', 'moderate', 'difficult')),
             topic_group TEXT NOT NULL DEFAULT 'General',
             delivery_stage TEXT NOT NULL DEFAULT 'standard' CHECK (delivery_stage IN ('standard', 'oral_opening')),
+            candidate_role TEXT NOT NULL DEFAULT 'All' CHECK (candidate_role IN ('All', 'Inspector', 'Supervisor', 'Technician')),
             archived_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             CHECK (delivery_stage = 'standard' OR (q_type = 'oral_practical' AND is_scored = FALSE))
         )""")
@@ -221,6 +222,8 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_token TEXT")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_disciplines TEXT[] NOT NULL DEFAULT ARRAY['All Disciplines']::TEXT[]")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS confidentiality_acceptance_id BIGINT REFERENCES confidentiality_acceptances(id)")
+        c.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS candidate_role TEXT NOT NULL DEFAULT 'All'")
+        c.execute("ALTER TABLE archived_questions ADD COLUMN IF NOT EXISTS candidate_role TEXT NOT NULL DEFAULT 'All'")
         initialized = c.execute("SELECT value FROM schema_info WHERE key='question_template_v1'").fetchone()
         
         if not initialized:
@@ -682,10 +685,12 @@ def question_counts():
     return {row['discipline']: row['question_count'] for row in rows}
 
 
-def question_count(discipline=None, question_type=None):
+def question_count(discipline=None, question_type=None, candidate_role=None):
     """Return the active question count for the selected filters."""
     if question_type is not None and question_type not in QUESTION_TYPES:
         raise ValueError('Invalid question type.')
+    if candidate_role is not None and candidate_role not in ('All', 'Inspector', 'Supervisor', 'Technician'):
+        raise ValueError('Invalid candidate role.')
     conditions = ['active=1']
     params = []
     if discipline is not None:
@@ -694,6 +699,9 @@ def question_count(discipline=None, question_type=None):
     if question_type:
         conditions.append('q_type=%s')
         params.append(question_type)
+    if candidate_role:
+        conditions.append('candidate_role=%s')
+        params.append(candidate_role)
     with connection() as c:
         return c.execute(
             f"SELECT COUNT(*) AS question_count FROM questions WHERE {' AND '.join(conditions)}",
@@ -701,10 +709,12 @@ def question_count(discipline=None, question_type=None):
         ).fetchone()['question_count']
 
 
-def question_page(discipline=None, question_type=None, limit=20, offset=0):
+def question_page(discipline=None, question_type=None, limit=20, offset=0, candidate_role=None):
     """Return one filtered page of active questions and its total row count."""
     if question_type is not None and question_type not in QUESTION_TYPES:
         raise ValueError('Invalid question type.')
+    if candidate_role is not None and candidate_role not in ('All', 'Inspector', 'Supervisor', 'Technician'):
+        raise ValueError('Invalid candidate role.')
     limit = max(1, min(int(limit), 100))
     offset = max(0, int(offset))
     conditions = ['q.active=1']
@@ -715,6 +725,9 @@ def question_page(discipline=None, question_type=None, limit=20, offset=0):
     if question_type:
         conditions.append('q.q_type=%s')
         params.append(question_type)
+    if candidate_role:
+        conditions.append('q.candidate_role=%s')
+        params.append(candidate_role)
     where_clause = ' AND '.join(conditions)
     with connection() as c:
         total = c.execute(
@@ -744,7 +757,7 @@ def add_question(actor, discipline, kind, prompt, options, correct, rubric, subj
         require(c, actor, ('Admin', 'Reviewer'))
         _insert_question(c, question)
 
-def _validate_question(discipline, kind, prompt, options, correct, rubric, subject='General', sub_subject='General', is_scored=True, difficulty='moderate', topic_group='General', delivery_stage='standard'):
+def _validate_question(discipline, kind, prompt, options, correct, rubric, subject='General', sub_subject='General', is_scored=True, difficulty='moderate', topic_group='General', delivery_stage='standard', candidate_role='All'):
     options = [v.strip() for v in options if v.strip()]
     if not discipline.strip() or not prompt.strip():
         raise ValueError('Discipline and question are required.')
@@ -758,18 +771,20 @@ def _validate_question(discipline, kind, prompt, options, correct, rubric, subje
         raise ValueError('Difficulty must be easy, moderate, or difficult.')
     if delivery_stage not in ('standard', 'oral_opening') or (delivery_stage == 'oral_opening' and (kind != 'oral_practical' or is_scored)):
         raise ValueError('Oral opening questions must be non-scored Oral-Practical questions.')
+    if candidate_role not in ('All', 'Inspector', 'Supervisor', 'Technician'):
+        raise ValueError('Candidate role must be All, Inspector, Supervisor, or Technician.')
     points = 1 if kind == 'mcq' else 10
-    return (discipline.strip(), kind, prompt.strip(), options, correct.strip(), rubric.strip(), points, subject.strip() or 'General', sub_subject.strip() or 'General', bool(is_scored), difficulty, topic_group.strip() or 'General', delivery_stage)
+    return (discipline.strip(), kind, prompt.strip(), options, correct.strip(), rubric.strip(), points, subject.strip() or 'General', sub_subject.strip() or 'General', bool(is_scored), difficulty, topic_group.strip() or 'General', delivery_stage, candidate_role)
 
 def _insert_question(connection, question):
-    values = list(question) + ['General', 'General', True, 'moderate', 'General', 'standard']
-    discipline, kind, prompt, options, correct, rubric, points, subject, sub_subject, is_scored, difficulty, topic_group, delivery_stage = values[:13]
+    values = list(question) + ['General', 'General', True, 'moderate', 'General', 'standard', 'All']
+    discipline, kind, prompt, options, correct, rubric, points, subject, sub_subject, is_scored, difficulty, topic_group, delivery_stage, candidate_role = values[:14]
     existing = connection.execute('SELECT id FROM questions WHERE discipline=%s AND q_type=%s AND question_text=%s', (discipline, kind, prompt)).fetchone()
     if existing:
         raise ValueError('Duplicate question found.')
-    connection.execute('INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points,subject,sub_subject,is_scored,difficulty,topic_group,delivery_stage) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+    connection.execute('INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points,subject,sub_subject,is_scored,difficulty,topic_group,delivery_stage,candidate_role) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                        (discipline, kind, prompt, json.dumps(options) if kind == 'mcq' else None,
-                        correct if kind == 'mcq' else None, rubric, points, subject, sub_subject, is_scored, difficulty, topic_group, delivery_stage))
+                        correct if kind == 'mcq' else None, rubric, points, subject, sub_subject, is_scored, difficulty, topic_group, delivery_stage, candidate_role))
 
 def add_questions(actor, parse_results, progress_callback=None):
     with connection() as c:
@@ -783,7 +798,7 @@ def add_questions(actor, parse_results, progress_callback=None):
             q = result['question']
             try:
                 with c.transaction():
-                    validated = _validate_question(q['discipline'], q['kind'], q['prompt'], q['options'], q['correct'], q['rubric'], q.get('subject'), q.get('sub_subject'), q.get('is_scored', True), q.get('difficulty'), q.get('topic_group'), q.get('delivery_stage'))
+                    validated = _validate_question(q['discipline'], q['kind'], q['prompt'], q['options'], q['correct'], q['rubric'], q.get('subject'), q.get('sub_subject'), q.get('is_scored', True), q.get('difficulty'), q.get('topic_group'), q.get('delivery_stage'), q.get('candidate_role', 'All'))
                     _insert_question(c, validated)
             except (ValueError, psycopg.Error) as e:
                 result['success'] = False
@@ -836,44 +851,54 @@ def delete_question(actor, question_id, force=False):
 
         c.execute('DELETE FROM questions WHERE id=%s', (question_id,))
 
-def _archive_question_rows_for_wipe(c, question_ids):
+def _archive_question_rows_for_wipe(c, question_ids, progress_callback=None, total=0):
     """Archive used questions and re-point answers to their archived record."""
     if not question_ids:
         return {}
     rows = c.execute('SELECT * FROM questions WHERE id = ANY(%s) ORDER BY id', (question_ids,)).fetchall()
     archive_map = {}
-    for row in rows:
+    for index, row in enumerate(rows, 1):
         archived_id = c.execute(
             """
             INSERT INTO archived_questions(
                 source_question_id, discipline, q_type, question_text, options, correct_answer, rubric,
-                max_points, active, subject, sub_subject, is_scored, difficulty, topic_group, delivery_stage
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                max_points, active, subject, sub_subject, is_scored, difficulty, topic_group, delivery_stage, candidate_role
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             RETURNING id
             """,
             (
                 row['id'], row['discipline'], row['q_type'], row['question_text'], row['options'], row['correct_answer'],
                 row['rubric'], row['max_points'], row['active'], row['subject'], row['sub_subject'], row['is_scored'],
-                row['difficulty'], row['topic_group'], row['delivery_stage'],
+                row['difficulty'], row['topic_group'], row['delivery_stage'], row['candidate_role'],
             ),
         ).fetchone()['id']
         archive_map[row['id']] = archived_id
+        if progress_callback:
+            progress_callback(index, total, f"Archiving used questions: {index} of {total}...")
     for original_id, archive_id in archive_map.items():
         c.execute('UPDATE answers SET question_id=%s WHERE question_id=%s', (archive_id, original_id))
     c.execute('DELETE FROM questions WHERE id = ANY(%s)', (list(archive_map),))
     return archive_map
 
 
-def wipe_questions(actor):
+def wipe_questions(actor, progress_callback=None):
     """Remove active bank entries and archive only the questions already used in submissions."""
     with connection() as c:
         require(c, actor, ('Admin',))
+        all_question_ids = [row['id'] for row in c.execute('SELECT id FROM questions ORDER BY id').fetchall()]
+        total = len(all_question_ids)
+        if progress_callback:
+            progress_callback(0, total, "Preparing question bank wipe...")
         question_ids = [row['id'] for row in c.execute('SELECT DISTINCT q.id FROM questions q JOIN answers a ON a.question_id = q.id ORDER BY q.id').fetchall()]
         if question_ids:
-            _archive_question_rows_for_wipe(c, question_ids)
+            _archive_question_rows_for_wipe(c, question_ids, progress_callback, total)
         remaining_ids = [row['id'] for row in c.execute('SELECT id FROM questions ORDER BY id').fetchall()]
         if remaining_ids:
+            if progress_callback:
+                progress_callback(total - len(remaining_ids), total, "Removing unanswered questions...")
             c.execute('DELETE FROM questions WHERE id = ANY(%s)', (remaining_ids,))
+        if progress_callback:
+            progress_callback(total, total, "Question bank wipe complete.")
 
 
 def wipe_archived_questions(actor, progress_callback=None):

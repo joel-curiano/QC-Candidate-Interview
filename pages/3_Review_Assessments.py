@@ -251,10 +251,10 @@ try:
         result_filename = candidate_result_filename(sub.get("candidate_name", "Candidate"))
         st.download_button(
             "Download Candidate Result", result_pdf, result_filename,
-            "application/pdf", use_container_width=True,
+            "application/pdf", width="stretch",
         )
     with action_col2:
-        if st.button("Email Result to Candidate", type="primary", use_container_width=True):
+        if st.button("Email Result to Candidate", type="primary", width="stretch"):
             if not sub.get("email"):
                 st.error("This candidate does not have an email address.")
             else:
