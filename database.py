@@ -16,6 +16,7 @@ from psycopg.rows import dict_row
 from contextlib import contextmanager
 from pathlib import Path
 from question_types import QUESTION_TYPES, REVIEWER_SCORED_TYPES
+from email_validation import validate_email_address
 
 logger = logging.getLogger(__name__)
 
@@ -421,6 +422,8 @@ def create_user(username, name, password, role='Candidate', actor=None, bootstra
             raise ValueError('Only Admin and Reviewer users can create Candidate accounts.')
         if role in ('Candidate', 'Reviewer') and not email:
             raise ValueError(f'{role} email is required.')
+        if email:
+            email = validate_email_address(email, f'{role} email')
         if role == 'Candidate' and not iqama_no.strip():
             raise ValueError('Candidate Iqama No is required.')
         if role not in ('Candidate', 'Reviewer', 'Admin'):
@@ -491,6 +494,7 @@ def candidate_accounts(actor):
         )]
 
 def update_candidate_details(actor, candidate_id, name, email, iqama_no, employee_no, mobile_no):
+    email = validate_email_address(email, 'Candidate email')
     with connection() as c:
         require(c, actor, ('Admin',))
         updated = c.execute(
@@ -567,6 +571,7 @@ def update_reviewer_disciplines(actor, reviewer_id, disciplines):
             raise ValueError('Reviewer account not found.')
 
 def update_reviewer_email(actor, reviewer_id, email):
+    email = validate_email_address(email, 'Reviewer email')
     email = email.strip().lower()
     if not email or '@' not in email or email.startswith('@') or email.endswith('@'):
         raise ValueError('Enter a valid Reviewer email address.')

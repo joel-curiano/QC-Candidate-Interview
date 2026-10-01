@@ -5,6 +5,7 @@ import smtplib
 from datetime import date
 from email.message import EmailMessage
 import streamlit as st
+from email_validation import validate_email_address
 
 
 class EmailDeliveryError(ValueError):
@@ -40,6 +41,10 @@ def _email_settings():
 
 def _deliver(message, host):
     try:
+        validate_email_address(str(message['To']), 'Recipient email')
+    except ValueError as exc:
+        raise EmailDeliveryError(str(exc)) from exc
+    try:
         port = int(_setting('SMTP_PORT', '587'))
     except ValueError as exc:
         raise EmailDeliveryError('SMTP_PORT must be a number.') from exc
@@ -49,7 +54,13 @@ def _deliver(message, host):
         smtp.starttls()
         if username_setting:
             smtp.login(username_setting, password)
-        smtp.send_message(message)
+        try:
+            smtp.send_message(message)
+        except smtplib.SMTPRecipientsRefused as exc:
+            raise EmailDeliveryError(
+                'The mail server rejected the recipient email address. '
+                'Check the account email in Accounts and try again.'
+            ) from exc
 
 
 def send_candidate_invitation(email, name, username, temporary_password, test_date, discipline=''):

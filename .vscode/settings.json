@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "*.qry": "sql"
+    },
+    "[sql]": {
+        "editor.defaultFormatter": "ReneSaarsoo.sql-formatter-vsc"
+    }
+}

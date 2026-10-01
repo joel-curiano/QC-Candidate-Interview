@@ -5,6 +5,7 @@ import streamlit as st
 
 import database as db
 from email_service import EmailDeliveryError, send_candidate_invitation
+from email_validation import validate_email_address
 from shared import (
     inject_global_styles,
     render_logo,
@@ -179,6 +180,7 @@ else:
 
             if send_schedule:
                 try:
+                    validate_email_address(candidate['email'], 'Candidate email in Accounts')
                     temporary_password = db.generate_password(length=6, alphanumeric_only=True)
                     db.set_candidate_temporary_password(
                         user["id"], candidate["id"], temporary_password

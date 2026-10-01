@@ -2,6 +2,55 @@ import pytest
 
 import email_service
 from email_service import EmailDeliveryError, send_candidate_invitation
+from email_validation import validate_email_address
+
+
+@pytest.mark.parametrize('address', ['welding.coordinator', '', '@example.com', 'user@', 'user@example..com', 'user@example.com\nBcc: other@example.com'])
+def test_incomplete_recipient_is_rejected_before_smtp(monkeypatch, address):
+    def unexpected_smtp(*args, **kwargs):
+        pytest.fail('Invalid recipients must not open an SMTP connection')
+
+    monkeypatch.setattr(email_service.smtplib, 'SMTP', unexpected_smtp)
+    from email.message import EmailMessage
+    message = EmailMessage()
+    # Validate raw input as well as addresses that can be assigned to a header.
+    with pytest.raises(ValueError, match='complete email address'):
+        validate_email_address(address)
+    if '\n' not in address:
+        message['To'] = address
+        with pytest.raises(EmailDeliveryError, match='complete email address'):
+            email_service._deliver(message, 'smtp.example.com')
+
+
+def test_valid_recipient_is_trimmed():
+    assert validate_email_address(' candidate@example.com ') == 'candidate@example.com'
+
+
+def test_recipient_refusal_has_actionable_error(monkeypatch):
+    from email.message import EmailMessage
+
+    class RejectingSMTP:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def starttls(self):
+            pass
+
+        def send_message(self, message):
+            raise email_service.smtplib.SMTPRecipientsRefused({'candidate@example.com': (553, b'rejected')})
+
+    monkeypatch.setattr(email_service.smtplib, 'SMTP', RejectingSMTP)
+    monkeypatch.setattr(email_service, '_setting', lambda name, default='': default)
+    message = EmailMessage()
+    message['To'] = 'candidate@example.com'
+    with pytest.raises(EmailDeliveryError, match='Check the account email in Accounts'):
+        email_service._deliver(message, 'smtp.example.com')
 
 
 def test_invitation_requires_mail_configuration(monkeypatch):
