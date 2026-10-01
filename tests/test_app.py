@@ -17,6 +17,17 @@ def test_first_run_setup(postgres_db):
     assert db.authenticate('admin', PASSWORD)['role'] == 'Admin'
 
 
+def test_admin_session_without_candidate_role(postgres_db):
+    db.init_db()
+    admin_id = db.create_user('admin', 'Admin', PASSWORD, bootstrap=True)
+    db.claim_login(admin_id, 'test-login-token')
+    at = AppTest.from_file(APP, default_timeout=15)
+    at.session_state['user'] = {'id': admin_id, 'name': 'Admin', 'role': 'Admin'}
+    at.session_state['login_token'] = 'test-login-token'
+    at.run()
+    assert not at.exception
+
+
 def test_candidate_and_reviewer_flow(postgres_db):
     db.init_db()
     db.create_user('admin', 'Admin', PASSWORD, bootstrap=True)

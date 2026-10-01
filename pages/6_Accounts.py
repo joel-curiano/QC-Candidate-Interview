@@ -89,21 +89,36 @@ with st.expander("Manage Candidate Accounts"):
             key="candidate_account_selection",
         )
         candidate = next(c for c in filtered if c["id"] == selected_id)
+
         with st.form("edit_candidate_account"):
             name = st.text_input("Full name *", value=candidate.get("name", ""))
+            candidate_roles = ['', 'Inspector', 'Supervisor', 'Technician']
+            current_role = candidate.get('candidate_role') or ''
+            candidate_role = st.selectbox(
+                'Candidate Role', candidate_roles,
+                index=candidate_roles.index(current_role) if current_role in candidate_roles else 0,
+                format_func=lambda value: value or 'Not assigned',
+            )
             email = st.text_input("Email *", value=candidate.get("email", ""))
             iqama_no = st.text_input("Iqama No *", value=candidate.get("iqama_no", ""))
             employee_no = st.text_input("Employee No", value=candidate.get("employee_no", ""))
             mobile_no = st.text_input("Mobile No", value=candidate.get("mobile_no", ""))
-            if st.form_submit_button("Save Candidate Details", type="primary"):
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                submitted = st.form_submit_button("Save Candidate Details", type="primary")
+            with col2:
+                if st.session_state.pop('candidate_details_updated', False):
+                    st.success("Candidate details updated successfully.", icon="✅")
+            if submitted:
                 try:
                     if not all(v.strip() for v in (name, email, iqama_no)):
                         raise ValueError("Name, email, and Iqama No are required.")
                     db.update_candidate_details(
-                        user["id"], selected_id, name, email, iqama_no, employee_no, mobile_no
+                        user["id"], selected_id, name, email, iqama_no, employee_no, mobile_no,
+                        candidate_role=candidate_role,
                     )
                     clear_read_caches()
-                    st.success("Candidate details updated successfully.")
+                    st.session_state.candidate_details_updated = True
                     st.rerun()
                 except ValueError as exc:
                     st.error(str(exc))

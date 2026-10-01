@@ -43,7 +43,7 @@ STARTER_DISCIPLINES = (
     'Mechanical QC', 'NDT QC', 'Non-Metallic Piping QC', 'Piping QC', 'Welding QC',
     'Pipeline QC', 'PQCS',
 )
-RUNTIME_SCHEMA_VERSION = '7'
+RUNTIME_SCHEMA_VERSION = '8'
 
 
 
@@ -224,6 +224,8 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_disciplines TEXT[] NOT NULL DEFAULT ARRAY['All Disciplines']::TEXT[]")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS confidentiality_acceptance_id BIGINT REFERENCES confidentiality_acceptances(id)")
         c.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS candidate_role TEXT NOT NULL DEFAULT 'All'")
+        c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS candidate_role TEXT NOT NULL DEFAULT ''")
+        c.execute("UPDATE users SET candidate_role='' WHERE role IN ('Admin', 'Reviewer') AND candidate_role<>''")
         c.execute("ALTER TABLE archived_questions ADD COLUMN IF NOT EXISTS candidate_role TEXT NOT NULL DEFAULT 'All'")
         initialized = c.execute("SELECT value FROM schema_info WHERE key='question_template_v1'").fetchone()
         
@@ -402,7 +404,11 @@ def set_maintenance_mode(actor, enabled):
         )
 
 
-def create_user(username, name, password, role='Candidate', actor=None, bootstrap=False, email='', test_date=None, discipline='', iqama_no='', employee_no='', mobile_no=''):
+def create_user(username, name, password, role='Candidate', actor=None, bootstrap=False, email='', test_date=None, discipline='', iqama_no='', employee_no='', mobile_no='', candidate_role=''):
+    if candidate_role and (bootstrap or role != 'Candidate'):
+        raise ValueError('Only Candidate accounts can have a candidate role.')
+    if candidate_role not in ('', 'Inspector', 'Supervisor', 'Technician'):
+        raise ValueError('Select a valid candidate role.')
     username, name = username.strip().lower(), name.strip()
     if not username or not name or len(password) < 6:
         raise ValueError('Enter a username, full name, and password of at least 6 characters.')
@@ -429,8 +435,8 @@ def create_user(username, name, password, role='Candidate', actor=None, bootstra
         if role not in ('Candidate', 'Reviewer', 'Admin'):
             raise ValueError('Invalid role.')
         try:
-            user_id = c.execute('INSERT INTO users(username,name,email,test_date,password,role,discipline,iqama_no,employee_no,mobile_no) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id',
-                                (username, name, email, test_date, hashed, role, discipline, iqama_no, employee_no, mobile_no)).fetchone()['id']
+            user_id = c.execute('INSERT INTO users(username,name,email,test_date,password,role,discipline,iqama_no,employee_no,mobile_no,candidate_role) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id',
+                                (username, name, email, test_date, hashed, role, discipline, iqama_no, employee_no, mobile_no, candidate_role)).fetchone()['id']
         except psycopg.errors.UniqueViolation as exc:
             raise ValueError('That username is already in use.') from exc
     return user_id
@@ -441,7 +447,10 @@ def authenticate(username, password):
     stored = user['password'] if user else password_hash('dummy password', '0' * 32)
     valid_password = hmac.compare_digest(password_hash(password, stored.split('$')[0]), stored)
     if valid_password and user and (user['role'] != 'Candidate' or user['test_date'] == date.today()):
-        return {k: user[k] for k in ('id', 'username', 'name', 'role', 'email', 'test_date', 'discipline', 'scheduled_discipline', 'iqama_no', 'employee_no', 'project_assignment')}
+        session_user = {k: user[k] for k in ('id', 'username', 'name', 'role', 'email', 'test_date', 'discipline', 'scheduled_discipline', 'iqama_no', 'employee_no', 'project_assignment')}
+        if user['role'] == 'Candidate':
+            session_user['candidate_role'] = user.get('candidate_role') or ''
+        return session_user
     return None
 
 def change_password(actor, current_password, new_password):
@@ -488,19 +497,21 @@ def candidate_accounts(actor):
     with connection() as c:
         require(c, actor, ('Admin', 'Reviewer'))
         return [dict(row) for row in c.execute(
-            "SELECT id,username,name,email,test_date,project_assignment,scheduled_discipline,invitation_sent_at,discipline,iqama_no,employee_no,mobile_no,previous_schedules, "
+            "SELECT id,username,name,email,candidate_role,test_date,project_assignment,scheduled_discipline,invitation_sent_at,discipline,iqama_no,employee_no,mobile_no,previous_schedules, "
             "CASE WHEN EXISTS (SELECT 1 FROM submissions s WHERE s.user_id=users.id) THEN 'Complete' ELSE 'Incomplete' END AS assessment_completion_status "
             "FROM users WHERE role='Candidate' ORDER BY test_date NULLS LAST, name"
         )]
 
-def update_candidate_details(actor, candidate_id, name, email, iqama_no, employee_no, mobile_no):
+def update_candidate_details(actor, candidate_id, name, email, iqama_no, employee_no, mobile_no, candidate_role=None):
+    if candidate_role is not None and candidate_role not in ('', 'Inspector', 'Supervisor', 'Technician'):
+        raise ValueError('Select a valid candidate role.')
     email = validate_email_address(email, 'Candidate email')
     with connection() as c:
         require(c, actor, ('Admin',))
         updated = c.execute(
-            "UPDATE users SET name=%s, email=%s, iqama_no=%s, employee_no=%s, mobile_no=%s "
+            "UPDATE users SET name=%s, email=%s, iqama_no=%s, employee_no=%s, mobile_no=%s, candidate_role=COALESCE(%s, candidate_role) "
             "WHERE id=%s AND role='Candidate' RETURNING id",
-            (name.strip(), email.strip().lower(), iqama_no.strip(), employee_no.strip(), mobile_no.strip(), candidate_id),
+            (name.strip(), email.strip().lower(), iqama_no.strip(), employee_no.strip(), mobile_no.strip(), candidate_role, candidate_id),
         ).fetchone()
         if not updated:
             raise ValueError('Candidate account not found.')

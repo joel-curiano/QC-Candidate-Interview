@@ -98,7 +98,8 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
             )
             confirm = st.text_input("Confirm password", type="password", key=confirm_key)
 
-        role = (
+        candidate_role = st.selectbox('Role *', ['Inspector', 'Supervisor', 'Technician']) if is_candidate else ''
+        role = 'Candidate' if is_candidate else (
             st.selectbox("Role", allowed_roles or ["Candidate", "Reviewer", "Admin"])
             if actor
             else "Candidate"
@@ -134,6 +135,7 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
                     email=account_email, test_date=None,
                     discipline="", iqama_no=iqama_no,
                     employee_no=employee_no, mobile_no=mobile_no,
+                    candidate_role=candidate_role,
                 )
                 if role == "Reviewer":
                     db.update_reviewer_disciplines(actor, candidate_id, reviewer_disciplines)

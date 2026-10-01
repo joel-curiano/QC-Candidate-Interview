@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS qc_portal.users (
     username TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
     email TEXT NOT NULL DEFAULT '',
+    candidate_role TEXT NOT NULL DEFAULT '' CHECK (candidate_role IN ('', 'Inspector', 'Supervisor', 'Technician')),
     test_date DATE,
     project_assignment TEXT NOT NULL DEFAULT '',
     scheduled_discipline TEXT NOT NULL DEFAULT '',
@@ -15,7 +16,8 @@ CREATE TABLE IF NOT EXISTS qc_portal.users (
     invitation_sent_at TIMESTAMPTZ,
     active_login_token TEXT,
     password TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('Candidate', 'Reviewer', 'Admin'))
+    role TEXT NOT NULL CHECK (role IN ('Candidate', 'Reviewer', 'Admin')),
+    CHECK (role = 'Candidate' OR candidate_role = '')
 );
 CREATE TABLE IF NOT EXISTS qc_portal.app_settings (
     key TEXT PRIMARY KEY,

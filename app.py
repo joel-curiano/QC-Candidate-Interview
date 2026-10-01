@@ -128,7 +128,7 @@ def initialize_database(schema_version):
 
 try:
     with st.spinner("Loading Competency Technical Assessment (CTA) Portal..."):
-        initialize_database(5)
+        initialize_database(db.RUNTIME_SCHEMA_VERSION)
 except db.DatabaseError as exc:
     st.error(str(exc))
     st.stop()
@@ -586,11 +586,20 @@ if discipline not in cached_disciplines():
 
 bank = cached_questions(discipline)
 settings = cached_assessment_settings(user["id"])
-question_pools = {kind: [q for q in bank if q["q_type"] == kind] for kind in QUESTION_TYPES}
+candidate_role = str(user.get('candidate_role') or '').strip()
+question_pools = {
+    kind: [
+        q for q in bank
+        if q["q_type"] == kind
+        and (not candidate_role or q.get('candidate_role', 'All') in ('All', candidate_role))
+    ]
+    for kind in QUESTION_TYPES
+}
 if any(len(question_pools[kind]) < settings[kind] for kind in QUESTION_TYPES):
     st.error(
         f"This discipline needs {settings['mcq']} MCQ, "
-        f"{settings['essay']} Essay, and {settings['oral_practical']} Oral-Practical questions."
+        f"{settings['essay']} Essay, and {settings['oral_practical']} Oral-Practical questions"
+        f"{(' for ' + candidate_role + ' role') if candidate_role else ''}."
     )
     st.stop()
 
@@ -631,9 +640,13 @@ if not details:
     )
     with st.form("candidate_details_form"):
         st.text_input("Discipline", value=discipline, disabled=True, key="candidate_discipline_display")
+        candidate_role = str(user.get('candidate_role') or '').strip()
         designation = st.selectbox(
             "Job Title",
             ["Inspector", "Supervisor", "Technician"],
+            index=(['Inspector', 'Supervisor', 'Technician'].index(candidate_role)
+                   if candidate_role in ('Inspector', 'Supervisor', 'Technician') else 0),
+            disabled=bool(candidate_role),
             key="candidate_job_title",
         )
         if st.form_submit_button("Start Multiple Choice Questions", type="primary"):
