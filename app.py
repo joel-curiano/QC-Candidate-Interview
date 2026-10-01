@@ -273,12 +273,20 @@ def select_by_difficulty(pool, question_count, kind, rng):
         if len(difficulty_pools[d]) < targets[d]
     ]
     if shortages:
-        mix = ", ".join(f"{ratio:.0%} {difficulty}" for difficulty, ratio in ratios.items())
-        raise ValueError(
-            f"This discipline needs {', '.join(shortages)} "
-            f"{QUESTION_TYPE_LABELS[kind]} questions to follow the "
-            f"{mix} mix."
-        )
+        fallback_ratios = {"easy": 0.50, "moderate": 0.40, "difficult": 0.10}
+        targets = difficulty_targets(question_count, fallback_ratios)
+        shortages = [
+            f"{targets[d]} {d} (only {len(difficulty_pools[d])} available)"
+            for d in fallback_ratios
+            if len(difficulty_pools[d]) < targets[d]
+        ]
+        if shortages:
+            mix = ", ".join(f"{ratio:.0%} {difficulty}" for difficulty, ratio in fallback_ratios.items())
+            raise ValueError(
+                f"This discipline needs {', '.join(shortages)} "
+                f"{QUESTION_TYPE_LABELS[kind]} questions to follow the fallback "
+                f"{mix} mix."
+            )
     selected = [
         q
         for d in DIFFICULTY_RATIOS
