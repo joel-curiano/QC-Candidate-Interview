@@ -897,22 +897,42 @@ def _archive_question_rows_for_wipe(c, question_ids, progress_callback=None, tot
     return archive_map
 
 
-def wipe_questions(actor, progress_callback=None):
+def wipe_questions(actor, discipline=None, candidate_role=None, progress_callback=None):
     """Remove active bank entries and archive only the questions already used in submissions."""
     with connection() as c:
         require(c, actor, ('Admin',))
-        all_question_ids = [row['id'] for row in c.execute('SELECT id FROM questions ORDER BY id').fetchall()]
+        conditions = []
+        params = []
+        if discipline and discipline != 'All Disciplines':
+            conditions.append('discipline = %s')
+            params.append(discipline)
+        if candidate_role and candidate_role != 'All Roles':
+            conditions.append('candidate_role = %s')
+            params.append(candidate_role)
+            
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        q_where = f"WHERE {' AND '.join('q.' + cond for cond in conditions)}" if conditions else ""
+        
+        all_question_ids = [row['id'] for row in c.execute(f'SELECT id FROM questions {where} ORDER BY id', params).fetchall()]
         total = len(all_question_ids)
+        if total == 0:
+            if progress_callback:
+                progress_callback(0, 0, "No questions match the selected criteria for wipe.")
+            return
+
         if progress_callback:
             progress_callback(0, total, "Preparing question bank wipe...")
-        question_ids = [row['id'] for row in c.execute('SELECT DISTINCT q.id FROM questions q JOIN answers a ON a.question_id = q.id ORDER BY q.id').fetchall()]
+            
+        question_ids = [row['id'] for row in c.execute(f'SELECT DISTINCT q.id FROM questions q JOIN answers a ON a.question_id = q.id {q_where} ORDER BY q.id', params).fetchall()]
         if question_ids:
             _archive_question_rows_for_wipe(c, question_ids, progress_callback, total)
-        remaining_ids = [row['id'] for row in c.execute('SELECT id FROM questions ORDER BY id').fetchall()]
+            
+        remaining_ids = [row['id'] for row in c.execute(f'SELECT id FROM questions {where} ORDER BY id', params).fetchall()]
         if remaining_ids:
             if progress_callback:
                 progress_callback(total - len(remaining_ids), total, "Removing unanswered questions...")
             c.execute('DELETE FROM questions WHERE id = ANY(%s)', (remaining_ids,))
+            
         if progress_callback:
             progress_callback(total, total, "Question bank wipe complete.")
 
@@ -1222,7 +1242,9 @@ def grade(actor, sid, scores, comments, observed_responses=None):
             raise ValueError('Score every essay before finalizing.')
         for a in essays:
             score = scores[a['id']]
-            if not isinstance(score, (int, float)) or not math.isfinite(score) or score != int(score) or not 0 <= score <= min(json.loads(a['snapshot'])['max_points'], 10):
+            if (not isinstance(score, (int, float)) or not math.isfinite(score)
+                    or not math.isclose(score * 10, round(score * 10), abs_tol=1e-9)
+                    or not 0 <= score <= min(json.loads(a['snapshot'])['max_points'], 10)):
                 raise ValueError("Each score must be within the question's point range.")
             c.execute('UPDATE answers SET awarded_score=%s WHERE id=%s', (score, a['id']))
         for answer_id, response in (observed_responses or {}).items():

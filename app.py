@@ -481,6 +481,8 @@ if cached_maintenance_mode() and user["role"] != "Admin":
     st.stop()
 
 hide_app_sidebar_link()
+if user["role"] == "Candidate":
+    hide_login_sidebar()
 
 # ---------------------------------------------------------------------------
 # Admin / Reviewer: redirect to pages via sidebar
@@ -879,34 +881,8 @@ else:
 
     if essay_index >= len(essay_questions):
         st.success("All Essay questions are complete. Submit the assessment when ready.")
-        essay_unanswered_numbers = [
-            number
-            for number, question in enumerate(essay_questions, 1)
-            if is_unanswered(question["id"])
-        ]
-        pending_essay_unanswered = st.session_state.get("assessment_essay_pending_unanswered")
-        if pending_essay_unanswered:
-            st.warning(
-                "These Essay questions are unanswered: "
-                + ", ".join(str(number) for number in pending_essay_unanswered)
-                + ". Return to the first unanswered question, or proceed with blank answers."
-            )
-            return_col, proceed_col = st.columns(2)
-            if return_col.button("Return to unanswered questions", type="primary"):
-                st.session_state.assessment_essay_index = pending_essay_unanswered[0] - 1
-                st.session_state.pop("assessment_essay_pending_unanswered", None)
-                save_current_assessment_draft(user["id"])
-                st.rerun()
-            if proceed_col.button("Proceed with blank answers"):
-                st.session_state.pop("assessment_essay_pending_unanswered", None)
-                submit_candidate_assessment()
-        elif st.button("Submit assessment", type="primary"):
-            if essay_unanswered_numbers:
-                st.session_state.assessment_essay_pending_unanswered = essay_unanswered_numbers
-                save_current_assessment_draft(user["id"])
-                st.rerun()
-            else:
-                submit_candidate_assessment()
+        if st.button("Submit assessment", type="primary"):
+            submit_candidate_assessment()
     else:
         question = essay_questions[essay_index]
         essay_started_at = st.session_state.setdefault("assessment_essay_started_at", {})
@@ -942,20 +918,36 @@ else:
         if isinstance(answer, str) and answer != current_val:
             st.session_state[f"answer_{question['id']}"] = answer
             save_assessment_answer(user["id"], question["id"])
-            st.rerun()
         st.caption("Your response is saved automatically while you type.")
         btn_label = (
             "Time expired: Go to next question"
             if expired
             else "Save answer and go to next question"
         )
-        if st.button(btn_label, type="primary"):
-            if expired and not answer.strip():
-                responses[question["id"]] = "[No response submitted - time expired]"
-            else:
-                responses[question["id"]] = answer.strip()
-            st.session_state.assessment_essay_index = essay_index + 1
-            save_current_assessment_draft(user["id"])
-            st.rerun()
+        if st.session_state.get(f"confirm_empty_{question['id']}"):
+            st.warning("There is no answer. Are you sure you want to proceed without answering?")
+            col1, col2 = st.columns(2)
+            if col1.button("Return to question", type="primary"):
+                st.session_state.pop(f"confirm_empty_{question['id']}", None)
+                st.rerun()
+            if col2.button("Proceed without answering"):
+                responses[question["id"]] = ""
+                st.session_state.pop(f"confirm_empty_{question['id']}", None)
+                st.session_state.assessment_essay_index = essay_index + 1
+                save_current_assessment_draft(user["id"])
+                st.rerun()
+        else:
+            if st.button(btn_label, type="primary"):
+                if not expired and not answer.strip():
+                    st.session_state[f"confirm_empty_{question['id']}"] = True
+                    st.rerun()
+                else:
+                    if expired and not answer.strip():
+                        responses[question["id"]] = "[No response submitted - time expired]"
+                    else:
+                        responses[question["id"]] = answer.strip()
+                    st.session_state.assessment_essay_index = essay_index + 1
+                    save_current_assessment_draft(user["id"])
+                    st.rerun()
 
     section.__exit__(None, None, None)

@@ -321,14 +321,14 @@ with st.form(f"grading_{sid}"):
             st.info(f"Scoring guidance: {q['rubric']}")
             score_max = min(q["max_points"], 10)
             scores[a["id"]] = st.number_input(
-                f"Points for {scored_question_numbers[a['id']][0]} question {scored_question_numbers[a['id']][1]} (max {int(score_max)})",
-                min_value=0, max_value=int(score_max),
+                f"Points for {scored_question_numbers[a['id']][0]} question {scored_question_numbers[a['id']][1]} (max {score_max:g})",
+                min_value=0.0, max_value=float(score_max),
                 value=(
-                    min(int(a["awarded_score"]), int(score_max))
+                    min(float(a["awarded_score"]), float(score_max))
                     if sub["status"] == "Graded"
                     else None
                 ),
-                step=1, key=f"review_score_{sid}_{a['id']}",
+                step=0.1, format="%.1f", key=f"review_score_{sid}_{a['id']}",
                 disabled=sub["status"] == "Graded",
             )
         else:

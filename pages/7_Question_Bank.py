@@ -37,9 +37,9 @@ st.title("Competency Technical Assessment (CTA) Portal")
 st.subheader("Question Bank")
 st.caption("Add project-specific technical questions and rubrics before using this for hiring.")
 
-if st.session_state.pop("question_bank_wiped", False):
+if st.session_state.pop("question_bank_deleted", False):
     st.success(
-        "Question Bank wiped. Unanswered questions were removed. Questions already used in candidate submissions were archived and kept linked to historical assessment records."
+        "Questions deleted from bank. Unanswered questions were removed. Questions already used in candidate submissions were archived and kept linked to historical assessment records."
     )
 
 
@@ -353,19 +353,23 @@ if user["role"] == "Admin":
     st.divider()
 
     def _render_question_bank_wipe():
-        with st.expander("Wipe Question Bank"):
+        with st.expander("Delete Questions from Bank"):
             st.warning(
-                "This clears the active question bank. Any question that has already appeared in a candidate submission is archived so historical assessment records remain linked to the original question."
+                "This clears the active question bank based on your selection. Any question that has already appeared in a candidate submission is archived so historical assessment records remain linked to the original question."
             )
-            if st.button("Wipe Question Bank", type="primary"):
+            
+            wipe_discipline = st.selectbox("Select Discipline to Delete", ['All Disciplines'] + db.disciplines(), key="wipe_discipline_select")
+            wipe_role = st.selectbox("Select Candidate Role to Delete", ['All Roles', 'Inspector', 'Supervisor', 'Technician'], key="wipe_role_select")
+
+            if st.button("Delete Questions from Bank", type="primary"):
                 if hasattr(st, "dialog"):
-                    @st.dialog("Confirm Question Bank Wipe")
-                    def _wipe_question_bank_dialog():
+                    @st.dialog("Confirm Delete Questions")
+                    def _wipe_question_bank_dialog(discipline, role):
                         st.warning(
-                            "This removes all unanswered questions and archives only the questions that were already used in candidate assessments."
+                            f"This removes all unanswered questions for {discipline} and {role}, and archives only the questions that were already used in candidate assessments."
                         )
-                        if st.button("Confirm Wipe Question Bank", type="primary"):
-                            progress_bar = st.progress(0, text="Preparing question bank wipe...")
+                        if st.button("Confirm Delete Questions", type="primary"):
+                            progress_bar = st.progress(0, text="Preparing to delete questions...")
 
                             def wipe_progress(current, total, text):
                                 progress_bar.progress(
@@ -374,23 +378,23 @@ if user["role"] == "Admin":
                                 )
 
                             try:
-                                db.wipe_questions(user["id"], progress_callback=wipe_progress)
+                                db.wipe_questions(user["id"], discipline, role, progress_callback=wipe_progress)
                                 clear_read_caches()
                                 progress_bar.empty()
-                                st.session_state["question_bank_wiped"] = True
+                                st.session_state["question_bank_deleted"] = True
                                 st.rerun()
                             except ValueError as exc:
                                 progress_bar.empty()
                                 st.error(str(exc))
-                    _wipe_question_bank_dialog()
+                    _wipe_question_bank_dialog(wipe_discipline, wipe_role)
                 else:
                     st.session_state["confirm_wipe_question_bank"] = True
             if st.session_state.get("confirm_wipe_question_bank"):
                 st.warning(
-                    "This removes all unanswered questions and archives only the questions that were already used in candidate assessments."
+                    f"This removes all unanswered questions for {wipe_discipline} and {wipe_role}, and archives only the questions that were already used in candidate assessments."
                 )
-                if st.button("Confirm Wipe Question Bank", type="primary"):
-                    progress_bar = st.progress(0, text="Preparing question bank wipe...")
+                if st.button("Confirm Delete Questions", type="primary"):
+                    progress_bar = st.progress(0, text="Preparing to delete questions...")
 
                     def wipe_progress(current, total, text):
                         progress_bar.progress(
@@ -399,11 +403,11 @@ if user["role"] == "Admin":
                         )
 
                     try:
-                        db.wipe_questions(user["id"], progress_callback=wipe_progress)
+                        db.wipe_questions(user["id"], wipe_discipline, wipe_role, progress_callback=wipe_progress)
                         clear_read_caches()
                         progress_bar.empty()
                         st.session_state.pop("confirm_wipe_question_bank", None)
-                        st.session_state["question_bank_wiped"] = True
+                        st.session_state["question_bank_deleted"] = True
                         st.rerun()
                     except ValueError as exc:
                         progress_bar.empty()
