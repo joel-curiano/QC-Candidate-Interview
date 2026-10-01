@@ -2,6 +2,7 @@
 import streamlit as st
 import re
 import secrets
+from datetime import date
 
 import database as db
 from email_service import EmailDeliveryError, send_reviewer_credentials
@@ -32,6 +33,8 @@ sidebar_nav(user)
 render_logo()
 st.title("Competency Technical Assessment (CTA) Portal")
 st.subheader("Accounts")
+if retest_message := st.session_state.pop('candidate_retest_issued', None):
+    st.success(retest_message)
 
 projects = cached_projects(user["id"])
 
@@ -104,6 +107,26 @@ with st.expander("Manage Candidate Accounts"):
                     st.rerun()
                 except ValueError as exc:
                     st.error(str(exc))
+
+        if candidate.get('assessment_completion_status') == 'Complete':
+            st.subheader('Issue Retest')
+            st.write(
+                'Issuing a retest permanently deletes this candidate’s previous submission, '
+                'answers, grades, and saved assessment draft. The next attempt starts with new questions and timers.'
+            )
+            with st.form(f"retest_{selected_id}"):
+                retest_date = st.date_input('Retest date', value=date.today(), min_value=date.today())
+                if st.form_submit_button('Delete Previous Submission and Issue Retest', type='primary'):
+                    try:
+                        db.issue_candidate_retest(user['id'], selected_id, retest_date)
+                        clear_read_caches()
+                        st.session_state.candidate_retest_issued = (
+                            f"Retest issued for {candidate['name']} on {retest_date:%d %B %Y}. "
+                            'Previous submission deleted. Send the new invitation from Candidate Schedules.'
+                        )
+                        st.rerun()
+                    except ValueError as exc:
+                        st.error(str(exc))
 
 st.divider()
 

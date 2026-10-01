@@ -22,7 +22,7 @@ def test_candidate_and_reviewer_flow(postgres_db):
     db.create_user('admin', 'Admin', PASSWORD, bootstrap=True)
     admin = db.authenticate('admin', PASSWORD)
     db.create_user('candidate', 'Candidate', PASSWORD, actor=admin['id'], email='candidate@example.com', test_date=date.today(), discipline='Welding QC', iqama_no='1234567890', employee_no='EMP-1')
-    mcq_difficulties = ['easy'] * 6 + ['moderate'] * 10 + ['difficult'] * 4
+    mcq_difficulties = ['easy'] * 12 + ['moderate'] * 6 + ['difficult'] * 2
     for index, difficulty in enumerate(mcq_difficulties):
         db.add_question(
             admin['id'], 'Welding QC', 'mcq', f'Additional choice {index}', ['A', 'B'], 'A', '',

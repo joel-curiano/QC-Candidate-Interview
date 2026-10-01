@@ -30,6 +30,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 import database as db
+from assessment_input import essay_input
 from question_types import QUESTION_TYPES, REVIEWER_SCORED_TYPES
 from email_service import EmailDeliveryError, send_reviewer_credentials
 from shared import (
@@ -153,6 +154,8 @@ ASSESSMENT_DRAFT_KEYS = (
     "assessment_counts",
     "assessment_phase",
     "assessment_responses",
+    "assessment_mcq_pending_unanswered",
+    "assessment_essay_pending_unanswered",
 )
 
 
@@ -237,15 +240,17 @@ def question_options(question: dict) -> list:
 
 
 DIFFICULTY_RATIOS = {"easy": 0.30, "moderate": 0.50, "difficult": 0.20}
+MCQ_DIFFICULTY_RATIOS = {"easy": 0.60, "moderate": 0.30, "difficult": 0.10}
 DIFFICULTY_TIE_ORDER = {"moderate": 0, "easy": 1, "difficult": 2}
 
 
-def difficulty_targets(question_count: int) -> dict:
-    exact_targets = {d: question_count * r for d, r in DIFFICULTY_RATIOS.items()}
+def difficulty_targets(question_count: int, ratios=None) -> dict:
+    ratios = DIFFICULTY_RATIOS if ratios is None else ratios
+    exact_targets = {d: question_count * r for d, r in ratios.items()}
     targets = {d: int(c) for d, c in exact_targets.items()}
     remaining = question_count - sum(targets.values())
     ranked = sorted(
-        DIFFICULTY_RATIOS,
+        ratios,
         key=lambda d: (-(exact_targets[d] - targets[d]), DIFFICULTY_TIE_ORDER[d]),
     )
     for d in ranked[:remaining]:
@@ -256,7 +261,8 @@ def difficulty_targets(question_count: int) -> dict:
 def select_by_difficulty(pool, question_count, kind, rng):
     from question_types import QUESTION_TYPE_LABELS
 
-    targets = difficulty_targets(question_count)
+    ratios = MCQ_DIFFICULTY_RATIOS if kind == "mcq" else DIFFICULTY_RATIOS
+    targets = difficulty_targets(question_count, ratios)
     difficulty_pools = {
         d: [q for q in pool if q.get("difficulty", "moderate") == d]
         for d in DIFFICULTY_RATIOS
@@ -267,10 +273,11 @@ def select_by_difficulty(pool, question_count, kind, rng):
         if len(difficulty_pools[d]) < targets[d]
     ]
     if shortages:
+        mix = ", ".join(f"{ratio:.0%} {difficulty}" for difficulty, ratio in ratios.items())
         raise ValueError(
             f"This discipline needs {', '.join(shortages)} "
             f"{QUESTION_TYPE_LABELS[kind]} questions to follow the "
-            "30% easy, 50% moderate, 20% difficult mix."
+            f"{mix} mix."
         )
     selected = [
         q
@@ -768,6 +775,7 @@ if st.session_state.get("assessment_phase", "mcq") == "mcq":
         return_col, proceed_col = st.columns(2)
         if return_col.button("Return to unanswered questions", type="primary"):
             st.session_state.pop("assessment_mcq_pending_unanswered", None)
+            save_current_assessment_draft(user["id"])
             st.rerun()
         if proceed_col.button("Proceed with unanswered questions"):
             for question in mcq_questions:
@@ -866,6 +874,7 @@ else:
             if return_col.button("Return to unanswered questions", type="primary"):
                 st.session_state.assessment_essay_index = pending_essay_unanswered[0] - 1
                 st.session_state.pop("assessment_essay_pending_unanswered", None)
+                save_current_assessment_draft(user["id"])
                 st.rerun()
             if proceed_col.button("Proceed with blank answers"):
                 st.session_state.pop("assessment_essay_pending_unanswered", None)
@@ -873,6 +882,7 @@ else:
         elif st.button("Submit assessment", type="primary"):
             if essay_unanswered_numbers:
                 st.session_state.assessment_essay_pending_unanswered = essay_unanswered_numbers
+                save_current_assessment_draft(user["id"])
                 st.rerun()
             else:
                 submit_candidate_assessment()
@@ -900,18 +910,19 @@ else:
             st.warning("Essay time expired. Click below to proceed to the next question.")
 
         current_val = responses.get(question["id"], "")
-        answer = st.text_area(
-            f"{essay_index + 1}. Essay: {question['question_text']}",
+        answer = essay_input(
+            label=f"{essay_index + 1}. Essay: {question['question_text']}",
             value=current_val,
-            placeholder="Type your answer here...",
-            height=220,
-            max_chars=20000,
-            key=f"answer_{question['id']}",
+            default=current_val,
+            recovery_key=f"{user['id']}:{st.session_state.attempt_token}:{question['id']}",
+            key=f"essay_input_{question['id']}",
             disabled=expired,
-            on_change=save_assessment_answer,
-            args=(user["id"], question["id"]),
         )
-        st.caption("Your response is saved automatically while you work.")
+        if isinstance(answer, str) and answer != current_val:
+            st.session_state[f"answer_{question['id']}"] = answer
+            save_assessment_answer(user["id"], question["id"])
+            st.rerun()
+        st.caption("Your response is saved automatically while you type.")
         btn_label = (
             "Time expired: Go to next question"
             if expired

@@ -1002,6 +1002,34 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         return sid
 
 
+def issue_candidate_retest(actor, candidate_id, test_date):
+    """Delete previous results and drafts, then schedule a fresh candidate attempt."""
+    if not isinstance(test_date, date) or test_date < date.today():
+        raise ValueError('Retest date must be today or a future date.')
+    with connection() as c:
+        require(c, actor, ('Admin',))
+        candidate = c.execute(
+            "SELECT id FROM users WHERE id=%s AND role='Candidate' FOR UPDATE",
+            (candidate_id,),
+        ).fetchone()
+        if not candidate:
+            raise ValueError('Candidate account not found.')
+        submissions = c.execute(
+            'SELECT id FROM submissions WHERE user_id=%s FOR UPDATE', (candidate_id,)
+        ).fetchall()
+        if not submissions:
+            raise ValueError('A previous submission is required to issue a retest.')
+        submission_ids = [row['id'] for row in submissions]
+        c.execute('DELETE FROM answers WHERE submission_id = ANY(%s)', (submission_ids,))
+        c.execute('DELETE FROM submissions WHERE id = ANY(%s)', (submission_ids,))
+        c.execute('DELETE FROM assessment_drafts WHERE user_id=%s', (candidate_id,))
+        c.execute(
+            "UPDATE users SET test_date=%s, invitation_sent_at=NULL, active_login_token=NULL "
+            "WHERE id=%s",
+            (test_date, candidate_id),
+        )
+
+
 def assessment_draft(actor):
     with connection() as c:
         require(c, actor, ('Candidate',))

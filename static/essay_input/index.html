@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+body { margin: 0; font-family: sans-serif; color: #31333f; }
+label { display: block; margin-bottom: 8px; font-size: 14px; }
+textarea { box-sizing: border-box; width: 100%; height: 220px; padding: 12px; border: 1px solid #bcc3ce; border-radius: 8px; font: 16px/1.5 sans-serif; resize: vertical; }
+textarea:focus { outline: 2px solid #b51f2d; }
+#status { font-size: 12px; margin-top: 6px; }
+</style></head><body>
+<label for="answer" id="label"></label>
+<textarea id="answer" maxlength="20000" placeholder="Type your answer here..."></textarea>
+<div id="status" role="status"></div>
+<script>
+const field = document.getElementById('answer');
+const status = document.getElementById('status');
+let initialized = false, storageKey, timer, lastSent, acknowledged = '';
+function post(type, data = {}) {
+  window.parent.postMessage({isStreamlitMessage: true, type, ...data}, '*');
+}
+function send() {
+  clearTimeout(timer);
+  if (field.value !== lastSent) {
+    lastSent = field.value;
+    post('streamlit:setComponentValue', {value: field.value, dataType: 'json'});
+  }
+}
+field.addEventListener('input', () => {
+  try { localStorage.setItem(storageKey, field.value); } catch (error) {}
+  status.textContent = 'Saving answer...';
+  clearTimeout(timer);
+  timer = setTimeout(send, 300);
+});
+field.addEventListener('blur', send);
+setInterval(() => { if (initialized) send(); }, 1000);
+window.addEventListener('message', event => {
+  if (event.source !== window.parent || event.data.type !== 'streamlit:render') return;
+  const args = event.data.args;
+  document.getElementById('label').textContent = args.label;
+  storageKey = 'cta-essay-draft:' + args.recovery_key;
+  acknowledged = args.value || '';
+  field.disabled = args.disabled;
+  if (!initialized) {
+    field.value = acknowledged;
+    try {
+      const recovered = localStorage.getItem(storageKey);
+      if (recovered !== null) field.value = recovered;
+    } catch (error) {}
+    initialized = true;
+    lastSent = acknowledged;
+    send();
+  }
+  if (field.value === acknowledged) {
+    status.textContent = 'Answer saved.';
+    try { localStorage.removeItem(storageKey); } catch (error) {}
+  }
+  post('streamlit:setFrameHeight', {height: 290});
+});
+post('streamlit:componentReady', {apiVersion: 1});
+</script></body></html>
