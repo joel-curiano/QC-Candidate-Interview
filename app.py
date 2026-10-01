@@ -771,22 +771,30 @@ if st.session_state.get("assessment_phase", "mcq") == "mcq":
             st.rerun()
         if proceed_col.button("Proceed with unanswered questions"):
             for question in mcq_questions:
-                answer = st.session_state.get(f"answer_{question['id']}")
+                answer = st.session_state.get(
+                    f"answer_{question['id']}", responses.get(question['id'], "")
+                )
                 responses[question["id"]] = (
                     answer if isinstance(answer, str) and answer.strip() else "[Unanswered]"
                 )
-            st.session_state.assessment_mcq_unanswered_count = pending_unanswered
+            st.session_state.assessment_mcq_unanswered_count = len(pending_unanswered)
             st.session_state.pop("assessment_mcq_pending_unanswered", None)
             st.session_state.assessment_phase = "essay"
             save_current_assessment_draft(user["id"])
             st.rerun()
     else:
         for number, question in enumerate(mcq_questions, 1):
+            answer_key = f"answer_{question['id']}"
+            options = st.session_state.assessment_mcq_options[question["id"]]
+            if answer_key not in st.session_state:
+                saved_answer = responses.get(question["id"])
+                if saved_answer in options:
+                    st.session_state[answer_key] = saved_answer
             st.radio(
                 f"{number}. {question['question_text']}",
                 st.session_state.assessment_mcq_options[question["id"]],
                 index=None,
-                key=f"answer_{question['id']}",
+                key=answer_key,
                 disabled=is_mcq_expired,
                 on_change=save_assessment_answer,
                 args=(user["id"], question["id"]),
