@@ -94,6 +94,11 @@ def inject_global_styles() -> None:
             h1 {{ font-size: 1.5rem !important; }}
         }}
         [data-testid="stSidebarNav"] ul li:first-child {{ display: none !important; }}
+        [data-testid="stSidebarNav"] li:has(a[href$="/Review_Assessments"]) {{
+            border-bottom: 1px solid #9ca3af;
+            padding-bottom: 0.75rem;
+            margin-bottom: 0.75rem;
+        }}
         </style>""",
         unsafe_allow_html=True,
     )
