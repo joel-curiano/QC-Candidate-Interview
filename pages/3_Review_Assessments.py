@@ -5,6 +5,7 @@ import json
 import streamlit as st
 
 import database as db
+import assessment_analysis
 from email_service import EmailDeliveryError, candidate_result_filename, send_candidate_result
 from question_types import QUESTION_TYPE_SECTION_LABELS, REVIEWER_SCORED_TYPES
 from shared import (
@@ -121,7 +122,7 @@ sub = next(r for r in rows if r["id"] == sid)
 
 
 @st.cache_data(show_spinner=False)
-def _candidate_result_pdf(sub: dict) -> bytes:
+def _candidate_result_pdf(sub: dict, answers: list = None) -> bytes:
     """Build a branded PDF result report in memory."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
@@ -211,6 +212,42 @@ def _candidate_result_pdf(sub: dict) -> bytes:
                 styles["CATOverallResult"],
             ),
         ]
+    if answers:
+        try:
+            pdf_analysis = assessment_analysis.analyze_assessment(sub, answers)
+            if pdf_analysis.get("subjects"):
+                story += [
+                    Spacer(1, 4 * mm),
+                    Paragraph("Technical Subject Competency", styles["CATResultHeading"]),
+                ]
+                subj_rows = [["Technical Subject", "Score", "Evaluation"]]
+                for s in pdf_analysis["subjects"][:6]:
+                    subj_rows.append([s["subject"][:32], f"{s['percentage']:.1f}%", s["status"]])
+                story.append(
+                    Table(
+                        subj_rows,
+                        colWidths=[65 * mm, 20 * mm, 45 * mm],
+                        style=TableStyle([
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#142735")),
+                            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D9DCDE")),
+                            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                            ("FONTSIZE", (0, 0), (-1, -1), 7),
+                            ("LEADING", (0, 0), (-1, -1), 9),
+                            ("PADDING", (0, 0), (-1, -1), 3),
+                        ]),
+                    )
+                )
+            if pdf_analysis.get("strengths"):
+                str_text = ", ".join(t["sub_subject"] for t in pdf_analysis["strengths"][:3])
+                story.append(Spacer(1, 2 * mm))
+                story.append(Paragraph(f"<b>Demonstrated Strengths:</b> {str_text}", styles["CATExplainBody"]))
+            if pdf_analysis.get("development_areas"):
+                gap_text = ", ".join(t["sub_subject"] for t in pdf_analysis["development_areas"][:3])
+                story.append(Spacer(1, 1 * mm))
+                story.append(Paragraph(f"<b>Development Focus Areas:</b> {gap_text}", styles["CATExplainBody"]))
+        except Exception:
+            pass
     story += [
         Spacer(1, 6 * mm),
         Paragraph("<b>How pass/fail is determined</b>", styles["CATExplainHeading"]),
@@ -244,8 +281,12 @@ def _candidate_result_pdf(sub: dict) -> bytes:
     return output.getvalue()
 
 
+# Load answers and compute auto analysis
+answers = db.answer_details(user["id"], sid)
+analysis = assessment_analysis.analyze_assessment(sub, answers)
+
 try:
-    result_pdf = _candidate_result_pdf(sub)
+    result_pdf = _candidate_result_pdf(sub, answers)
     action_col1, action_col2 = st.columns(2)
     with action_col1:
         result_filename = candidate_result_filename(sub.get("candidate_name", "Candidate"))
@@ -270,8 +311,23 @@ except (ImportError, OSError, ValueError) as exc:
         f"Unable to create the candidate result PDF. Install the reportlab package and retry. Details: {exc}"
     )
 
+# Automated Candidate Analysis
+with st.expander("Automated Candidate Analysis", expanded=(sub["status"] == "Graded")):
+    assessment_analysis.render_assessment_analysis(analysis, allow_feedback_copy=True, for_candidate=False)
+
+if sub["status"] != "Graded":
+    if st.button("Apply Auto-Analysis Summary to Reviewer Feedback", key=f"apply_auto_fb_{sid}"):
+        st.session_state[f"review_comments_{sid}"] = analysis.get("reviewer_feedback_snippet", "")
+        st.rerun()
+
+comments = st.text_area(
+    "Additional Reviewer Feedback",
+    value=st.session_state.get(f"review_comments_{sid}", sub["reviewer_comments"] or ""),
+    key=f"review_comments_{sid}", disabled=sub["status"] == "Graded",
+    help="Add your observations and recommendations. This feedback is saved when you finalize the grade.",
+)
+
 # Grading panel.
-answers = db.answer_details(user["id"], sid)
 questionnaire = st.expander("Questionnaire", expanded=False)
 questionnaire.__enter__()
 
@@ -337,10 +393,6 @@ with st.form(f"grading_{sid}"):
     if question_section is not None:
         question_section.__exit__(None, None, None)
 
-    comments = st.text_area(
-        "Reviewer feedback", value=sub["reviewer_comments"] or "",
-        key=f"review_comments_{sid}", disabled=sub["status"] == "Graded",
-    )
     if st.form_submit_button(
         "Finalize grade", disabled=sub["status"] == "Graded", type="primary"
     ):

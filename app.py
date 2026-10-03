@@ -30,6 +30,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 import database as db
+import assessment_analysis
 from assessment_input import essay_input
 from question_types import QUESTION_TYPES, REVIEWER_SCORED_TYPES
 from email_service import EmailDeliveryError, send_reviewer_credentials
@@ -43,6 +44,7 @@ from shared import (
     inject_global_styles,
     render_logo,
     countdown_timer,
+    format_result_datetime,
 )
 import re
 
@@ -583,6 +585,36 @@ if st.sidebar.button("Sign out"):
     db.release_login(user["id"], login_token)
     st.session_state.clear()
     st.rerun()
+
+candidate_subs = db.submissions(user["id"])
+if candidate_subs and not user.get("test_date") and not st.session_state.get("assessment_phase"):
+    latest_sub = candidate_subs[0]
+    st.subheader("Assessment Completed")
+    status = latest_sub["status"]
+    if status == "Graded":
+        final_res = db.result(latest_sub)
+        is_pass = final_res.startswith("PASS")
+        (st.success if is_pass else st.error)(f"Status: Graded | Result: {final_res}")
+    else:
+        st.info("Status: Pending Review | Your assessment has been submitted and is awaiting Reviewer evaluation.")
+
+    st.markdown(
+        f"<b>Candidate:</b> {user['name']}<br>"
+        f"<b>Discipline:</b> {latest_sub['discipline']}<br>"
+        f"<b>Exam Date:</b> {format_result_datetime(latest_sub.get('exam_date', ''))}<br>"
+        f"<b>Submission Reference:</b> #{latest_sub['id']}",
+        unsafe_allow_html=True,
+    )
+
+    try:
+        cand_answers = db.candidate_submission_answers(user["id"], latest_sub["id"])
+        cand_analysis = assessment_analysis.analyze_assessment(latest_sub, cand_answers)
+        with st.expander("Automated Assessment Performance Analysis", expanded=True):
+            assessment_analysis.render_assessment_analysis(cand_analysis, allow_feedback_copy=False, for_candidate=True)
+    except Exception:
+        pass
+
+    st.stop()
 
 st.subheader("Take an assessment")
 

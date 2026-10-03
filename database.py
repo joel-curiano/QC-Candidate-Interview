@@ -1231,6 +1231,15 @@ def answer_details(actor, sid):
         require(c, actor, ('Reviewer', 'Admin'))
         return [dict(r) for r in c.execute('SELECT * FROM answers WHERE submission_id=%s ORDER BY id', (sid,))]
 
+def candidate_submission_answers(actor, sid):
+    with connection() as c:
+        user = require(c, actor, ('Candidate', 'Reviewer', 'Admin'))
+        if user['role'] == 'Candidate':
+            sub = c.execute('SELECT id FROM submissions WHERE id=%s AND user_id=%s', (sid, actor)).fetchone()
+            if not sub:
+                raise ValueError('Assessment not found.')
+        return [dict(r) for r in c.execute('SELECT * FROM answers WHERE submission_id=%s ORDER BY id', (sid,))]
+
 def grade(actor, sid, scores, comments, observed_responses=None):
     with connection() as c:
         require(c, actor, ('Reviewer', 'Admin'))
