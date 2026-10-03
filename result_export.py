@@ -7,6 +7,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 import database as db
+from shared import format_result_datetime
 
 ILLEGAL_EXCEL_CHARS = re.compile(r'[\x00-\x08\x0B\x0C\x0E-\x1F]')
 
@@ -14,7 +15,7 @@ ILLEGAL_EXCEL_CHARS = re.compile(r'[\x00-\x08\x0B\x0C\x0E-\x1F]')
 RESULT_HEADERS = [
     'Reference', 'Candidate', 'Job Title', 'Employee No', 'Discipline', 'Project Assignment', 'Exam Date',
     'Status', 'Multiple Choice Grade', 'Essay Grade', 'Oral-Practical Grade',
-    'Reviewer Comments', 'Graded (UTC)', 'Overall Result',
+    'Reviewer Comments', 'Graded (Saudi Arabia Time)', 'Overall Result',
 ]
 
 
@@ -35,7 +36,7 @@ def _row_values(row):
         row.get('exam_date', ''), row.get('status', ''),
         row.get('multiple_choice_grade', db.category_result(row, 'mcq')), row.get('essay_grade', db.category_result(row, 'essay')),
         row.get('oral_practical_grade', db.category_result(row, 'oral_practical')),
-        row.get('reviewer_comments', ''), row.get('graded_at', ''),
+        row.get('reviewer_comments', ''), format_result_datetime(row.get('graded_at', '')),
         row.get('result', db.result(row)),
     ]
 

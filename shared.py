@@ -10,6 +10,7 @@ Process flow:
 import base64
 import json
 import time
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import streamlit as st
@@ -347,17 +348,28 @@ def countdown_timer(label: str, deadline: float, key: str) -> None:
 # ---------------------------------------------------------------------------
 # Result formatting helpers (shared between Review Assessments and PDF export)
 # ---------------------------------------------------------------------------
-def format_result_datetime(value: str) -> str:
+def format_result_datetime(value: str | date | datetime) -> str:
     if not value:
         return ""
-    text = str(value).replace("T", " ").replace("Z", "")
-    if "." in text:
-        text = text.split(".", 1)[0]
-    if "+" in text[10:]:
-        text = text.split("+", 1)[0]
-    if len(text) == 10:
-        return f"{text} 00:00"
-    return text[:16]
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = str(value).strip()
+        if len(text) == 10:
+            try:
+                return date.fromisoformat(text).isoformat()
+            except ValueError:
+                pass
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return text
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    saudi_time = parsed.astimezone(timezone(timedelta(hours=3)))
+    return saudi_time.strftime("%Y-%m-%d %H:%M")
 
 
 def result_table(rows: list) -> list:
@@ -374,7 +386,7 @@ def result_table(rows: list) -> list:
             "Essay Grade": db.category_result(r, "essay"),
             "Oral-Practical Grade": db.category_result(r, "oral_practical"),
             "Reviewer Comments": r.get("reviewer_comments", ""),
-            "Graded (UTC)": format_result_datetime(r.get("graded_at", "")),
+            "Graded (Saudi Arabia Time)": format_result_datetime(r.get("graded_at", "")),
             "Overall Result": db.result(r),
         }
         for r in rows

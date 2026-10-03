@@ -273,7 +273,7 @@ def _candidate_result_pdf(sub: dict, answers: list = None) -> bytes:
         accepted_time = format_result_datetime(sub.get("conf_acceptance_time", ""))
         conf_notice += (
             f"<br/><br/>This notice confirms the existing agreement (Version {sub.get('conf_agreement_version')}, "
-            f"accepted {accepted_time}) and does not require another acceptance."
+            f"accepted {accepted_time} Saudi Arabia Time) and does not require another acceptance."
         )
     story.append(Paragraph(conf_notice, styles["CATExplainBody"]))
 
@@ -465,4 +465,3 @@ if sub["status"] == "Graded":
     with st.expander("Final Result", expanded=True):
         final_grade = db.result(sub)
         (st.success if final_grade.startswith("PASS") else st.error)(f"Final Grade: {final_grade}")
-
