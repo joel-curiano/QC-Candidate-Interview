@@ -214,7 +214,7 @@ def _candidate_result_pdf(sub: dict, answers: list = None) -> bytes:
         ]
     if answers:
         try:
-            pdf_analysis = assessment_analysis.analyze_assessment(sub, answers)
+            pdf_analysis = db.assessment_report(user["id"], sub)
             if pdf_analysis.get("subjects"):
                 story += [
                     Spacer(1, 4 * mm),
@@ -283,7 +283,7 @@ def _candidate_result_pdf(sub: dict, answers: list = None) -> bytes:
 
 # Load answers and compute auto analysis
 answers = db.answer_details(user["id"], sid)
-analysis = assessment_analysis.analyze_assessment(sub, answers)
+analysis = db.assessment_report(user["id"], sub)
 
 try:
     result_pdf = _candidate_result_pdf(sub, answers)

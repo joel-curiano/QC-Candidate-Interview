@@ -43,7 +43,7 @@ STARTER_DISCIPLINES = (
     'Mechanical QC', 'NDT QC', 'Non-Metallic Piping QC', 'Piping QC', 'Welding QC',
     'Pipeline QC', 'PQCS',
 )
-RUNTIME_SCHEMA_VERSION = '8'
+RUNTIME_SCHEMA_VERSION = '9'
 
 
 
@@ -222,6 +222,7 @@ def init_db():
         # question-bank migration so existing deployments receive the update.
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_token TEXT")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_disciplines TEXT[] NOT NULL DEFAULT ARRAY['All Disciplines']::TEXT[]")
+        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS analysis_reports JSONB NOT NULL DEFAULT '{}'::jsonb")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS confidentiality_acceptance_id BIGINT REFERENCES confidentiality_acceptances(id)")
         c.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS candidate_role TEXT NOT NULL DEFAULT 'All'")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS candidate_role TEXT NOT NULL DEFAULT ''")
@@ -1239,6 +1240,35 @@ def candidate_submission_answers(actor, sid):
             if not sub:
                 raise ValueError('Assessment not found.')
         return [dict(r) for r in c.execute('SELECT * FROM answers WHERE submission_id=%s ORDER BY id', (sid,))]
+
+def assessment_report(actor, submission):
+    """Persist the first report per assessment status, shared by every result view.
+
+    Grading starts a new report phase. Existing reports remain immutable across
+    reruns, sessions, and future changes to the analysis implementation.
+    """
+    from assessment_analysis import analyze_assessment
+
+    sid = submission["id"]
+    with connection() as c:
+        user = require(c, actor, ('Candidate', 'Reviewer', 'Admin'))
+        row = c.execute('SELECT * FROM submissions WHERE id=%s FOR UPDATE', (sid,)).fetchone()
+        if not row or (user['role'] == 'Candidate' and row['user_id'] != actor):
+            raise ValueError('Assessment not found.')
+        reports = row.get('analysis_reports') or {}
+        if isinstance(reports, str):
+            reports = json.loads(reports)
+        phase = row['status']
+        if phase in reports:
+            return reports[phase]
+        answers = [dict(a) for a in c.execute(
+            'SELECT * FROM answers WHERE submission_id=%s ORDER BY id', (sid,))]
+        report = analyze_assessment(dict(submission, **dict(row)), answers)
+        reports[phase] = report
+        c.execute('UPDATE submissions SET analysis_reports=%s::jsonb WHERE id=%s',
+                  (json.dumps(reports, allow_nan=False), sid))
+        return report
+
 
 def grade(actor, sid, scores, comments, observed_responses=None):
     with connection() as c:

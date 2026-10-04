@@ -247,3 +247,22 @@ def test_submission_with_timed_out_essay(accounts):
     answers = db.answer_details(accounts['admin'], sid)
     essay_ans = next(a for a in answers if a['question_id'] == essay['id'])
     assert essay_ans['submitted_answer'] == '[No response submitted - time expired]'
+
+
+def test_assessment_report_persists_across_review_and_grading(accounts):
+    sid, responses = attempt(accounts)
+    submission = next(s for s in db.submissions(accounts['alice']) if s['id'] == sid)
+    first = db.assessment_report(accounts['alice'], submission)
+    assert db.assessment_report(accounts['reviewer'], submission) == first
+    with pytest.raises(ValueError, match='Assessment not found'):
+        db.assessment_report(accounts['bob'], submission)
+    answers = db.answer_details(accounts['reviewer'], sid)
+    scores = {a['id']: 8 for a in answers if json.loads(a['snapshot'])['q_type'] != 'mcq'}
+    db.grade(accounts['reviewer'], sid, scores, 'Reviewed')
+    graded = db.assessment_report(accounts['alice'], submission)
+    assert graded['is_graded'] is True
+    assert db.assessment_report(accounts['reviewer'], submission) == graded
+    with db.connection() as c:
+        saved = c.execute('SELECT analysis_reports FROM submissions WHERE id=%s', (sid,)).fetchone()['analysis_reports']
+    assert saved['Pending Review'] == first
+    assert saved['Graded'] == graded

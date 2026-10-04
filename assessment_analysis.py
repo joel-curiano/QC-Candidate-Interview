@@ -12,7 +12,7 @@ Compliance: No em dashes or double hyphens used.
 """
 
 import json
-import math
+from html import escape
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -117,11 +117,11 @@ def analyze_essay_response(
     if unanswered:
         length_rating = "No response submitted"
     elif word_count < 25:
-        length_rating = "Brief (minimal technical detail)"
+        length_rating = "Brief (under 25 words)"
     elif word_count < 75:
-        length_rating = "Moderate (standard coverage)"
+        length_rating = "Moderate (25 to 74 words)"
     else:
-        length_rating = "Comprehensive (thorough explanation)"
+        length_rating = "Comprehensive (75 or more words)"
 
     candidate_keywords = extract_keywords(submitted_answer) if not unanswered else set()
 
@@ -135,16 +135,13 @@ def analyze_essay_response(
 
         criterion_keywords = extract_keywords(criterion)
         if not criterion_keywords:
-            covered_criteria.append(criterion)
+            missing_criteria.append(criterion)
             continue
 
         overlap = candidate_keywords.intersection(criterion_keywords)
-        # Check standard citations (e.g., SAES, API, ASME, ASTM, ISO)
-        standards = set(re.findall(r"(saes-[a-z0-9-]+|api\s*\d+|asme\s*[a-z0-9.]+|astm\s*[a-z0-9]+|iso\s*[a-z0-9]+)", criterion.lower()))
-        standards_met = any(std.replace(" ", "") in submitted_answer.lower().replace(" ", "") for std in standards) if standards else False
 
         match_ratio = len(overlap) / len(criterion_keywords)
-        if match_ratio >= 0.25 or len(overlap) >= 3 or standards_met:
+        if match_ratio >= 0.5 and (len(overlap) >= 2 or len(criterion_keywords) == 1):
             covered_criteria.append(criterion)
         else:
             missing_criteria.append(criterion)
@@ -153,13 +150,14 @@ def analyze_essay_response(
     coverage_pct = round(100.0 * len(covered_criteria) / total_crit, 1) if total_crit > 0 else 0.0
 
     if unanswered:
-        feedback = "Question was not answered before submission deadline."
-    elif coverage_pct >= 75.0:
-        feedback = f"Strong technical response covering {len(covered_criteria)} of {total_crit} rubric criteria with adequate technical depth."
-    elif coverage_pct >= 50.0:
-        feedback = f"Acceptable response covering {len(covered_criteria)} of {total_crit} criteria. Technical detail was omitted for: {missing_criteria[0][:80]}..."
+        feedback = "No response submitted."
+    elif not rubric_criteria:
+        feedback = "Rubric unavailable. Concept coverage cannot be estimated."
     else:
-        feedback = f"Partial response covering {len(covered_criteria)} of {total_crit} criteria. Key concepts and standards were missing."
+        feedback = (
+            f"Keyword matches found for {len(covered_criteria)} of {total_crit} rubric criteria. "
+            "This is a lexical estimate. A reviewer must verify correctness, reasoning, and technical depth."
+        )
 
     return {
         "word_count": word_count,
@@ -168,6 +166,7 @@ def analyze_essay_response(
         "covered_criteria": covered_criteria,
         "missing_criteria": missing_criteria,
         "coverage_pct": coverage_pct,
+        "coverage_available": bool(rubric_criteria),
         "feedback": feedback,
         "awarded_score": awarded_score,
         "max_points": max_points,
@@ -201,6 +200,8 @@ def analyze_assessment(submission: Dict[str, Any], answers: List[Dict[str, Any]]
 
     for a in answers:
         snap = parse_snapshot(a.get("snapshot"))
+        if not snap.get("is_scored", True):
+            continue
         q_type = snap.get("q_type", "mcq")
         q_id = snap.get("id") or a.get("question_id") or a.get("id")
         q_text = snap.get("question_text", "")
@@ -258,7 +259,7 @@ def analyze_assessment(submission: Dict[str, Any], answers: List[Dict[str, Any]]
             diff_entry["mcq_count"] += 1
 
             correct_answer = snap.get("correct_answer") or ""
-            is_correct = (submitted_answer == correct_answer and not is_unanswered(submitted_answer))
+            is_correct = awarded_score > 0
 
             if is_correct:
                 subj_entry["mcq_correct"] += 1
@@ -300,7 +301,7 @@ def analyze_assessment(submission: Dict[str, Any], answers: List[Dict[str, Any]]
 
     # MCQ Overall Metrics
     mcq_total = len(mcq_answers)
-    mcq_correct = sum(1 for a in mcq_answers if a.get("awarded_score", 0) > 0)
+    mcq_correct = sum(data["mcq_correct"] for data in subject_data.values())
     mcq_unanswered = sum(1 for a in mcq_answers if is_unanswered(a.get("submitted_answer")))
     mcq_incorrect = mcq_total - mcq_correct
     mcq_pct = round(100.0 * mcq_correct / mcq_total, 1) if mcq_total > 0 else 0.0
@@ -315,7 +316,7 @@ def analyze_assessment(submission: Dict[str, Any], answers: List[Dict[str, Any]]
 
     # Oral-Practical Overall Metrics
     oral_total = len(oral_answers)
-    oral_completed = sum(1 for a in oral_answers if str(a.get("submitted_answer", "")).strip())
+    oral_completed = sum(1 for a in oral_answers if not is_unanswered(a.get("submitted_answer")))
     oral_score = sum(float(a.get("awarded_score", 0.0) or 0.0) for a in oral_answers)
     oral_max = sum(float(min(parse_snapshot(a.get("snapshot")).get("max_points", 10), 10)) for a in oral_answers)
     oral_pct = round(100.0 * oral_score / oral_max, 1) if oral_max > 0 else 0.0
@@ -346,7 +347,11 @@ def analyze_assessment(submission: Dict[str, Any], answers: List[Dict[str, Any]]
         else:
             subj_pct = round(100.0 * earned_pts / total_pts, 1) if total_pts > 0 else 0.0
 
-        if subj_pct >= 75.0:
+        assessed_count = data["total_questions"] if is_graded else data["mcq_count"]
+        if assessed_count == 0:
+            status_label = "Pending Review"
+            badge_color = "#666666"
+        elif subj_pct >= 75.0:
             status_label = "Demonstrated Strength"
             badge_color = "#188038"
         elif subj_pct >= 60.0:
@@ -356,7 +361,7 @@ def analyze_assessment(submission: Dict[str, Any], answers: List[Dict[str, Any]]
             status_label = "Critical Knowledge Gap"
             badge_color = "#B51F2D"
 
-        evidence_label = "Sufficient evidence" if data["total_questions"] >= 2 else "Limited evidence"
+        evidence_label = "Sufficient evidence" if assessed_count >= 2 else "Limited evidence"
 
         subjects_list.append({
             "subject": subj_name,
@@ -371,6 +376,7 @@ def analyze_assessment(submission: Dict[str, Any], answers: List[Dict[str, Any]]
             "status": status_label,
             "badge_color": badge_color,
             "evidence": evidence_label,
+            "assessed_questions": assessed_count,
         })
 
     # Sort subjects: lowest percentage first so gaps are immediately visible
@@ -405,11 +411,14 @@ def analyze_assessment(submission: Dict[str, Any], answers: List[Dict[str, Any]]
             "max_points": mx,
             "percentage": pct,
             "cognitive_eval": eval_comment,
+            "assessed_questions": cnt if is_graded else d_info["mcq_count"],
         }
 
     # Strengths and Development Areas (by topic)
     topic_rows = []
     for (subj, top), t_info in topic_data.items():
+        if not is_graded and not t_info["total_mcq"]:
+            continue
         if is_graded and t_info["max_points"] > 0:
             t_pct = round(100.0 * t_info["awarded_points"] / t_info["max_points"], 1)
         elif t_info["total_mcq"] > 0:
@@ -541,14 +550,12 @@ def build_executive_summary(
     if topic_strengths:
         str_items = [f"{item['sub_subject']} ({item['percentage']:.0f}%)" for item in topic_strengths[:3]]
         paragraphs.append(
-            f"Demonstrated Technical Strengths: The candidate exhibited solid technical competence in "
-            f"{', '.join(str_items)}. Responses in these modules showed clear alignment with approved specifications "
-            f"and established quality verification workflows."
+            f"Demonstrated Technical Strengths: High scores were recorded in "
+            f"{', '.join(str_items)}. These findings reflect the tested questions and require field verification."
         )
     else:
         paragraphs.append(
-            "Demonstrated Technical Strengths: Baseline competence was demonstrated across general inspection principles, "
-            "with opportunities for development identified across specialized subjects."
+            "Demonstrated Technical Strengths: No high-scoring topics were identified in the available scored evidence."
         )
 
     # Paragraph 3: Knowledge Gaps & Risk Analysis
@@ -556,21 +563,22 @@ def build_executive_summary(
         gap_items = [f"{item['sub_subject']} ({item['percentage']:.0f}%)" for item in topic_gaps[:3]]
         paragraphs.append(
             f"Identified Knowledge Gaps: Priority development areas include {', '.join(gap_items)}. "
-            f"Incorrect responses in these topics indicate an opportunity to reinforce practical code tolerances, "
-            f"acceptance criteria, and nonconformance investigation protocols."
+            f"Review missed questions and reviewer feedback in these topics, then confirm understanding with a follow-up assessment."
         )
     else:
         paragraphs.append(
-            "Identified Knowledge Gaps: No critical technical vulnerabilities were detected across tested subjects."
+            "Identified Knowledge Gaps: No low-scoring topics were identified in the available scored evidence."
         )
 
     # Paragraph 4: Essay Technical Depth
     if essay_evaluations:
-        avg_essay_cov = sum(e["coverage_pct"] for e in essay_evaluations) / len(essay_evaluations)
+        evaluable_essays = [e for e in essay_evaluations if e["rubric_criteria"]]
+        avg_essay_cov = sum(e["coverage_pct"] for e in evaluable_essays) / len(evaluable_essays) if evaluable_essays else None
+        coverage_label = f"{avg_essay_cov:.1f}%" if avg_essay_cov is not None else "unavailable"
         paragraphs.append(
-            f"Written Response Analysis: Candidate completed {len(essay_evaluations)} essay prompt(s) with an average "
-            f"rubric concept coverage of {avg_essay_cov:.1f}%. Technical terminology, inspection sequencing, "
-            f"and code citations were reviewed against project grading rubrics."
+            f"Written Response Analysis: Candidate answered {sum(not is_unanswered(e['submitted_answer']) for e in essay_evaluations)} of {len(essay_evaluations)} essay prompt(s) with an average "
+            f"rubric keyword overlap of {coverage_label}. Keyword matches do not establish technical correctness. "
+            f"Reviewer evaluation is required. Missing rubrics cannot be evaluated."
         )
 
     # Paragraph 5: Recommendations
@@ -582,7 +590,7 @@ def build_executive_summary(
     recs.append("Practical review of Saudi Aramco Engineering Standards (SAES) and inspection checklist verification")
 
     paragraphs.append(
-        f"Actionable Recommendations: 1) {recs[0]}. 2) {recs[1]}. 3) {recs[2]}."
+        "Actionable Recommendations: " + " ".join(f"{i}) {rec}." for i, rec in enumerate(recs, 1))
     )
 
     return "\n\n".join(paragraphs)
@@ -615,7 +623,7 @@ def build_reviewer_feedback_snippet(
 
     if essay_evaluations:
         essay_words = sum(e["word_count"] for e in essay_evaluations)
-        lines.append(f"- Written Technical Responses: {len(essay_evaluations)} essays submitted ({essay_words} total words)")
+        lines.append(f"- Written Technical Responses: {sum(not is_unanswered(e['submitted_answer']) for e in essay_evaluations)} essays submitted ({essay_words} total words)")
 
     lines.append("- Recommendation: Verify candidate field competence on identified development areas during initial site deployment.")
     return "\n".join(lines)
@@ -635,6 +643,7 @@ def render_assessment_analysis(
 
     # Header / KPI metrics row
     st.markdown("#### Automated Competency & Performance Overview")
+    st.caption("Scores reflect assessed questions. Topic conclusions may have limited evidence. Essay keyword matches require reviewer verification.")
     kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
 
     with kpi_col1:
@@ -678,13 +687,15 @@ def render_assessment_analysis(
                 color = s["badge_color"]
                 st.markdown(
                     f"<div style='margin-bottom: 8px;'>"
-                    f"<strong>{s['subject']}</strong> &nbsp; "
+                    f"<strong>{escape(s['subject'])}</strong> &nbsp; "
                     f"<span style='color: {color}; font-weight: 600;'>[{s['status']}]</span> &nbsp; "
-                    f"<span>{pct:.1f}% ({s['total_questions']} questions)</span>"
+                    f"<span>{'Pending' if s['status'] == 'Pending Review' else f'{pct:.1f}%'} ({s['total_questions']} questions)</span>"
                     f"</div>",
                     unsafe_allow_html=True,
                 )
-                st.progress(min(max(pct / 100.0, 0.0), 1.0))
+                st.caption(f"{s['evidence']}. {s.get('assessed_questions', s['total_questions'])} assessed questions.")
+                if s["status"] != "Pending Review":
+                    st.progress(min(max(pct / 100.0, 0.0), 1.0))
 
     # Tab 2: Difficulty Breakdown
     with tab_difficulty:
@@ -694,17 +705,17 @@ def render_assessment_analysis(
 
         with col_e:
             easy_info = diffs.get("easy", {})
-            st.metric("Easy (Recall & Standards)", f"{easy_info.get('percentage', 0.0):.1f}%")
+            st.metric("Easy (Recall & Standards)", f"{easy_info.get('percentage', 0.0):.1f}%" if easy_info.get("assessed_questions", 0) else "N/A")
             st.caption(f"{easy_info.get('count', 0)} questions. {easy_info.get('cognitive_eval', '')}")
 
         with col_m:
             mod_info = diffs.get("moderate", {})
-            st.metric("Moderate (Applied Quality)", f"{mod_info.get('percentage', 0.0):.1f}%")
+            st.metric("Moderate (Applied Quality)", f"{mod_info.get('percentage', 0.0):.1f}%" if mod_info.get("assessed_questions", 0) else "N/A")
             st.caption(f"{mod_info.get('count', 0)} questions. {mod_info.get('cognitive_eval', '')}")
 
         with col_d:
             diff_info = diffs.get("difficult", {})
-            st.metric("Difficult (Troubleshooting)", f"{diff_info.get('percentage', 0.0):.1f}%")
+            st.metric("Difficult (Troubleshooting)", f"{diff_info.get('percentage', 0.0):.1f}%" if diff_info.get("assessed_questions", 0) else "N/A")
             st.caption(f"{diff_info.get('count', 0)} questions. {diff_info.get('cognitive_eval', '')}")
 
     # Tab 3: Strengths & Development Areas
@@ -739,16 +750,17 @@ def render_assessment_analysis(
                 with st.expander(f"Essay {idx}: {eval_item['topic']} ({eval_item['length_rating']})", expanded=False):
                     st.write(f"**Prompt:** {eval_item['question_text']}")
                     st.text_area("Candidate Response", value=eval_item["submitted_answer"], disabled=True, height=100, key=f"auto_essay_view_{eval_item['question_id']}")
-                    st.write(f"**Word Count:** {eval_item['word_count']} words | **Rubric Concept Coverage:** {eval_item['coverage_pct']:.1f}%")
+                    coverage_label = f"{eval_item['coverage_pct']:.1f}%" if eval_item.get("coverage_available", bool(eval_item["rubric_criteria"])) else "Unavailable"
+                    st.write(f"**Word Count:** {eval_item['word_count']} words | **Rubric Keyword Overlap:** {coverage_label}")
                     st.info(f"**Evaluation:** {eval_item['feedback']}")
 
                     if eval_item["covered_criteria"]:
-                        st.write("**Addressed Rubric Concepts:**")
+                        st.write("**Rubric Concepts with Keyword Matches:**")
                         for c in eval_item["covered_criteria"]:
                             st.write(f"- [x] {c}")
 
                     if eval_item["missing_criteria"]:
-                        st.write("**Omitted or Incomplete Rubric Concepts:**")
+                        st.write("**Rubric Concepts Requiring Review:**")
                         for c in eval_item["missing_criteria"]:
                             st.write(f"- [ ] {c}")
 
@@ -757,7 +769,10 @@ def render_assessment_analysis(
         st.write("**Multiple Choice Error Diagnostics**")
         missed = analysis.get("mcq_diagnostics", [])
         if not missed:
-            st.success("Candidate answered 100% of Multiple Choice Questions correctly!")
+            if mcq_data.get("total", 0):
+                st.success("Candidate answered all Multiple Choice Questions correctly.")
+            else:
+                st.caption("No Multiple Choice questions available.")
         else:
             st.caption(f"Candidate missed {len(missed)} Multiple Choice question(s):")
             for item in missed:

@@ -607,12 +607,11 @@ if candidate_subs and not user.get("test_date") and not st.session_state.get("as
     )
 
     try:
-        cand_answers = db.candidate_submission_answers(user["id"], latest_sub["id"])
-        cand_analysis = assessment_analysis.analyze_assessment(latest_sub, cand_answers)
+        cand_analysis = db.assessment_report(user["id"], latest_sub)
         with st.expander("Automated Assessment Performance Analysis", expanded=True):
             assessment_analysis.render_assessment_analysis(cand_analysis, allow_feedback_copy=False, for_candidate=True)
-    except Exception:
-        pass
+    except (db.DatabaseError, ValueError):
+        st.warning("The assessment analysis could not be loaded. Please reload the result.")
 
     st.stop()
 

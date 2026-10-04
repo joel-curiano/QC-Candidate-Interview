@@ -358,3 +358,47 @@ def test_assessment_analysis_pending_review_status():
     assert analysis["overall"]["mcq"]["accuracy_pct"] == 50.0
     assert analysis["overall"]["essay"]["completed"] == 1
     assert "Pending Review" in analysis["executive_summary"]
+
+
+@pytest.mark.parametrize("answers", [[], [
+    {"submitted_answer": "A", "awarded_score": 1,
+     "snapshot": {"q_type": "mcq", "correct_answer": "A"}}
+]])
+def test_no_development_areas_does_not_crash(answers):
+    report = analyze_assessment({"status": "Pending Review"}, answers)
+    assert report["development_areas"] == []
+    assert "Actionable Recommendations" in report["executive_summary"]
+
+
+def test_pending_essay_is_not_a_knowledge_gap():
+    report = analyze_assessment({"status": "Pending Review"}, [
+        {"submitted_answer": "Inspection response", "awarded_score": 0,
+         "snapshot": {"q_type": "essay", "subject": "Testing"}}
+    ])
+    assert report["development_areas"] == []
+    assert report["subjects"][0]["status"] == "Pending Review"
+    assert report["subjects"][0]["assessed_questions"] == 0
+
+
+def test_essay_citation_and_missing_rubric_are_not_competence():
+    result = analyze_essay_response("", "API 650", [
+        "Explain API 650 acceptance criteria and inspection procedures"], 0, 10)
+    assert result["covered_criteria"] == []
+    assert "reviewer must verify" in result["feedback"]
+    result = analyze_essay_response("", "Inspection response", [], 0, 10)
+    assert "Rubric unavailable" in result["feedback"]
+
+
+def test_unanswered_essays_are_not_counted_as_submitted():
+    report = analyze_assessment({}, [{"submitted_answer": "[Unanswered]",
+        "snapshot": {"q_type": "essay"}}])
+    assert "answered 0 of 1" in report["executive_summary"]
+    assert "0 essays submitted" in report["reviewer_feedback_snippet"]
+
+
+def test_mcq_accuracy_uses_awarded_score_consistently():
+    report = analyze_assessment({}, [{"submitted_answer": "A", "awarded_score": 1,
+        "snapshot": {"q_type": "mcq", "correct_answer": "B"}}])
+    assert report["overall"]["mcq"]["correct"] == 1
+    assert report["subjects"][0]["mcq_correct"] == 1
+    assert report["mcq_diagnostics"] == []
