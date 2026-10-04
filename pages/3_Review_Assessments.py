@@ -13,6 +13,7 @@ from shared import (
     render_logo,
     require_login,
     sidebar_nav,
+    cached_questions,
     cached_submission_page,
     cached_submission_status_counts,
     clear_read_caches,
@@ -48,6 +49,57 @@ status_counts = cached_submission_status_counts(user["id"])
 left, right = st.columns(2)
 left.metric("Pending review", status_counts.get("Pending Review", 0))
 right.metric("Graded", status_counts.get("Graded", 0))
+
+saved_drafts = db.assessment_drafts_for_review(user["id"])
+if saved_drafts:
+    question_banks = {}
+    with st.expander("Saved in-progress answers", expanded=True):
+        st.caption(
+            "Saved responses are read-only drafts. They are not submitted and cannot be scored until the candidate submits."
+        )
+        for draft in saved_drafts:
+            payload = draft["payload"]
+            if isinstance(payload, str):
+                payload = json.loads(payload)
+            saved_responses = payload.get("assessment_responses") or {}
+            if not isinstance(saved_responses, dict):
+                saved_responses = {}
+            mcq_ids = payload.get("assessment_mcq_ids") or []
+            essay_ids = payload.get("assessment_essay_ids") or []
+            response_count = sum(
+                bool(str(saved_responses.get(str(qid), saved_responses.get(qid, ""))).strip())
+                for qid in [*mcq_ids, *essay_ids]
+            )
+            phase = str(payload.get("assessment_phase", "mcq")).replace("_", " ").title()
+            draft_title = (
+                f"{draft['candidate_name']} · {draft['discipline']} · {phase} · "
+                f"{response_count} saved responses · {format_result_datetime(draft['updated_at'])}"
+            )
+            with st.expander(draft_title, expanded=False):
+                if draft["discipline"] not in question_banks:
+                    question_banks[draft["discipline"]] = {
+                        q["id"]: q for q in cached_questions(draft["discipline"], include_inactive=True)
+                    }
+                questions_by_id = question_banks[draft["discipline"]]
+                for kind, label, question_ids in (
+                    ("mcq", "Multiple Choice", mcq_ids),
+                    ("essay", "Essay", essay_ids),
+                ):
+                    if not question_ids:
+                        continue
+                    st.markdown(f"**{label} saved responses**")
+                    for number, question_id in enumerate(question_ids, 1):
+                        question = questions_by_id.get(question_id)
+                        question_text = question["question_text"] if question else f"Question {question_id} is no longer available in the question bank."
+                        answer = saved_responses.get(str(question_id), saved_responses.get(question_id, ""))
+                        st.write(f"{number}. {question_text}")
+                        if kind == "essay":
+                            st.text_area(
+                                f"Saved essay response {number}", value=str(answer), disabled=True,
+                                key=f"saved_draft_essay_{draft['candidate_id']}_{question_id}",
+                            )
+                        else:
+                            st.caption(f"Saved answer: {answer if str(answer).strip() else 'No answer saved'}")
 
 status = st.selectbox(
     "Status",

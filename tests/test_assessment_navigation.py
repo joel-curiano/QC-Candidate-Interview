@@ -1,5 +1,6 @@
 """Exercise the real MCQ view across Streamlit widget cleanup and reruns."""
 from pathlib import Path
+import time
 
 import pytest
 from streamlit.testing.v1 import AppTest
@@ -58,3 +59,17 @@ def test_proceed_preserves_saved_answers(mcq_app):
     click(app, 'Proceed with unanswered questions')
     assert app.session_state['assessment_responses'] == {1: 'B', 2: '[Unanswered]'}
     assert app.session_state['assessment_mcq_unanswered_count'] == 1
+
+
+def test_expired_mcq_proceeds_to_essay_and_marks_blanks(mcq_app):
+    app = mcq_app
+    app.radio[0].set_value('B').run()
+    app.session_state['assessment_responses'].clear()
+    app.session_state['assessment_mcq_deadline'] = time.time() - 1
+    next(button for button in app.button if button.label == 'Continue to Essay Questions').click().run()
+    assert not app.exception
+    assert app.session_state['assessment_phase'] == 'essay'
+    assert app.session_state['assessment_responses'] == {
+        1: 'B',
+        2: '[Unanswered - time expired]',
+    }

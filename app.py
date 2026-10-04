@@ -870,7 +870,13 @@ if st.session_state.get("assessment_phase", "mcq") == "mcq":
             if is_mcq_expired
             else "Continue to Essay Questions"
         )
-        if st.button(submit_label, type="primary"):
+        if st.button(submit_label, type="primary", key="continue_to_essay"):
+            for question in mcq_questions:
+                answer = st.session_state.get(
+                    f"answer_{question['id']}", responses.get(question["id"], "")
+                )
+                if answer in st.session_state.assessment_mcq_options[question["id"]]:
+                    responses[question["id"]] = answer
             unanswered_count = sum(
                 is_unanswered(q["id"]) for q in mcq_questions
             )

@@ -1,6 +1,7 @@
 """Report persistence and access tests using an isolated connection double."""
 import json
 from contextlib import contextmanager
+from datetime import date
 import pytest
 import database as db
 import assessment_analysis
@@ -35,7 +36,11 @@ def report_store(monkeypatch):
 
 def test_reload_reuses_first_saved_report(report_store, monkeypatch):
     row, answers = report_store
-    first = db.assessment_report(7, {"id": 12, "candidate_name": "Original"})
+    first = db.assessment_report(7, {
+        "id": 12,
+        "candidate_name": "Original",
+        "exam_date": date(2026, 10, 4),
+    })
     answers.clear()
     monkeypatch.setattr(assessment_analysis, "analyze_assessment", lambda *args: pytest.fail("Regenerated saved report"))
     assert db.assessment_report(7, {"id": 12, "candidate_name": "Changed"}) == first

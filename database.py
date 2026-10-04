@@ -1072,6 +1072,34 @@ def assessment_draft(actor):
         return payload if isinstance(payload, dict) else json.loads(payload)
 
 
+def assessment_drafts_for_review(actor):
+    """List saved candidate drafts visible to a Reviewer or Admin."""
+    with connection() as c:
+        user = require(c, actor, ('Reviewer', 'Admin'))
+        assigned_projects = user.get('assigned_projects') or []
+        assigned_disciplines = user.get('assigned_disciplines') or ['All Disciplines']
+        rows = c.execute("""
+            SELECT u.id AS candidate_id, u.name AS candidate_name,
+                   COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline) AS discipline,
+                   d.payload, d.updated_at
+            FROM assessment_drafts d
+            JOIN users u ON u.id=d.user_id
+            WHERE u.role='Candidate'
+              AND (
+                  %s='Admin'
+                  OR (%s='Reviewer' AND (
+                      COALESCE(NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')='Unassigned'
+                      OR ((cardinality(%s::text[])=0 OR u.project_assignment=ANY(%s::text[]))
+                          AND ('All Disciplines'=ANY(%s::text[])
+                               OR COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline)=ANY(%s::text[])))
+                  ))
+              )
+            ORDER BY d.updated_at DESC
+        """, (user['role'], user['role'], assigned_projects, assigned_projects,
+              assigned_disciplines, assigned_disciplines)).fetchall()
+    return [dict(row) for row in rows]
+
+
 def save_assessment_draft(actor, payload):
     with connection() as c:
         require(c, actor, ('Candidate',))
@@ -1265,9 +1293,11 @@ def assessment_report(actor, submission):
             'SELECT * FROM answers WHERE submission_id=%s ORDER BY id', (sid,))]
         report = analyze_assessment(dict(submission, **dict(row)), answers)
         reports[phase] = report
+        serialized_reports = json.dumps(reports, allow_nan=False, default=str)
+        reports = json.loads(serialized_reports)
         c.execute('UPDATE submissions SET analysis_reports=%s::jsonb WHERE id=%s',
-                  (json.dumps(reports, allow_nan=False), sid))
-        return report
+                  (serialized_reports, sid))
+        return reports[phase]
 
 
 def grade(actor, sid, scores, comments, observed_responses=None):
