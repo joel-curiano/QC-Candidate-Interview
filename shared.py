@@ -220,6 +220,15 @@ def clear_read_caches() -> None:
     cached_maintenance_mode.clear()
 
 
+def clear_question_caches() -> None:
+    """Invalidate caches that contain question-bank data."""
+    cached_disciplines.clear()
+    cached_questions.clear()
+    cached_question_counts.clear()
+    cached_question_count.clear()
+    cached_question_page.clear()
+
+
 # ---------------------------------------------------------------------------
 # Session / authentication helpers
 # ---------------------------------------------------------------------------

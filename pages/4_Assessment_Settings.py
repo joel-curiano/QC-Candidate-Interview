@@ -12,6 +12,8 @@ from shared import (
     cached_assessment_settings,
     cached_submissions,
     clear_read_caches,
+    clear_question_caches,
+    format_result_datetime,
 )
 
 st.set_page_config(
@@ -30,12 +32,26 @@ sidebar_nav(user)
 render_logo()
 st.title("Competency Technical Assessment (CTA) Portal")
 st.subheader("Assessment Settings")
+if candidate_name := st.session_state.pop("saved_draft_deleted_candidate", None):
+    st.success(
+        f"Saved in-progress answers for {candidate_name} were deleted. "
+        "The candidate must sign in again to start a fresh attempt."
+    )
 st.caption(
     "Set question counts and the maximum points awarded per question type. "
     "Changes apply to new assessments."
 )
 
 current = cached_assessment_settings(user["id"])
+
+with st.expander("Question Cache"):
+    st.caption(
+        "Clear cached question-bank data so the next page load fetches current questions. "
+        "This does not delete questions from the database."
+    )
+    if st.button("Clear Cached Questions", key="clear_cached_questions"):
+        clear_question_caches()
+        st.success("Cached question data cleared.")
 
 with st.form("assessment_settings"):
     counts = {
@@ -74,6 +90,48 @@ with st.form("assessment_settings"):
 
 # Admin-only: delete individual assessment and test email delivery.
 if user["role"] == "Admin":
+    st.divider()
+    st.subheader("Delete Candidate In-Progress Answers")
+    st.caption(
+        "This permanently removes one candidate's saved draft and ends their active session. "
+        "Submitted assessments are not affected."
+    )
+    saved_drafts = db.assessment_drafts_for_review(user["id"])
+    if saved_drafts:
+        draft_options = {
+            draft["candidate_id"]: (
+                f"{draft['candidate_name']} Â· {draft['discipline']} Â· "
+                f"{format_result_datetime(draft['updated_at'])}"
+            )
+            for draft in saved_drafts
+        }
+        draft_id = st.selectbox(
+            "Candidate draft to delete",
+            list(draft_options),
+            format_func=lambda value: draft_options[value],
+            key="delete_saved_draft_id",
+        )
+        selected_draft = next(draft for draft in saved_drafts if draft["candidate_id"] == draft_id)
+        confirmation_key = (
+            f"confirm_delete_saved_draft_{draft_id}_"
+            f"{selected_draft['updated_at'].timestamp()}"
+        )
+        confirm_draft_delete = st.checkbox(
+            "I understand this permanently deletes the candidate's in-progress answers.",
+            key=confirmation_key,
+        )
+        if st.button("Delete Candidate's Saved Answers", disabled=not confirm_draft_delete):
+            try:
+                deleted_name = db.delete_candidate_assessment_draft(user["id"], draft_id)
+                if deleted_name:
+                    st.session_state.saved_draft_deleted_candidate = deleted_name
+                    st.rerun()
+                st.info("That saved draft was already removed.")
+            except ValueError as exc:
+                st.error(str(exc))
+    else:
+        st.info("No saved in-progress candidate answers are available.")
+
     st.divider()
     st.subheader("Delete Individual Assessment")
     assessments = db.submissions(user["id"])

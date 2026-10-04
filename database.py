@@ -1100,6 +1100,26 @@ def assessment_drafts_for_review(actor):
     return [dict(row) for row in rows]
 
 
+def delete_candidate_assessment_draft(actor, candidate_id):
+    """Delete one Candidate's saved draft and revoke its active session."""
+    with connection() as c:
+        require(c, actor, ('Admin',))
+        candidate = c.execute(
+            "SELECT id, name FROM users WHERE id=%s AND role='Candidate' FOR UPDATE",
+            (candidate_id,),
+        ).fetchone()
+        if not candidate:
+            raise ValueError('Candidate account not found.')
+        deleted = c.execute(
+            'DELETE FROM assessment_drafts WHERE user_id=%s RETURNING user_id',
+            (candidate_id,),
+        ).fetchone()
+        if not deleted:
+            return None
+        c.execute('UPDATE users SET active_login_token=NULL WHERE id=%s', (candidate_id,))
+        return candidate['name']
+
+
 def save_assessment_draft(actor, payload):
     with connection() as c:
         require(c, actor, ('Candidate',))
