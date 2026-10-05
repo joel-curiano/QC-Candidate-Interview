@@ -298,9 +298,10 @@ def select_by_difficulty(pool, question_count, kind, rng):
     return selected
 
 
-def select_assessment_questions(bank, settings, rng, candidate_role='All'):
+def select_assessment_questions(bank, settings, rng, candidate_role='Inspector'):
     """Select questions with the required difficulty mix and MCQ subject-topic alignment."""
-    pools = {kind: [q for q in bank if q["q_type"] == kind and q.get('candidate_role', 'All') in ('All', candidate_role)] for kind in QUESTION_TYPES}
+    role = 'Inspector' if not candidate_role or candidate_role in ('All', '') else candidate_role
+    pools = {kind: [q for q in bank if q["q_type"] == kind and (q.get('candidate_role') or 'Inspector') == role] for kind in QUESTION_TYPES}
     selected = {"mcq": select_by_difficulty(pools["mcq"], settings["mcq"], "mcq", rng)}
     selected_subject_topics = {
         (q.get("subject", "General"), q.get("topic_group", "General"))
@@ -944,6 +945,7 @@ else:
             st.warning("Essay time expired. Click below to proceed to the next question.")
 
         current_val = responses.get(question["id"], "")
+        answer_key = f"answer_{question['id']}"
         answer = essay_input(
             label=f"{essay_index + 1}. Essay: {question['question_text']}",
             value=current_val,
@@ -952,8 +954,15 @@ else:
             key=f"essay_input_{question['id']}",
             disabled=expired,
         )
-        if isinstance(answer, str) and answer != current_val:
-            st.session_state[f"answer_{question['id']}"] = answer
+        widget_answer = st.session_state.get(answer_key)
+        if not isinstance(answer, str):
+            answer = (
+                widget_answer if isinstance(widget_answer, str)
+                else current_val if isinstance(current_val, str)
+                else ""
+            )
+        if answer != current_val:
+            st.session_state[answer_key] = answer
             save_assessment_answer(user["id"], question["id"])
         st.caption("Your response is saved automatically while you type.")
         btn_label = (
@@ -979,10 +988,12 @@ else:
                     st.session_state[f"confirm_empty_{question['id']}"] = True
                     st.rerun()
                 else:
-                    if expired and not answer.strip():
+                    if answer.strip():
+                        responses[question["id"]] = answer.strip()
+                    elif expired:
                         responses[question["id"]] = "[No response submitted - time expired]"
                     else:
-                        responses[question["id"]] = answer.strip()
+                        responses[question["id"]] = ""
                     st.session_state.assessment_essay_index = essay_index + 1
                     save_current_assessment_draft(user["id"])
                     st.rerun()

@@ -47,6 +47,11 @@ def clear_question_data():
     st.session_state.pop("question_export_bytes", None)
     clear_read_caches()
 
+
+def refresh_question_bank_page():
+    """Return to the Question Bank after a mutation, preserving page context."""
+    st.switch_page("pages/7_Question_Bank.py")
+
 # ---------------------------------------------------------------------------
 # Import / Export controls
 # ---------------------------------------------------------------------------
@@ -304,7 +309,10 @@ else:
             f"{'Active' if q['active'] else 'Archived'}"
         ):
             st.write(q["question_text"])
-            st.caption(f"Candidate role: {q.get('candidate_role', 'All')}")
+            role_display = q.get('candidate_role')
+            if not role_display or role_display in ('All', ''):
+                role_display = 'Inspector'
+            st.caption(f"Candidate role: {role_display}")
             if q["q_type"] == "mcq":
                 options_list = json.loads(q["options"]) if q.get("options") else []
                 for opt in options_list:
@@ -323,7 +331,7 @@ else:
                     ):
                         db.set_active(user["id"], q["id"], not q["active"])
                         clear_read_caches()
-                        st.rerun()
+                        refresh_question_bank_page()
                 with col_btn2:
                     if not q["active"]:
                         if st.button(
@@ -334,7 +342,7 @@ else:
                             try:
                                 db.delete_question(user["id"], q["id"], force=True)
                                 clear_read_caches()
-                                st.rerun()
+                                refresh_question_bank_page()
                             except ValueError as exc:
                                 st.error(str(exc))
             else:
@@ -342,7 +350,7 @@ else:
                     try:
                         db.delete_question(user["id"], q["id"])
                         clear_read_caches()
-                        st.rerun()
+                        refresh_question_bank_page()
                     except ValueError as exc:
                         st.error(str(exc))
 

@@ -43,7 +43,7 @@ STARTER_DISCIPLINES = (
     'Mechanical QC', 'NDT QC', 'Non-Metallic Piping QC', 'Piping QC', 'Welding QC',
     'Pipeline QC', 'PQCS',
 )
-RUNTIME_SCHEMA_VERSION = '9'
+RUNTIME_SCHEMA_VERSION = '10'
 
 
 
@@ -202,7 +202,7 @@ def init_db():
             difficulty TEXT NOT NULL DEFAULT 'moderate' CHECK (difficulty IN ('easy', 'moderate', 'difficult')),
             topic_group TEXT NOT NULL DEFAULT 'General',
             delivery_stage TEXT NOT NULL DEFAULT 'standard' CHECK (delivery_stage IN ('standard', 'oral_opening')),
-            candidate_role TEXT NOT NULL DEFAULT 'All' CHECK (candidate_role IN ('All', 'Inspector', 'Supervisor', 'Technician')),
+            candidate_role TEXT NOT NULL DEFAULT 'Inspector' CHECK (candidate_role IN ('All', 'Inspector', 'Supervisor', 'Technician')),
             archived_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             CHECK (delivery_stage = 'standard' OR (q_type = 'oral_practical' AND is_scored = FALSE))
         )""")
@@ -224,10 +224,12 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_disciplines TEXT[] NOT NULL DEFAULT ARRAY['All Disciplines']::TEXT[]")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS analysis_reports JSONB NOT NULL DEFAULT '{}'::jsonb")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS confidentiality_acceptance_id BIGINT REFERENCES confidentiality_acceptances(id)")
-        c.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS candidate_role TEXT NOT NULL DEFAULT 'All'")
+        c.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS candidate_role TEXT NOT NULL DEFAULT 'Inspector'")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS candidate_role TEXT NOT NULL DEFAULT ''")
         c.execute("UPDATE users SET candidate_role='' WHERE role IN ('Admin', 'Reviewer') AND candidate_role<>''")
-        c.execute("ALTER TABLE archived_questions ADD COLUMN IF NOT EXISTS candidate_role TEXT NOT NULL DEFAULT 'All'")
+        c.execute("ALTER TABLE archived_questions ADD COLUMN IF NOT EXISTS candidate_role TEXT NOT NULL DEFAULT 'Inspector'")
+        c.execute("UPDATE questions SET candidate_role='Inspector' WHERE candidate_role='All' OR candidate_role IS NULL OR candidate_role=''")
+        c.execute("UPDATE archived_questions SET candidate_role='Inspector' WHERE candidate_role='All' OR candidate_role IS NULL OR candidate_role=''")
         initialized = c.execute("SELECT value FROM schema_info WHERE key='question_template_v1'").fetchone()
         
         if not initialized:
@@ -689,7 +691,13 @@ def questions(discipline=None, include_inactive=False):
     '''
     with connection() as c:
         rows = c.execute(query, params).fetchall()
-    return [dict(q) for q in rows]
+    result_rows = []
+    for q in rows:
+        d = dict(q)
+        if not d.get('candidate_role') or d.get('candidate_role') in ('All', ''):
+            d['candidate_role'] = 'Inspector'
+        result_rows.append(d)
+    return result_rows
 
 
 def question_counts():
@@ -717,8 +725,11 @@ def question_count(discipline=None, question_type=None, candidate_role=None):
         conditions.append('q_type=%s')
         params.append(question_type)
     if candidate_role:
-        conditions.append('candidate_role=%s')
-        params.append(candidate_role)
+        if candidate_role == 'Inspector':
+            conditions.append("(candidate_role = 'Inspector' OR candidate_role = 'All' OR candidate_role IS NULL OR candidate_role = '')")
+        else:
+            conditions.append('candidate_role=%s')
+            params.append(candidate_role)
     with connection() as c:
         return c.execute(
             f"SELECT COUNT(*) AS question_count FROM questions WHERE {' AND '.join(conditions)}",
@@ -743,8 +754,11 @@ def question_page(discipline=None, question_type=None, limit=20, offset=0, candi
         conditions.append('q.q_type=%s')
         params.append(question_type)
     if candidate_role:
-        conditions.append('q.candidate_role=%s')
-        params.append(candidate_role)
+        if candidate_role == 'Inspector':
+            conditions.append("(q.candidate_role = 'Inspector' OR q.candidate_role = 'All' OR q.candidate_role IS NULL OR q.candidate_role = '')")
+        else:
+            conditions.append('q.candidate_role=%s')
+            params.append(candidate_role)
     where_clause = ' AND '.join(conditions)
     with connection() as c:
         total = c.execute(
@@ -761,7 +775,13 @@ def question_page(discipline=None, question_type=None, limit=20, offset=0, candi
                 LIMIT %s OFFSET %s''',
             [*params, limit, offset],
         ).fetchall()
-    return total, [dict(row) for row in rows]
+    result_rows = []
+    for row in rows:
+        d = dict(row)
+        if not d.get('candidate_role') or d.get('candidate_role') in ('All', ''):
+            d['candidate_role'] = 'Inspector'
+        result_rows.append(d)
+    return total, result_rows
 
 def disciplines():
     with connection() as c:
@@ -774,7 +794,9 @@ def add_question(actor, discipline, kind, prompt, options, correct, rubric, subj
         require(c, actor, ('Admin', 'Reviewer'))
         _insert_question(c, question)
 
-def _validate_question(discipline, kind, prompt, options, correct, rubric, subject='General', sub_subject='General', is_scored=True, difficulty='moderate', topic_group='General', delivery_stage='standard', candidate_role='All'):
+def _validate_question(discipline, kind, prompt, options, correct, rubric, subject='General', sub_subject='General', is_scored=True, difficulty='moderate', topic_group='General', delivery_stage='standard', candidate_role='Inspector'):
+    if not candidate_role or candidate_role in ('All', ''):
+        candidate_role = 'Inspector'
     options = [v.strip() for v in options if v.strip()]
     if not discipline.strip() or not prompt.strip():
         raise ValueError('Discipline and question are required.')
@@ -794,7 +816,7 @@ def _validate_question(discipline, kind, prompt, options, correct, rubric, subje
     return (discipline.strip(), kind, prompt.strip(), options, correct.strip(), rubric.strip(), points, subject.strip() or 'General', sub_subject.strip() or 'General', bool(is_scored), difficulty, topic_group.strip() or 'General', delivery_stage, candidate_role)
 
 def _insert_question(connection, question):
-    values = list(question) + ['General', 'General', True, 'moderate', 'General', 'standard', 'All']
+    values = list(question) + ['General', 'General', True, 'moderate', 'General', 'standard', 'Inspector']
     discipline, kind, prompt, options, correct, rubric, points, subject, sub_subject, is_scored, difficulty, topic_group, delivery_stage, candidate_role = values[:14]
     existing = connection.execute('SELECT id FROM questions WHERE discipline=%s AND q_type=%s AND question_text=%s', (discipline, kind, prompt)).fetchone()
     if existing:
@@ -815,7 +837,7 @@ def add_questions(actor, parse_results, progress_callback=None):
             q = result['question']
             try:
                 with c.transaction():
-                    validated = _validate_question(q['discipline'], q['kind'], q['prompt'], q['options'], q['correct'], q['rubric'], q.get('subject'), q.get('sub_subject'), q.get('is_scored', True), q.get('difficulty'), q.get('topic_group'), q.get('delivery_stage'), q.get('candidate_role', 'All'))
+                    validated = _validate_question(q['discipline'], q['kind'], q['prompt'], q['options'], q['correct'], q['rubric'], q.get('subject'), q.get('sub_subject'), q.get('is_scored', True), q.get('difficulty'), q.get('topic_group'), q.get('delivery_stage'), q.get('candidate_role', 'Inspector'))
                     _insert_question(c, validated)
             except (ValueError, psycopg.Error) as e:
                 result['success'] = False
@@ -903,16 +925,23 @@ def wipe_questions(actor, discipline=None, candidate_role=None, progress_callbac
     with connection() as c:
         require(c, actor, ('Admin',))
         conditions = []
+        joined_conditions = []
         params = []
         if discipline and discipline != 'All Disciplines':
             conditions.append('discipline = %s')
+            joined_conditions.append('q.discipline = %s')
             params.append(discipline)
         if candidate_role and candidate_role != 'All Roles':
-            conditions.append('candidate_role = %s')
-            params.append(candidate_role)
+            if candidate_role == 'Inspector':
+                conditions.append("(candidate_role = 'Inspector' OR candidate_role = 'All' OR candidate_role IS NULL OR candidate_role = '')")
+                joined_conditions.append("(q.candidate_role = 'Inspector' OR q.candidate_role = 'All' OR q.candidate_role IS NULL OR q.candidate_role = '')")
+            else:
+                conditions.append('candidate_role = %s')
+                joined_conditions.append('q.candidate_role = %s')
+                params.append(candidate_role)
             
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        q_where = f"WHERE {' AND '.join('q.' + cond for cond in conditions)}" if conditions else ""
+        q_where = f"WHERE {' AND '.join(joined_conditions)}" if joined_conditions else ""
         
         all_question_ids = [row['id'] for row in c.execute(f'SELECT id FROM questions {where} ORDER BY id', params).fetchall()]
         total = len(all_question_ids)

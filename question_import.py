@@ -58,7 +58,9 @@ def parse_questions(workbook_bytes):
         discipline, kind, prompt, options, correct, rubric = map(_text, values[:6])
         metadata = list(row[6:13]) + ['', '', '', '', '', '', '']
         subject, sub_subject, scored, difficulty, topic_group, delivery_stage, candidate_role = map(_text, metadata[:7])
-        subject = subject or 'General'; sub_subject = sub_subject or 'General'; difficulty = difficulty or 'moderate'; topic_group = topic_group or 'General'; scored = scored.lower() not in ('no', 'false', '0', 'non-scored'); delivery_stage = delivery_stage or 'standard'; candidate_role = candidate_role or 'All'
+        subject = subject or 'General'; sub_subject = sub_subject or 'General'; difficulty = difficulty or 'moderate'; topic_group = topic_group or 'General'; scored = scored.lower() not in ('no', 'false', '0', 'non-scored'); delivery_stage = delivery_stage or 'standard'; candidate_role = candidate_role or 'Inspector'
+        if candidate_role == 'All':
+            candidate_role = 'Inspector'
         
         row_result = {'row_number': row_number, 'success': True, 'error': None, 'question': None, 'prompt': prompt}
         try:
@@ -142,7 +144,7 @@ def export_questions_bytes(questions):
             '\n'.join(str(option) for option in options),
             question.get('correct_answer', '') or '',
             question.get('rubric', '') or '', question.get('subject', 'General'), question.get('sub_subject', 'General'),
-            'yes' if question.get('is_scored', True) else 'no', question.get('difficulty', 'moderate'), question.get('topic_group', 'General'), question.get('delivery_stage', 'standard'), question.get('candidate_role', 'All'),
+            'yes' if question.get('is_scored', True) else 'no', question.get('difficulty', 'moderate'), question.get('topic_group', 'General'), question.get('delivery_stage', 'standard'), ('Inspector' if not question.get('candidate_role') or question.get('candidate_role') in ('All', '') else question.get('candidate_role')),
         ])
         for cell in sheet[sheet.max_row]:
             if isinstance(cell.value, str):

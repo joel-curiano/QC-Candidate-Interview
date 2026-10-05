@@ -44,15 +44,6 @@ st.caption(
 
 current = cached_assessment_settings(user["id"])
 
-with st.expander("Question Cache"):
-    st.caption(
-        "Clear cached question-bank data so the next page load fetches current questions. "
-        "This does not delete questions from the database."
-    )
-    if st.button("Clear Cached Questions", key="clear_cached_questions"):
-        clear_question_caches()
-        st.success("Cached question data cleared.")
-
 with st.form("assessment_settings"):
     counts = {
         kind: st.number_input(label, min_value=1, max_value=100, value=current[kind], step=1)
@@ -90,6 +81,16 @@ with st.form("assessment_settings"):
 
 # Admin-only: delete individual assessment and test email delivery.
 if user["role"] == "Admin":
+    st.divider()
+    st.subheader("Question Cache")
+    st.caption(
+        "Clear cached question-bank data so the next page load fetches current questions. "
+        "This does not delete questions from the database."
+    )
+    if st.button("Clear Cached Questions", key="clear_cached_questions"):
+        clear_question_caches()
+        st.success("Cached question data cleared.")
+
     st.divider()
     st.subheader("Delete Candidate In-Progress Answers")
     st.caption(

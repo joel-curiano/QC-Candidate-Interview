@@ -176,6 +176,36 @@ def test_wipe_questions_archives_used_questions_and_preserves_answer_references(
         assert c.execute('SELECT COUNT(*) FROM questions WHERE id = ANY(%s)', ([q['id'] for q in qs],)).fetchone()[0] == 0
 
 
+def test_wipe_inspector_questions_includes_blank_candidate_role(accounts):
+    db.add_question(
+        accounts['admin'], 'Inspector Blank Role Test', 'mcq',
+        'Choose the accepted option.', ['Accepted', 'Rejected'], 'Accepted', '',
+    )
+    question = db.questions('Inspector Blank Role Test')[0]
+    with db.connection() as c:
+        c.execute("UPDATE questions SET candidate_role = '' WHERE id = %s", (question['id'],))
+
+    submission_id = db.submit(
+        accounts['alice'], 'Inspector Blank Role Test',
+        {question['id']: 'Accepted'}, 'inspector-blank-role-wipe',
+    )
+    db.wipe_questions(
+        accounts['admin'], 'Inspector Blank Role Test', 'Inspector',
+    )
+
+    with db.connection() as c:
+        archived = c.execute(
+            'SELECT id, source_question_id, candidate_role FROM archived_questions WHERE source_question_id = %s',
+            (question['id'],),
+        ).fetchone()
+        assert archived['source_question_id'] == question['id']
+        assert archived['candidate_role'] == ''
+        assert c.execute(
+            'SELECT COUNT(*) FROM answers WHERE submission_id = %s AND question_id = %s',
+            (submission_id, archived['id']),
+        ).fetchone()[0] == 1
+
+
 def test_concurrent_duplicate_submission(accounts):
     from concurrent.futures import ThreadPoolExecutor
     qs = db.questions('Welding QC')
