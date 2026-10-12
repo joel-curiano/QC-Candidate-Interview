@@ -127,6 +127,29 @@ def test_scoring_and_isolation(accounts):
     with pytest.raises(ValueError):
         db.grade(accounts['admin'], sid, {essay['id']: 0}, '')
 
+
+def test_admin_can_submit_an_assessment(accounts):
+    questions = db.questions('Welding QC')
+    responses = {
+        question['id']: (
+            question['correct_answer']
+            if question['q_type'] == 'mcq'
+            else 'Inspection evidence and closure.'
+        )
+        for question in questions
+        if question['q_type'] != 'oral_practical'
+    }
+
+    submission_id = db.submit(
+        accounts['admin'], 'Welding QC', responses, 'admin-assessment'
+    )
+
+    submission = next(
+        row for row in db.submissions(accounts['admin'])
+        if row['id'] == submission_id
+    )
+    assert submission['user_id'] == accounts['admin']
+
 def test_reviewer_can_see_legacy_unassigned_candidate(accounts):
     attempt(accounts, 'legacy-unassigned')
     db.update_staff_projects(accounts['admin'], accounts['reviewer'], ['Project A'])

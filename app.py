@@ -487,10 +487,16 @@ hide_app_sidebar_link()
 if user["role"] == "Candidate":
     hide_login_sidebar()
 
+is_admin_assessment = (
+    user["role"] == "Admin"
+    and bool(st.session_state.get("admin_assessment_mode"))
+)
+is_assessment_taker = user["role"] == "Candidate" or is_admin_assessment
+
 # ---------------------------------------------------------------------------
 # Admin / Reviewer: redirect to pages via sidebar
 # ---------------------------------------------------------------------------
-if user["role"] != "Candidate":
+if not is_assessment_taker:
     try:
         st.logo("img/Icon/CAT Icon White Background.png", icon_image="img/Icon/CAT-Tab-Icon.png")
     except AttributeError:
@@ -547,11 +553,25 @@ if user["role"] != "Candidate":
         st.session_state.clear()
         st.rerun()
 
-    # Prompt staff to use the sidebar navigation to reach the pages.
-    st.info(
-        "Use the sidebar to open Candidate Schedules, Question Bank, Review Assessments, "
-        "and other admin pages."
-    )
+    if user["role"] == "Admin":
+        st.subheader("Admin assessment")
+        available_disciplines = cached_disciplines()
+        if available_disciplines:
+            admin_discipline = st.selectbox(
+                "Discipline", available_disciplines,
+                key="admin_assessment_discipline_picker",
+            )
+            if st.button("Start assessment", type="primary"):
+                st.session_state.admin_assessment_discipline = admin_discipline
+                st.session_state.admin_assessment_mode = True
+                st.rerun()
+        else:
+            st.info("No assessments are currently available.")
+    else:
+        st.info(
+            "Use the sidebar to open Candidate Schedules, Question Bank, Review Assessments, "
+            "and other admin pages."
+        )
     st.stop()
 
 # ---------------------------------------------------------------------------
@@ -572,7 +592,7 @@ if user["role"] == "Candidate" and st.session_state.pop("show_candidate_start_di
     else:
         st.info("Your assessment is ready. Review your details below, then start the test.")
 
-if user["role"] == "Candidate" and st.session_state.get("assessment_phase"):
+if is_assessment_taker and st.session_state.get("assessment_phase"):
     assessment_draft_heartbeat(user["id"])
 
 try:
@@ -587,9 +607,12 @@ if st.sidebar.button("Sign out"):
     st.session_state.clear()
     st.rerun()
 
-candidate_subs = db.submissions(user["id"])
-if candidate_subs and not user.get("test_date") and not st.session_state.get("assessment_phase"):
-    latest_sub = candidate_subs[0]
+assessment_subs = [
+    submission for submission in db.submissions(user["id"])
+    if submission["user_id"] == user["id"]
+]
+if assessment_subs and not user.get("test_date") and not st.session_state.get("assessment_phase"):
+    latest_sub = assessment_subs[0]
     st.subheader("Assessment Completed")
     status = latest_sub["status"]
     if status == "Graded":
@@ -600,7 +623,7 @@ if candidate_subs and not user.get("test_date") and not st.session_state.get("as
         st.info("Status: Pending Review | Your assessment has been submitted and is awaiting Reviewer evaluation.")
 
     st.markdown(
-        f"<b>Candidate:</b> {user['name']}<br>"
+        f"<b>{'Administrator' if user['role'] == 'Admin' else 'Candidate'}:</b> {user['name']}<br>"
         f"<b>Discipline:</b> {latest_sub['discipline']}<br>"
         f"<b>Exam Date:</b> {format_result_datetime(latest_sub.get('exam_date', ''))}<br>"
         f"<b>Submission Reference:</b> #{latest_sub['id']}",
@@ -618,9 +641,13 @@ if candidate_subs and not user.get("test_date") and not st.session_state.get("as
 
 st.subheader("Take an assessment")
 
-discipline = user.get("scheduled_discipline") or user.get("discipline", "")
+discipline = (
+    st.session_state.get("admin_assessment_discipline", "")
+    if user["role"] == "Admin"
+    else user.get("scheduled_discipline") or user.get("discipline", "")
+)
 if not discipline:
-    st.info("No discipline is assigned to this candidate.")
+    st.info("No discipline is assigned to this assessment.")
     st.stop()
 if discipline not in cached_disciplines():
     st.info("No assessments are currently available.")
@@ -756,6 +783,9 @@ def is_unanswered(question_id):
 
 
 def submit_candidate_assessment():
+    for question in mcq_questions:
+        if not isinstance(responses.get(question["id"]), str) or not responses[question["id"]].strip():
+            responses[question["id"]] = "[Unanswered]"
     for question in essay_questions:
         if question["id"] not in responses or not str(responses[question["id"]]).strip():
             responses[question["id"]] = "[No response submitted - time expired]"

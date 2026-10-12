@@ -44,6 +44,7 @@ STARTER_DISCIPLINES = (
     'Pipeline QC', 'PQCS',
 )
 RUNTIME_SCHEMA_VERSION = '10'
+ASSESSMENT_TAKER_ROLES = ('Candidate', 'Admin')
 
 
 
@@ -139,7 +140,10 @@ def connection():
             yield conn
     except DatabaseError:
         raise
+    except ValueError:
+        raise
     except (psycopg.Error, Exception):
+        logger.exception("Database operation failed")
         raise DatabaseError('Database operation failed. Check your Supabase connection, project status, and schema setup, then retry.') from None
 
 
@@ -1002,7 +1006,7 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         raise ValueError('A submission reference is required.')
     with connection() as c:
         c.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))', (token,))
-        user = require(c, actor, ('Candidate',))
+        user = require(c, actor, ASSESSMENT_TAKER_ROLES)
         existing = c.execute('SELECT id,user_id FROM submissions WHERE token=%s', (token,)).fetchone()
         if existing:
             if existing['user_id'] != actor:
@@ -1052,8 +1056,9 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         answer_rows = []
         for q in qs:
             score = q['max_points'] if q['q_type'] == 'mcq' and responses[q['id']] == q['correct_answer'] else 0
+            submitted_answer = responses.get(q['id']) or ''
             answer_rows.append(
-                (sid, q['id'], responses.get(q['id'], ''), score, json.dumps(dict(q)))
+                (sid, q['id'], submitted_answer, score, json.dumps(dict(q)))
             )
         c.cursor().executemany(
             'INSERT INTO answers(submission_id,question_id,submitted_answer,awarded_score,snapshot) VALUES (%s,%s,%s,%s,%s)',
@@ -1093,7 +1098,7 @@ def issue_candidate_retest(actor, candidate_id, test_date):
 
 def assessment_draft(actor):
     with connection() as c:
-        require(c, actor, ('Candidate',))
+        require(c, actor, ASSESSMENT_TAKER_ROLES)
         row = c.execute('SELECT payload FROM assessment_drafts WHERE user_id=%s', (actor,)).fetchone()
         if not row:
             return None
@@ -1151,7 +1156,7 @@ def delete_candidate_assessment_draft(actor, candidate_id):
 
 def save_assessment_draft(actor, payload):
     with connection() as c:
-        require(c, actor, ('Candidate',))
+        require(c, actor, ASSESSMENT_TAKER_ROLES)
         c.execute(
             """INSERT INTO assessment_drafts(user_id, payload, updated_at) VALUES (%s, %s::jsonb, CURRENT_TIMESTAMP)
                ON CONFLICT (user_id) DO UPDATE SET payload=EXCLUDED.payload, updated_at=CURRENT_TIMESTAMP""",
@@ -1161,7 +1166,7 @@ def save_assessment_draft(actor, payload):
 
 def delete_assessment_draft(actor):
     with connection() as c:
-        require(c, actor, ('Candidate',))
+        require(c, actor, ASSESSMENT_TAKER_ROLES)
         c.execute('DELETE FROM assessment_drafts WHERE user_id=%s', (actor,))
 
 
