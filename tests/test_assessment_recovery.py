@@ -48,3 +48,20 @@ def test_restart_restores_mcq_and_essay_draft():
     assert restored.assessment_essay_started_at == {11: 1100, 12: 1200}
     assert restored.assessment_mcq_options == {1: ['B', 'A']}
     assert restored.assessment_essay_pending_unanswered == [3]
+
+
+def test_essay_editor_uses_fragment_without_interval_polling():
+    root = Path(__file__).parents[1]
+    app_source = ast.parse((root / 'app.py').read_text(encoding='utf-8'))
+    editor_fns = [
+        node for node in ast.walk(app_source)
+        if isinstance(node, ast.FunctionDef) and node.name == 'render_essay_editor'
+    ]
+    assert len(editor_fns) == 1
+    decorators = [ast.unparse(d) for d in editor_fns[0].decorator_list]
+    assert 'st.fragment' in decorators
+
+    html = (root / 'static' / 'essay_input' / 'index.html').read_text(encoding='utf-8')
+    assert 'setInterval(' not in html
+    assert "field.addEventListener('blur', send)" in html
+

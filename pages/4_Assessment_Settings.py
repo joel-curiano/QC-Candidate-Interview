@@ -37,6 +37,8 @@ if candidate_name := st.session_state.pop("saved_draft_deleted_candidate", None)
         f"Saved in-progress answers for {candidate_name} were deleted. "
         "The candidate must sign in again to start a fresh attempt."
     )
+if submission_id := st.session_state.pop("saved_draft_submitted", None):
+    st.success(f"Candidate assessment #{submission_id} was submitted successfully.")
 st.caption(
     "Set question counts and the maximum points awarded per question type. "
     "Changes apply to new assessments."
@@ -106,6 +108,35 @@ if user["role"] == "Admin":
             )
             for draft in saved_drafts
         }
+        st.subheader("Recover Candidate Assessment")
+        st.caption(
+            "Submit a candidate's saved MCQ and Essay answers when they cannot submit "
+            "the assessment themselves. Blank answers are recorded as unanswered."
+        )
+        recovery_id = st.selectbox(
+            "Candidate draft to submit",
+            list(draft_options),
+            format_func=lambda value: draft_options[value],
+            key="submit_saved_draft_id",
+        )
+        confirm_recovery = st.checkbox(
+            "I confirm that this candidate's saved answers are ready to submit.",
+            key=f"confirm_submit_saved_draft_{recovery_id}",
+        )
+        if st.button(
+            "Submit Candidate's Saved Assessment",
+            type="primary",
+            disabled=not confirm_recovery,
+        ):
+            try:
+                submission_id = db.submit_candidate_draft(user["id"], recovery_id)
+                clear_read_caches()
+                st.session_state.saved_draft_submitted = submission_id
+                st.rerun()
+            except ValueError as exc:
+                st.error(str(exc))
+
+        st.divider()
         draft_id = st.selectbox(
             "Candidate draft to delete",
             list(draft_options),

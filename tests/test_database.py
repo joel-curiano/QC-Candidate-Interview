@@ -128,27 +128,36 @@ def test_scoring_and_isolation(accounts):
         db.grade(accounts['admin'], sid, {essay['id']: 0}, '')
 
 
-def test_admin_can_submit_an_assessment(accounts):
+def test_admin_can_submit_a_saved_candidate_assessment(accounts):
     questions = db.questions('Welding QC')
+    mcq_ids = [question['id'] for question in questions if question['q_type'] == 'mcq']
+    essay_ids = [question['id'] for question in questions if question['q_type'] == 'essay']
     responses = {
         question['id']: (
-            question['correct_answer']
-            if question['q_type'] == 'mcq'
+            None if question['id'] == mcq_ids[0]
+            else question['correct_answer'] if question['q_type'] == 'mcq'
             else 'Inspection evidence and closure.'
         )
         for question in questions
         if question['q_type'] != 'oral_practical'
     }
+    db.save_assessment_draft(accounts['alice'], {
+        'attempt_token': 'admin-recovery',
+        'assessment_discipline': 'Welding QC',
+        'assessment_mcq_ids': mcq_ids,
+        'assessment_essay_ids': essay_ids,
+        'assessment_reviewer_ids': [],
+        'assessment_responses': responses,
+        'candidate_details': {'name': 'Alice', 'designation': 'Inspector'},
+    })
 
-    submission_id = db.submit(
-        accounts['admin'], 'Welding QC', responses, 'admin-assessment'
-    )
+    submission_id = db.submit_candidate_draft(accounts['admin'], accounts['alice'])
 
-    submission = next(
-        row for row in db.submissions(accounts['admin'])
-        if row['id'] == submission_id
-    )
-    assert submission['user_id'] == accounts['admin']
+    answers = db.answer_details(accounts['admin'], submission_id)
+    recovered_answer = next(answer for answer in answers if answer['question_id'] == mcq_ids[0])
+    assert recovered_answer['submitted_answer'] == '[Unanswered]'
+    assert db.assessment_draft(accounts['alice']) is None
+
 
 def test_reviewer_can_see_legacy_unassigned_candidate(accounts):
     attempt(accounts, 'legacy-unassigned')

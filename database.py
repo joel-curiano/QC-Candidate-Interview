@@ -44,7 +44,6 @@ STARTER_DISCIPLINES = (
     'Pipeline QC', 'PQCS',
 )
 RUNTIME_SCHEMA_VERSION = '10'
-ASSESSMENT_TAKER_ROLES = ('Candidate', 'Admin')
 
 
 
@@ -1006,7 +1005,7 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         raise ValueError('A submission reference is required.')
     with connection() as c:
         c.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))', (token,))
-        user = require(c, actor, ASSESSMENT_TAKER_ROLES)
+        user = require(c, actor, ('Candidate',))
         existing = c.execute('SELECT id,user_id FROM submissions WHERE token=%s', (token,)).fetchone()
         if existing:
             if existing['user_id'] != actor:
@@ -1068,6 +1067,60 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         return sid
 
 
+def submit_candidate_draft(actor, candidate_id):
+    """Allow an Admin to recover and submit a Candidate's saved assessment."""
+    with connection() as c:
+        require(c, actor, ('Admin',))
+        require(c, candidate_id, ('Candidate',))
+        row = c.execute(
+            'SELECT payload FROM assessment_drafts WHERE user_id=%s FOR UPDATE',
+            (candidate_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError('No saved assessment answers were found for this candidate.')
+        payload = row['payload']
+        payload = payload if isinstance(payload, dict) else json.loads(payload)
+
+        try:
+            token = payload['attempt_token']
+            discipline = payload['assessment_discipline']
+            mcq_ids = list(payload['assessment_mcq_ids'])
+            essay_ids = list(payload['assessment_essay_ids'])
+            reviewer_ids = list(payload.get('assessment_reviewer_ids', []))
+        except (KeyError, TypeError, ValueError):
+            raise ValueError('The saved assessment is incomplete and cannot be submitted.') from None
+
+        raw_responses = payload.get('assessment_responses', {})
+        if not isinstance(raw_responses, dict):
+            raise ValueError('The saved assessment answers are invalid and cannot be submitted.')
+        responses = {int(question_id): answer for question_id, answer in raw_responses.items()}
+        for question_id in mcq_ids + essay_ids:
+            answer = responses.get(int(question_id))
+            if not isinstance(answer, str) or not answer.strip():
+                responses[int(question_id)] = '[Unanswered]'
+        details = payload.get('candidate_details') or {}
+        expected_counts = payload.get('assessment_counts')
+
+    settings = assessment_settings(actor)
+    point_settings = {
+        kind: settings[f'{kind}_points'] for kind in QUESTION_TYPES
+    }
+    submission_id = submit(
+        candidate_id,
+        discipline,
+        responses,
+        token,
+        details,
+        mcq_ids + essay_ids + reviewer_ids,
+        point_settings=point_settings,
+        expected_counts=expected_counts,
+    )
+    with connection() as c:
+        require(c, actor, ('Admin',))
+        c.execute('DELETE FROM assessment_drafts WHERE user_id=%s', (candidate_id,))
+    return submission_id
+
+
 def issue_candidate_retest(actor, candidate_id, test_date):
     """Delete previous results and drafts, then schedule a fresh candidate attempt."""
     if not isinstance(test_date, date) or test_date < date.today():
@@ -1098,7 +1151,7 @@ def issue_candidate_retest(actor, candidate_id, test_date):
 
 def assessment_draft(actor):
     with connection() as c:
-        require(c, actor, ASSESSMENT_TAKER_ROLES)
+        require(c, actor, ('Candidate',))
         row = c.execute('SELECT payload FROM assessment_drafts WHERE user_id=%s', (actor,)).fetchone()
         if not row:
             return None
@@ -1156,7 +1209,7 @@ def delete_candidate_assessment_draft(actor, candidate_id):
 
 def save_assessment_draft(actor, payload):
     with connection() as c:
-        require(c, actor, ASSESSMENT_TAKER_ROLES)
+        require(c, actor, ('Candidate',))
         c.execute(
             """INSERT INTO assessment_drafts(user_id, payload, updated_at) VALUES (%s, %s::jsonb, CURRENT_TIMESTAMP)
                ON CONFLICT (user_id) DO UPDATE SET payload=EXCLUDED.payload, updated_at=CURRENT_TIMESTAMP""",
@@ -1166,7 +1219,7 @@ def save_assessment_draft(actor, payload):
 
 def delete_assessment_draft(actor):
     with connection() as c:
-        require(c, actor, ASSESSMENT_TAKER_ROLES)
+        require(c, actor, ('Candidate',))
         c.execute('DELETE FROM assessment_drafts WHERE user_id=%s', (actor,))
 
 

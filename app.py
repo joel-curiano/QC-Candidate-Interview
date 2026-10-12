@@ -487,16 +487,10 @@ hide_app_sidebar_link()
 if user["role"] == "Candidate":
     hide_login_sidebar()
 
-is_admin_assessment = (
-    user["role"] == "Admin"
-    and bool(st.session_state.get("admin_assessment_mode"))
-)
-is_assessment_taker = user["role"] == "Candidate" or is_admin_assessment
-
 # ---------------------------------------------------------------------------
 # Admin / Reviewer: redirect to pages via sidebar
 # ---------------------------------------------------------------------------
-if not is_assessment_taker:
+if user["role"] != "Candidate":
     try:
         st.logo("img/Icon/CAT Icon White Background.png", icon_image="img/Icon/CAT-Tab-Icon.png")
     except AttributeError:
@@ -553,25 +547,10 @@ if not is_assessment_taker:
         st.session_state.clear()
         st.rerun()
 
-    if user["role"] == "Admin":
-        st.subheader("Admin assessment")
-        available_disciplines = cached_disciplines()
-        if available_disciplines:
-            admin_discipline = st.selectbox(
-                "Discipline", available_disciplines,
-                key="admin_assessment_discipline_picker",
-            )
-            if st.button("Start assessment", type="primary"):
-                st.session_state.admin_assessment_discipline = admin_discipline
-                st.session_state.admin_assessment_mode = True
-                st.rerun()
-        else:
-            st.info("No assessments are currently available.")
-    else:
-        st.info(
-            "Use the sidebar to open Candidate Schedules, Question Bank, Review Assessments, "
-            "and other admin pages."
-        )
+    st.info(
+        "Use the sidebar to open Candidate Schedules, Question Bank, Review Assessments, "
+        "and other admin pages."
+    )
     st.stop()
 
 # ---------------------------------------------------------------------------
@@ -592,7 +571,7 @@ if user["role"] == "Candidate" and st.session_state.pop("show_candidate_start_di
     else:
         st.info("Your assessment is ready. Review your details below, then start the test.")
 
-if is_assessment_taker and st.session_state.get("assessment_phase"):
+if user["role"] == "Candidate" and st.session_state.get("assessment_phase"):
     assessment_draft_heartbeat(user["id"])
 
 try:
@@ -607,12 +586,9 @@ if st.sidebar.button("Sign out"):
     st.session_state.clear()
     st.rerun()
 
-assessment_subs = [
-    submission for submission in db.submissions(user["id"])
-    if submission["user_id"] == user["id"]
-]
-if assessment_subs and not user.get("test_date") and not st.session_state.get("assessment_phase"):
-    latest_sub = assessment_subs[0]
+candidate_subs = db.submissions(user["id"])
+if candidate_subs and not user.get("test_date") and not st.session_state.get("assessment_phase"):
+    latest_sub = candidate_subs[0]
     st.subheader("Assessment Completed")
     status = latest_sub["status"]
     if status == "Graded":
@@ -623,7 +599,7 @@ if assessment_subs and not user.get("test_date") and not st.session_state.get("a
         st.info("Status: Pending Review | Your assessment has been submitted and is awaiting Reviewer evaluation.")
 
     st.markdown(
-        f"<b>{'Administrator' if user['role'] == 'Admin' else 'Candidate'}:</b> {user['name']}<br>"
+        f"<b>Candidate:</b> {user['name']}<br>"
         f"<b>Discipline:</b> {latest_sub['discipline']}<br>"
         f"<b>Exam Date:</b> {format_result_datetime(latest_sub.get('exam_date', ''))}<br>"
         f"<b>Submission Reference:</b> #{latest_sub['id']}",
@@ -641,13 +617,9 @@ if assessment_subs and not user.get("test_date") and not st.session_state.get("a
 
 st.subheader("Take an assessment")
 
-discipline = (
-    st.session_state.get("admin_assessment_discipline", "")
-    if user["role"] == "Admin"
-    else user.get("scheduled_discipline") or user.get("discipline", "")
-)
+discipline = user.get("scheduled_discipline") or user.get("discipline", "")
 if not discipline:
-    st.info("No discipline is assigned to this assessment.")
+    st.info("No discipline is assigned to this candidate.")
     st.stop()
 if discipline not in cached_disciplines():
     st.info("No assessments are currently available.")
@@ -974,23 +946,38 @@ else:
         if expired:
             st.warning("Essay time expired. Click below to proceed to the next question.")
 
-        current_val = responses.get(question["id"], "")
         answer_key = f"answer_{question['id']}"
-        answer = essay_input(
-            label=f"{essay_index + 1}. Essay: {question['question_text']}",
-            value=current_val,
-            default=current_val,
-            recovery_key=f"{user['id']}:{st.session_state.attempt_token}:{question['id']}",
-            key=f"essay_input_{question['id']}",
-            disabled=expired,
-        )
-        widget_answer = st.session_state.get(answer_key)
-        if not isinstance(answer, str):
-            answer = (
-                widget_answer if isinstance(widget_answer, str)
-                else current_val if isinstance(current_val, str)
-                else ""
+        component_key = f"essay_input_{question['id']}"
+        initial_key = f"essay_initial_{question['id']}"
+        if initial_key not in st.session_state:
+            st.session_state[initial_key] = responses.get(question["id"], "")
+
+        @st.fragment
+        def render_essay_editor() -> None:
+            saved_val = responses.get(question["id"], "")
+            draft_val = essay_input(
+                label=f"{essay_index + 1}. Essay: {question['question_text']}",
+                value=st.session_state[initial_key],
+                default=st.session_state[initial_key],
+                recovery_key=f"{user['id']}:{st.session_state.attempt_token}:{question['id']}",
+                key=component_key,
+                disabled=expired,
             )
+            if isinstance(draft_val, str):
+                st.session_state[answer_key] = draft_val
+                if draft_val != saved_val:
+                    save_assessment_answer(user["id"], question["id"])
+
+        render_essay_editor()
+        current_val = responses.get(question["id"], "")
+        component_val = st.session_state.get(component_key)
+        widget_answer = st.session_state.get(answer_key)
+        answer = (
+            component_val if isinstance(component_val, str)
+            else widget_answer if isinstance(widget_answer, str)
+            else current_val if isinstance(current_val, str)
+            else ""
+        )
         if answer != current_val:
             st.session_state[answer_key] = answer
             save_assessment_answer(user["id"], question["id"])

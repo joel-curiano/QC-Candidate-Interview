@@ -12,7 +12,7 @@ textarea:focus { outline: 2px solid #b51f2d; }
 <script>
 const field = document.getElementById('answer');
 const status = document.getElementById('status');
-let initialized = false, storageKey, timer, lastSent, acknowledged = '';
+let initialized = false, storageKey, timer, lastSent = '';
 function post(type, data = {}) {
   window.parent.postMessage({isStreamlitMessage: true, type, ...data}, '*');
 }
@@ -22,35 +22,36 @@ function send() {
     lastSent = field.value;
     post('streamlit:setComponentValue', {value: field.value, dataType: 'json'});
   }
+  status.textContent = 'Answer saved.';
 }
 field.addEventListener('input', () => {
   try { localStorage.setItem(storageKey, field.value); } catch (error) {}
   status.textContent = 'Saving answer...';
   clearTimeout(timer);
-  timer = setTimeout(send, 300);
+  timer = setTimeout(send, 1000);
 });
 field.addEventListener('blur', send);
-setInterval(() => { if (initialized) send(); }, 1000);
+field.addEventListener('change', send);
+window.addEventListener('pagehide', send);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') send();
+});
 window.addEventListener('message', event => {
   if (event.source !== window.parent || event.data.type !== 'streamlit:render') return;
   const args = event.data.args;
   document.getElementById('label').textContent = args.label;
   storageKey = 'cta-essay-draft:' + args.recovery_key;
-  acknowledged = args.value || '';
+  const initialValue = args.value || '';
   field.disabled = args.disabled;
   if (!initialized) {
-    field.value = acknowledged;
+    field.value = initialValue;
     try {
       const recovered = localStorage.getItem(storageKey);
       if (recovered !== null) field.value = recovered;
     } catch (error) {}
     initialized = true;
-    lastSent = acknowledged;
+    lastSent = initialValue;
     send();
-  }
-  if (field.value === acknowledged) {
-    status.textContent = 'Answer saved.';
-    try { localStorage.removeItem(storageKey); } catch (error) {}
   }
   post('streamlit:setFrameHeight', {height: 290});
 });
