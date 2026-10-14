@@ -7,7 +7,7 @@ import streamlit as st
 import database as db
 import assessment_analysis
 from email_service import EmailDeliveryError, candidate_result_filename, send_candidate_result
-from question_types import QUESTION_TYPE_SECTION_LABELS, REVIEWER_SCORED_TYPES
+from question_types import QUESTION_TYPES, QUESTION_TYPE_SECTION_LABELS, REVIEWER_SCORED_TYPES
 from shared import (
     inject_global_styles,
     render_logo,
@@ -393,7 +393,19 @@ with st.form(f"grading_{sid}"):
     oral_practical_numbers = {}
     scored_question_numbers = {}
 
-    for a in answers:
+    question_type_order = {kind: idx for idx, kind in enumerate(QUESTION_TYPES)}
+    grouped_answers = sorted(
+        answers,
+        key=lambda a: (
+            question_type_order.get(
+                (json.loads(a["snapshot"]) if isinstance(a["snapshot"], str) else a["snapshot"]).get("q_type"),
+                len(QUESTION_TYPES),
+            ),
+            a.get("id", 0),
+        ),
+    )
+
+    for a in grouped_answers:
         q = json.loads(a["snapshot"])
         if q["q_type"] != question_section_type:
             if question_section is not None:

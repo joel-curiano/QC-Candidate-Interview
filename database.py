@@ -1017,6 +1017,9 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
             if len(question_ids) != len(set(question_ids)):
                 raise ValueError('The assessment contains duplicate questions.')
             qs = c.execute('SELECT * FROM questions WHERE discipline=%s AND active=1 AND id=ANY(%s) ORDER BY id FOR SHARE', (discipline, list(question_ids))).fetchall()
+        type_order = {kind: index for index, kind in enumerate(QUESTION_TYPES)}
+        id_order = {qid: index for index, qid in enumerate(question_ids or ())}
+        qs = sorted(qs, key=lambda q: (type_order.get(q['q_type'], len(QUESTION_TYPES)), id_order.get(q['id'], q['id'])))
         if point_settings:
             qs = [dict(q, max_points=(1 if q['q_type'] == 'mcq' else point_settings.get(q['q_type'], q['max_points']))) for q in qs]
         candidate_question_ids = {q['id'] for q in qs if q['q_type'] != 'oral_practical'}
@@ -1362,10 +1365,22 @@ def delete_assessment(actor, submission_id):
         c.execute('DELETE FROM answers WHERE submission_id=%s', (submission_id,))
         c.execute('DELETE FROM submissions WHERE id=%s', (submission_id,))
 
+def _order_answers_by_question_type(rows):
+    type_order = {kind: index for index, kind in enumerate(QUESTION_TYPES)}
+    def _sort_key(row):
+        snapshot = row.get('snapshot') or {}
+        if isinstance(snapshot, str):
+            try:
+                snapshot = json.loads(snapshot)
+            except ValueError:
+                snapshot = {}
+        return (type_order.get(snapshot.get('q_type'), len(QUESTION_TYPES)), row.get('id', 0))
+    return sorted((dict(r) for r in rows), key=_sort_key)
+
 def answer_details(actor, sid):
     with connection() as c:
         require(c, actor, ('Reviewer', 'Admin'))
-        return [dict(r) for r in c.execute('SELECT * FROM answers WHERE submission_id=%s ORDER BY id', (sid,))]
+        return _order_answers_by_question_type(c.execute('SELECT * FROM answers WHERE submission_id=%s ORDER BY id', (sid,)))
 
 def candidate_submission_answers(actor, sid):
     with connection() as c:
@@ -1374,7 +1389,7 @@ def candidate_submission_answers(actor, sid):
             sub = c.execute('SELECT id FROM submissions WHERE id=%s AND user_id=%s', (sid, actor)).fetchone()
             if not sub:
                 raise ValueError('Assessment not found.')
-        return [dict(r) for r in c.execute('SELECT * FROM answers WHERE submission_id=%s ORDER BY id', (sid,))]
+        return _order_answers_by_question_type(c.execute('SELECT * FROM answers WHERE submission_id=%s ORDER BY id', (sid,)))
 
 def assessment_report(actor, submission):
     """Persist the first report per assessment status, shared by every result view.

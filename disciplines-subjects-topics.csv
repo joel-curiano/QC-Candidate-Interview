@@ -276,7 +276,7 @@ Welding QC,Codes and standards,Controlled welding requirements and project docum
 Welding QC,Codes and standards,Applicable welding code and acceptance criteria
 Welding QC,Codes and standards,Approved WPS PQR and welder qualification controls
 Welding QC,Inspection planning,Welding inspection plan and hold points
-Welding QC,Inspection planning,Fit up visual and NDT coordination
+Welding QC,Inspection planning,Pipeline spread and piping spool welding inspection readiness
 Welding QC,Inspection planning,Calibrated welding and inspection equipment verification
 Welding QC,Materials and traceability,Base material heat number and MTC traceability
 Welding QC,Materials and traceability,Filler metal identification storage and conditioning
@@ -285,13 +285,13 @@ Welding QC,Installation and workmanship,Joint preparation fit up and alignment
 Welding QC,Installation and workmanship,Preheat interpass temperature and welding parameter control
 Welding QC,Installation and workmanship,Visual weld profile and defect prevention
 Welding QC,Testing and verification,WPS compliance and consumable control checks
-Welding QC,Testing and verification,Visual examination and NDT acceptance
-Welding QC,Testing and verification,PWHT monitoring and hardness testing where required
+Welding QC,Testing and verification,Root pass hot pass fill and cap visual and dimensional acceptance
+Welding QC,Testing and verification,Back purging dissolved oxygen verification and sour service welding controls
 Welding QC,Nonconformance and corrective action,Weld defect reporting and repair authorization
 Welding QC,Nonconformance and corrective action,Repair cycle control and traceability
-Welding QC,Nonconformance and corrective action,Reinspection and NDT after repair
+Welding QC,Nonconformance and corrective action,Weld excavation root or cap repair execution and visual reinspection
 Welding QC,Documentation and turnover,Weld map WPS and welder qualification records
-Welding QC,Documentation and turnover,NDT PWHT and repair records
+Welding QC,Documentation and turnover,Daily welding production reports welder continuity and repair logs
 Welding QC,Documentation and turnover,Welding dossier and punch closure evidence
 Welding QC,Safety and field execution,Hot work permit and fire watch controls
 Welding QC,Safety and field execution,Welding fume ventilation and PPE
