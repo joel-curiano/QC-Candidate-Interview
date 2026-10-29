@@ -94,6 +94,7 @@ else:
         "Select Candidate",
         options=list(options.keys()),
         format_func=lambda x: options[x],
+        key="schedule_selected_candidate",
     )
 
     if selected_id:
@@ -174,6 +175,8 @@ else:
                         "project_assignment": project_assignment,
                     }
                     st.session_state.candidate_schedule_saved_id = candidate["id"]
+                    # Keep the same candidate selected after cached data reloads.
+                    st.session_state.schedule_selected_candidate = candidate["id"]
                     st.rerun()
                 except ValueError as exc:
                     st.error(str(exc))

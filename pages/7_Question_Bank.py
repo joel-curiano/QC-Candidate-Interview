@@ -502,4 +502,3 @@ if user["role"] == "Admin":
                         st.error(str(exc))
 
     _render_question_bank_wipe()
-

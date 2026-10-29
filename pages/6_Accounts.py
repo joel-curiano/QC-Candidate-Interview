@@ -349,4 +349,3 @@ for staff in db.staff_accounts(user["id"]):
                     st.rerun()
                 except ValueError as exc:
                     st.error(str(exc))
-

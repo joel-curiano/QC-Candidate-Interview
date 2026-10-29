@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 from streamlit.testing.v1 import AppTest
 import database as db
@@ -65,6 +67,15 @@ def test_questionnaire_groups_interleaved_question_types(postgres_db):
         question_ids=[q['id'] for q in custom_qs],
         expected_counts={'mcq': 1, 'essay': 2, 'oral_practical': 2},
     )
+    db.record_employment_verification(
+        admin['id'],
+        candidate['id'],
+        'Adverse finding',
+        date.today(),
+        'Issuing organization confirmation',
+        'The issuer confirmed the certificate number was not issued.',
+        'Referred to HR for employment decision.',
+    )
 
     # Verify db.answer_details returns answers grouped by canonical QUESTION_TYPES
     details = db.answer_details(reviewer['id'], sid)
@@ -73,16 +84,45 @@ def test_questionnaire_groups_interleaved_question_types(postgres_db):
 
     # Verify Review Assessments page renders exactly one expander per question type
     db.claim_login(reviewer['id'], 'token-group-test')
+    from shared import clear_read_caches
+    clear_read_caches()
     at = AppTest.from_file(APP, default_timeout=15)
     at.session_state['user'] = reviewer
     at.session_state['login_token'] = 'token-group-test'
     at.run()
     assert not at.exception
+    assert {widget.label for widget in at.selectbox} >= {
+        'Status', 'Discipline', 'Assessment Date'
+    }
+    assert any(widget.label == 'Name' for widget in at.text_input)
+    assert at.radio[0].value == sid
+    assert any('Candidate One' in widget.value for widget in at.subheader)
+    review_headings = [widget.value for widget in at.subheader]
+    assert review_headings.index('Grading summary') < review_headings.index('Employment Verification')
+    assert not any(widget.label == 'Verification status' for widget in at.selectbox)
+    assert any('Adverse finding' in widget.value for widget in at.error)
 
     expander_labels = [exp.label for exp in at.expander]
     assert expander_labels.count('Multiple Choice Questions') == 1
     assert expander_labels.count('Essay Questions') == 1
     assert expander_labels.count('Oral-Practical Questions') == 1
+
+    at.text_input[0].set_value('No matching candidate')
+    at.run()
+    assert not at.radio
+    at.text_input[0].set_value('Candidate One')
+    at.run()
+    assert at.radio[0].value == sid
+
+    db.claim_login(admin['id'], 'token-admin-verification')
+    admin_app = AppTest.from_file(APP, default_timeout=15)
+    admin_app.session_state['user'] = admin
+    admin_app.session_state['login_token'] = 'token-admin-verification'
+    admin_app.run()
+    assert not admin_app.exception
+    assert any(widget.label == 'Verification status' for widget in admin_app.selectbox)
+    admin_headings = [widget.value for widget in admin_app.subheader]
+    assert admin_headings.index('Grading summary') < admin_headings.index('Employment Verification')
 
 
 def test_order_answers_by_question_type_groups_interleaved_rows():
@@ -99,5 +139,3 @@ def test_order_answers_by_question_type_groups_interleaved_rows():
     assert [db.json.loads(r['snapshot'])['q_type'] for r in ordered] == [
         'mcq', 'mcq', 'essay', 'essay', 'oral_practical', 'oral_practical'
     ]
-
-

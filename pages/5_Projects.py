@@ -53,4 +53,3 @@ for p in projects:
             st.rerun()
 
 st.divider()
-

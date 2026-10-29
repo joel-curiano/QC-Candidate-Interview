@@ -230,4 +230,3 @@ if user["role"] == "Admin":
                         st.success(f"Test email sent to {recipient}.")
                     except (EmailDeliveryError, OSError, ValueError) as exc:
                         st.error(str(exc))
-

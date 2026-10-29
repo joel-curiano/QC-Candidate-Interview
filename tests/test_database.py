@@ -44,6 +44,54 @@ def test_candidate_login_requires_scheduled_date(accounts):
     assert db.authenticate('future', PASSWORD) is None
 
 
+def test_adverse_employment_finding_requires_evidence_notes_and_outcome():
+    with pytest.raises(ValueError, match='evidence source'):
+        db.record_employment_verification(
+            1, 2, 'Adverse finding', date.today(),
+        )
+
+
+def test_employment_verification_keeps_auditable_history_and_role_scope(accounts):
+    with pytest.raises(ValueError):
+        db.employment_verification_candidates(accounts['reviewer'])
+    with pytest.raises(ValueError, match='evidence source'):
+        db.record_employment_verification(
+            accounts['admin'], accounts['alice'], 'Adverse finding', date.today(),
+            notes='Document details did not match issuer records.',
+            outcome='Escalated for HR review.',
+        )
+
+    pending_id = db.record_employment_verification(
+        accounts['admin'], accounts['alice'], 'Pending', date.today(),
+        evidence_source='Issuer verification request',
+        notes='Confirmation requested.',
+        outcome='Awaiting response.',
+    )
+    adverse_id = db.record_employment_verification(
+        accounts['admin'], accounts['alice'], 'Adverse finding', date.today(),
+        evidence_source='Issuer confirmation email',
+        notes='The issuer confirmed the certificate number was not issued.',
+        outcome='Referred to HR for employment decision.',
+    )
+    assert adverse_id > pending_id
+
+    sid, _ = attempt(accounts, token='employment-verification-history')
+    history = db.employment_verification_history_for_assessment(accounts['reviewer'], sid)
+    assert [entry['status'] for entry in history] == ['Adverse finding', 'Pending']
+    assert history[0]['recorded_by_name'] == 'Administrator'
+    assert history[0]['evidence_source'] == 'Issuer confirmation email'
+    assert history[0]['outcome'] == 'Referred to HR for employment decision.'
+    with pytest.raises(ValueError, match='employment verification history'):
+        db.delete_user(accounts['admin'], accounts['alice'])
+
+    submission = next(row for row in db.submissions(accounts['reviewer']) if row['id'] == sid)
+    assert db.result(submission) == 'Pending Review'
+
+    candidate_rows = db.employment_verification_candidates(accounts['admin'])
+    alice = next(row for row in candidate_rows if row['id'] == accounts['alice'])
+    assert alice['status'] == 'Adverse finding'
+
+
 def test_verified_login_replaces_orphaned_session_token(accounts):
     user_id = accounts['reviewer']
     assert db.claim_login(user_id, 'first-token')

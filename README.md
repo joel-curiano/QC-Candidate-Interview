@@ -114,11 +114,13 @@ Commit the secrets **example**, but never the real `.streamlit/secrets.toml` fil
 | --- | --- |
 | Candidate | Sign in on the assigned date, choose a discipline, answer the randomized assessment, view own results and feedback |
 | Reviewer | Create and schedule Candidate accounts, send invitations, add questions/disciplines, review submissions, score Essay and Oral-Practical questions, finalize grades, export results CSV |
-| Admin | Reviewer access, create accounts, add questions/disciplines, archive/restore questions |
+| Admin | Reviewer access, create accounts, add questions/disciplines, archive/restore questions, record employment verification |
 
 Starter disciplines: Welding, NDT, Piping, Non-Metallic Piping, Civil, Coating, Electrical, Instrumentation, E&I, Mechanical, Telecom, Pipeline QC, and PQCS. Non-Metallic Piping QC, Coating QC, Telecom QC, E&I QC, and Mechanical QC are available immediately in discipline selectors; add their questions through the Question bank or Excel import before scheduling assessments.
 
 Multiple Choice questions are worth exactly 1 point and receive 1 point or zero. Assessment Settings determines the maximum points for Essay, Oral Test, and Practical Test questions in each new assessment. Final percentage is `(Multiple Choice + reviewer-scored points) / total possible points * 100`; the overall CTA must reach 70% to pass. Pending reviewer-scored submissions have no final result. Question snapshots preserve historical grading. Final grades are immutable, repeated form tokens are idempotent, and concurrent reviewers cannot overwrite a finalized grade.
+
+Employment verification is managed in Review Assessments beneath the grading summary. Admins can append status updates with the verification date, evidence source, review notes, and outcome; each entry records its administrator and remains in the audit history. Reviewers see verification history only for candidates whose assessments they can access. An adverse finding is highlighted separately and never changes the historical CTA grade.
 
 ## Database access model
 

@@ -189,8 +189,13 @@ def cached_submission_status_counts(actor_id: int) -> dict:
 
 
 @st.cache_data(ttl=30, show_spinner=False)
-def cached_submission_page(actor_id: int, status=None, limit=15, offset=0):
-    return db.submission_page(actor_id, status, limit, offset)
+def cached_submission_review_candidates(actor_id: int) -> list:
+    return db.submission_review_candidates(actor_id)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cached_submission_page(actor_id: int, status=None, limit=15, offset=0, submission_id=None):
+    return db.submission_page(actor_id, status, limit, offset, submission_id)
 
 
 @st.cache_data(ttl=20, show_spinner=False)

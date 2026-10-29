@@ -1,0 +1,88 @@
+digraph QCCandidateInterview {
+    graph [
+        label="QC Competency Technical Assessment Portal",
+        labelloc=t,
+        fontsize=20,
+        fontname="Arial",
+        rankdir=TB,
+        nodesep=0.45,
+        ranksep=0.7,
+        bgcolor="white"
+    ];
+
+    node [
+        shape=box,
+        style="rounded,filled",
+        fontname="Arial",
+        fontsize=11,
+        fillcolor="#F8FAFC",
+        color="#475569",
+        margin="0.14,0.08"
+    ];
+
+    edge [color="#64748B", fontname="Arial", fontsize=10, arrowsize=0.75];
+
+    users [label="Users", fillcolor="#E0F2FE"];
+    login [label="Login and confidentiality\nacceptance", fillcolor="#DBEAFE"];
+
+    candidate [label="Candidate", fillcolor="#DCFCE7"];
+    staff [label="Reviewer or Admin", fillcolor="#FEF3C7"];
+
+    choose [label="Choose scheduled\ndiscipline"];
+    assessment [label="Randomized MCQ, essay,\noral and practical assessment"];
+    draft [label="Persist draft and\ntimer state"];
+    submit [label="Submit assessment"];
+    results [label="View results and\nfeedback"];
+
+    create [label="Create candidate and\nreviewer accounts"];
+    schedule [label="Schedule assessment\n(preserves selected candidate after save)"];
+    question_bank [label="Manage disciplines\nand questions"];
+    review [label="Review assessments"];
+    settings [label="Assessment settings"];
+    admin [label="Projects, accounts, maintenance\nand confidentiality register"];
+    grade [label="Score essay, oral and\npractical responses"];
+    export [label="Export CTA Record\nLog Excel"];
+    result_email [label="Email candidate results"];
+
+    app [label="Streamlit application\napp.py and pages/", fillcolor="#EDE9FE"];
+    database [label="Supabase PostgreSQL\nprivate qc_portal schema", shape=cylinder, fillcolor="#FCE7F3"];
+    analysis [label="Assessment analysis", fillcolor="#F3E8FF"];
+    smtp [label="SMTP email service", shape=component, fillcolor="#FFEDD5"];
+
+    users -> login;
+    login -> candidate;
+    login -> staff;
+
+    candidate -> choose;
+    choose -> assessment;
+    assessment -> draft;
+    assessment -> submit;
+    submit -> results;
+
+    staff -> create;
+    staff -> schedule;
+    staff -> question_bank;
+    staff -> review;
+    staff -> settings;
+    staff -> admin;
+    review -> grade;
+    review -> export;
+    review -> result_email;
+
+    app -> database;
+    assessment -> database [label="drafts and submissions"];
+    submit -> database;
+    grade -> database;
+    create -> database;
+    schedule -> database;
+    question_bank -> database;
+    settings -> database;
+    admin -> database;
+
+    app -> analysis;
+    analysis -> database [label="stored reports"];
+
+    create -> smtp [label="staff credentials"];
+    schedule -> smtp [label="candidate invitation"];
+    result_email -> smtp [label="result delivery"];
+}

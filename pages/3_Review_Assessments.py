@@ -1,6 +1,7 @@
 """Review Assessments page - grading, result download, and result emailing."""
 import io
 import json
+from datetime import date
 
 import streamlit as st
 
@@ -14,6 +15,7 @@ from shared import (
     require_login,
     sidebar_nav,
     cached_questions,
+    cached_submission_review_candidates,
     cached_submission_page,
     cached_submission_status_counts,
     clear_read_caches,
@@ -33,6 +35,7 @@ if user["role"] not in ("Admin", "Reviewer"):
     st.error("Access denied.")
     st.stop()
 
+db.ensure_employment_verification_schema()
 sidebar_nav(user)
 render_logo()
 st.title("Competency Technical Assessment (CTA) Portal")
@@ -101,28 +104,6 @@ if saved_drafts:
                         else:
                             st.caption(f"Saved answer: {answer if str(answer).strip() else 'No answer saved'}")
 
-status = st.selectbox(
-    "Status",
-    ["All", "Pending Review", "Graded"],
-    index=1,
-    key="assessment_review_status",
-)
-if st.session_state.get("assessment_review_filter") != status:
-    st.session_state.assessment_review_filter = status
-    st.session_state.ar_page = 1
-
-page_size = 15
-selected_status = None if status == "All" else status
-total_rows = (
-    status_counts.get(selected_status, 0)
-    if selected_status
-    else sum(status_counts.values())
-)
-
-if not total_rows:
-    st.info("No assessments match this view.")
-    st.stop()
-
 st.markdown(
     """<style>
     [data-testid="stExpander"] details summary p { font-size: 1rem; }
@@ -134,43 +115,91 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Paginate summary list in the database.
-total_pages = max(1, (total_rows + page_size - 1) // page_size)
-st.session_state.ar_page = min(st.session_state.get("ar_page", 1), total_pages)
-if total_pages > 1:
-    p_col1, p_col2 = st.columns([1, 3])
-    with p_col1:
-        page_num = st.number_input(
-            "Page", min_value=1, max_value=total_pages, value=1, step=1, key="ar_page"
-        )
-    with p_col2:
-        st.caption(
-            f"Showing submissions {(page_num - 1) * page_size + 1} "
-            f"to {min(page_num * page_size, total_rows)} of {total_rows}"
-        )
-else:
-    page_num = 1
-
-_, rows = cached_submission_page(
-    user["id"], selected_status, page_size, (page_num - 1) * page_size
+submissions = cached_submission_review_candidates(user["id"])
+disciplines = sorted({str(row.get("discipline") or "") for row in submissions if row.get("discipline")})
+assessment_dates = sorted(
+    {str(row.get("exam_date") or "")[:10] for row in submissions if row.get("exam_date")},
+    reverse=True,
 )
-page_table = result_table(rows)
 
-for result_row in page_table:
-    summary = f"{result_row['Candidate']} · {result_row['Discipline']} · {result_row['Status']}"
-    with st.expander(summary, expanded=False):
-        for label, value in result_row.items():
-            st.markdown(f"**{label}:** {value if value != '' else chr(8212)}")
+st.markdown("#### Find an assessment")
+filter_status, filter_discipline, filter_name, filter_date = st.columns([1, 1.3, 1.5, 1.2])
+with filter_status:
+    status = st.selectbox(
+        "Status",
+        ["All", "Pending Review", "Graded"],
+        index=1,
+        key="assessment_review_status",
+    )
+with filter_discipline:
+    discipline = st.selectbox("Discipline", ["All disciplines", *disciplines])
+with filter_name:
+    candidate_name_filter = st.text_input("Name", placeholder="Search candidate name")
+with filter_date:
+    assessment_date = st.selectbox("Assessment Date", ["All dates", *assessment_dates])
 
-# Assessment selector and detail grading panel.
-sid = st.selectbox(
-    "Assessment",
-    [r["id"] for r in rows],
-    format_func=lambda v: next(
-        f"#{r['id']} · {r['candidate_name']} · {r['discipline']}" for r in rows if r["id"] == v
-    ),
+search_name = candidate_name_filter.strip().casefold()
+filtered_rows = [
+    row for row in submissions
+    if (status == "All" or row.get("status") == status)
+    and (discipline == "All disciplines" or row.get("discipline") == discipline)
+    and (not search_name or search_name in str(row.get("candidate_name") or "").casefold())
+    and (
+        assessment_date == "All dates"
+        or str(row.get("exam_date") or "")[:10] == assessment_date
+    )
+]
+
+st.caption(f"{len(filtered_rows)} assessment{'s' if len(filtered_rows) != 1 else ''} found")
+if not filtered_rows:
+    st.session_state.pop("assessment_candidate_selection", None)
+    st.info("No assessments match these filters. Adjust or clear a filter to see more candidates.")
+    st.stop()
+
+candidate_labels = {}
+label_counts = {}
+for row in filtered_rows:
+    label = f"{row.get('candidate_name') or 'Unknown candidate'} · {row.get('discipline') or 'No discipline'}"
+    label_counts[label] = label_counts.get(label, 0) + 1
+    candidate_labels[row["id"]] = label
+for row in filtered_rows:
+    label = candidate_labels[row["id"]]
+    if label_counts[label] > 1:
+        candidate_labels[row["id"]] = (
+            f"{label} · {str(row.get('exam_date') or '')[:10]} · Assessment #{row['id']}"
+        )
+
+st.markdown("#### Select candidate")
+with st.container(height=265, border=True):
+    sid = st.radio(
+        "Candidate · Discipline",
+        [row["id"] for row in filtered_rows],
+        format_func=lambda submission_id: candidate_labels[submission_id],
+        key="assessment_candidate_selection",
+    )
+
+_, selected_rows = cached_submission_page(user["id"], limit=1, submission_id=sid)
+if not selected_rows:
+    st.error("This assessment is no longer available. Refresh the page and select it again.")
+    st.stop()
+sub = selected_rows[0]
+st.divider()
+candidate_heading, status_heading = st.columns([3, 1])
+with candidate_heading:
+    st.subheader(sub.get("candidate_name") or "Unknown candidate")
+    st.caption(sub.get("discipline") or "No discipline")
+with status_heading:
+    st.metric("Review status", sub["status"])
+
+detail_columns = st.columns(4)
+detail_columns[0].markdown(f"**Assessment date**  \n{format_result_datetime(sub.get('exam_date')) or '—'}")
+detail_columns[1].markdown(f"**Job title**  \n{sub.get('designation') or '—'}")
+detail_columns[2].markdown(f"**Employee number**  \n{sub.get('employee_no') or '—'}")
+detail_columns[3].markdown(
+    f"**Graded**  \n{format_result_datetime(sub.get('graded_at')) or 'Not graded'}"
 )
-sub = next(r for r in rows if r["id"] == sid)
+if sub.get("reviewer_comments"):
+    st.markdown(f"**Reviewer feedback**  \n{sub['reviewer_comments']}")
 
 
 @st.cache_data(show_spinner=False)
@@ -363,22 +392,6 @@ except (ImportError, OSError, ValueError) as exc:
         f"Unable to create the candidate result PDF. Install the reportlab package and retry. Details: {exc}"
     )
 
-# Automated Candidate Analysis
-with st.expander("Automated Candidate Analysis", expanded=(sub["status"] == "Graded")):
-    assessment_analysis.render_assessment_analysis(analysis, allow_feedback_copy=True, for_candidate=False)
-
-if sub["status"] != "Graded":
-    if st.button("Apply Auto-Analysis Summary to Reviewer Feedback", key=f"apply_auto_fb_{sid}"):
-        st.session_state[f"review_comments_{sid}"] = analysis.get("reviewer_feedback_snippet", "")
-        st.rerun()
-
-comments = st.text_area(
-    "Additional Reviewer Feedback",
-    value=st.session_state.get(f"review_comments_{sid}", sub["reviewer_comments"] or ""),
-    key=f"review_comments_{sid}", disabled=sub["status"] == "Graded",
-    help="Add your observations and recommendations. This feedback is saved when you finalize the grade.",
-)
-
 # Grading panel.
 questionnaire = st.expander("Questionnaire", expanded=False)
 questionnaire.__enter__()
@@ -457,34 +470,52 @@ with st.form(f"grading_{sid}"):
     if question_section is not None:
         question_section.__exit__(None, None, None)
 
-    if st.form_submit_button(
+    finalize_grade = st.form_submit_button(
         "Finalize grade", disabled=sub["status"] == "Graded", type="primary"
-    ):
-        unanswered_oral_numbers = [
-            ("Oral-Practical", number, "observed response")
-            for answer_id, number in oral_practical_numbers.items()
-            if not str(observed_responses.get(answer_id, "")).strip()
-        ]
-        ungraded_numbers = [
-            (kind, number, "score")
-            for answer_id, (kind, number) in scored_question_numbers.items()
-            if scores.get(answer_id) is None
-        ]
-        pending_items = unanswered_oral_numbers + ungraded_numbers
-        if pending_items:
-            st.session_state[f"pending_review_blanks_{sid}"] = pending_items
-            st.rerun()
-        else:
-            try:
-                db.grade(user["id"], sid, scores, comments, observed_responses)
-                clear_read_caches()
-                st.session_state.assessment_finalized = {"candidate_name": sub["candidate_name"]}
-                st.session_state.show_finalized_assessment = True
-                st.rerun()
-            except ValueError as exc:
-                st.error(str(exc))
+    )
 
 questionnaire.__exit__(None, None, None)
+
+# Automated Candidate Analysis
+with st.expander("Automated Candidate Analysis", expanded=(sub["status"] == "Graded")):
+    assessment_analysis.render_assessment_analysis(analysis, allow_feedback_copy=True, for_candidate=False)
+
+if sub["status"] != "Graded":
+    if st.button("Apply Auto-Analysis Summary to Reviewer Feedback", key=f"apply_auto_fb_{sid}"):
+        st.session_state[f"review_comments_{sid}"] = analysis.get("reviewer_feedback_snippet", "")
+        st.rerun()
+
+comments = st.text_area(
+    "Additional Reviewer Feedback",
+    value=st.session_state.get(f"review_comments_{sid}", sub["reviewer_comments"] or ""),
+    key=f"review_comments_{sid}", disabled=sub["status"] == "Graded",
+    help="Add your observations and recommendations. This feedback is saved when you finalize the grade.",
+)
+
+if finalize_grade:
+    unanswered_oral_numbers = [
+        ("Oral-Practical", number, "observed response")
+        for answer_id, number in oral_practical_numbers.items()
+        if not str(observed_responses.get(answer_id, "")).strip()
+    ]
+    ungraded_numbers = [
+        (kind, number, "score")
+        for answer_id, (kind, number) in scored_question_numbers.items()
+        if scores.get(answer_id) is None
+    ]
+    pending_items = unanswered_oral_numbers + ungraded_numbers
+    if pending_items:
+        st.session_state[f"pending_review_blanks_{sid}"] = pending_items
+        st.rerun()
+    else:
+        try:
+            db.grade(user["id"], sid, scores, comments, observed_responses)
+            clear_read_caches()
+            st.session_state.assessment_finalized = {"candidate_name": sub["candidate_name"]}
+            st.session_state.show_finalized_assessment = True
+            st.rerun()
+        except ValueError as exc:
+            st.error(str(exc))
 
 pending_review_blanks = st.session_state.get(f"pending_review_blanks_{sid}")
 if pending_review_blanks:
@@ -529,3 +560,85 @@ if sub["status"] == "Graded":
     with st.expander("Final Result", expanded=True):
         final_grade = db.result(sub)
         (st.success if final_grade.startswith("PASS") else st.error)(f"Final Grade: {final_grade}")
+
+st.subheader("Grading summary")
+summary = result_table([sub])[0]
+st.table([{"Assessment detail": label, "Result": value or "—"} for label, value in summary.items()])
+
+verification_history = db.employment_verification_history_for_assessment(user["id"], sid)
+st.subheader("Employment Verification")
+st.caption("Employment verification is recorded separately and does not change the CTA result.")
+
+if st.session_state.pop("employment_verification_saved", False):
+    st.success("Employment verification update recorded.")
+
+latest_verification = verification_history[0] if verification_history else {}
+if user["role"] == "Admin" and sub.get("user_id") is not None:
+    statuses = list(db.EMPLOYMENT_VERIFICATION_STATUSES)
+    with st.form(f"employment_verification_{sid}"):
+        verification_status = st.selectbox(
+            "Verification status",
+            statuses,
+            index=(
+                statuses.index(latest_verification["status"])
+                if latest_verification.get("status") in statuses else 0
+            ),
+        )
+        verification_date = st.date_input(
+            "Verification or finding date",
+            value=latest_verification.get("verification_date") or date.today(),
+        )
+        evidence_source = st.text_input(
+            "Evidence source",
+            value=latest_verification.get("evidence_source") or "",
+            max_chars=1000,
+            help="For example, issuing organization confirmation or a documented verification response.",
+        )
+        verification_notes = st.text_area(
+            "Review notes",
+            value=latest_verification.get("notes") or "",
+            max_chars=5000,
+            help="Record factual observations and the basis for the verification status.",
+        )
+        verification_outcome = st.text_area(
+            "Outcome or follow-up",
+            value=latest_verification.get("outcome") or "",
+            max_chars=2000,
+            help="Record the verification outcome or next action, not an assessment grade.",
+        )
+        save_verification = st.form_submit_button("Record update", type="primary")
+
+    if save_verification:
+        try:
+            db.record_employment_verification(
+                user["id"],
+                sub["user_id"],
+                verification_status,
+                verification_date,
+                evidence_source,
+                verification_notes,
+                verification_outcome,
+            )
+            st.session_state.employment_verification_saved = True
+            st.rerun()
+        except ValueError as exc:
+            st.error(str(exc))
+elif user["role"] == "Admin":
+    st.info("Verification updates are unavailable because this assessment has no linked candidate account.")
+
+if not verification_history:
+    st.info("No employment verification updates recorded.")
+else:
+    for verification in verification_history:
+        details = (
+            f"**Verification date:** {format_result_datetime(verification['verification_date']) or '—'}\n\n"
+            f"**Evidence source:** {verification['evidence_source'] or '—'}\n\n"
+            f"**Review notes:** {verification['notes'] or '—'}\n\n"
+            f"**Outcome or follow-up:** {verification['outcome'] or '—'}\n\n"
+            f"**Recorded by:** {verification['recorded_by_name']} · "
+            f"{format_result_datetime(verification['created_at'])}"
+        )
+        if verification["status"] == "Adverse finding":
+            st.error(f"**Adverse finding**\n\n{details}")
+        else:
+            st.info(f"**{verification['status']}**\n\n{details}")

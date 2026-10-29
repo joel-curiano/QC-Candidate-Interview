@@ -44,4 +44,3 @@ with st.form("maintenance_mode"):
             "Maintenance mode enabled." if enable_maintenance else "Maintenance mode disabled."
         )
         st.rerun()
-
