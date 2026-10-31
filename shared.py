@@ -221,6 +221,7 @@ def clear_read_caches() -> None:
     cached_candidate_accounts.clear()
     cached_submissions.clear()
     cached_submission_status_counts.clear()
+    cached_submission_review_candidates.clear()
     cached_submission_page.clear()
     cached_maintenance_mode.clear()
 

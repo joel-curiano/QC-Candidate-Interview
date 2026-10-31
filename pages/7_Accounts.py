@@ -35,6 +35,8 @@ st.title("Competency Technical Assessment (CTA) Portal")
 st.subheader("Accounts")
 if retest_message := st.session_state.pop('candidate_retest_issued', None):
     st.success(retest_message)
+if deleted_candidate := st.session_state.pop('candidate_account_deleted', None):
+    st.success(f"Candidate account deleted: {deleted_candidate}.")
 
 projects = cached_projects(user["id"])
 
@@ -142,6 +144,29 @@ with st.expander("Manage Candidate Accounts"):
                         st.rerun()
                     except ValueError as exc:
                         st.error(str(exc))
+
+        st.subheader('Delete Candidate Account')
+        st.warning(
+            'This permanently deletes the candidate account, submitted assessments and answers, '
+            'and any saved assessment draft. Accounts with employment verification history cannot be deleted.'
+        )
+        confirmed = st.checkbox(
+            f"I understand that deleting {candidate['name']}'s account and assessment data is permanent.",
+            key=f"confirm_delete_candidate_{selected_id}",
+        )
+        if st.button(
+            'Delete Candidate Account',
+            key=f"delete_candidate_{selected_id}",
+            type='primary',
+            disabled=not confirmed,
+        ):
+            try:
+                db.delete_user(user["id"], selected_id)
+                clear_read_caches()
+                st.session_state.candidate_account_deleted = candidate["name"]
+                st.rerun()
+            except ValueError as exc:
+                st.error(str(exc))
 
 st.divider()
 

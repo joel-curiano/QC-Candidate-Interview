@@ -35,9 +35,13 @@ digraph QCCandidateInterview {
     results [label="View results and\nfeedback"];
 
     create [label="Create candidate and\nreviewer accounts"];
+    delete_candidate [label="Delete candidate account\nand assessment data"];
     schedule [label="Schedule assessment\n(preserves selected candidate after save)"];
     question_bank [label="Manage disciplines\nand questions"];
-    review [label="Review assessments"];
+    review [label="Review assessments\n(project and discipline filters)"];
+    assessment_project [label="Reassign one assessment\nto a project"];
+    analytics [label="Assessment analytics\n(total and filterable per-project results)", fillcolor="#F3E8FF"];
+    analytics_export [label="Export analytics PDF\n(per-candidate grading summaries)"];
     settings [label="Assessment settings"];
     admin [label="Projects, accounts, maintenance\nand confidentiality register"];
     grade [label="Score essay, oral and\npractical responses"];
@@ -63,9 +67,14 @@ digraph QCCandidateInterview {
     staff -> schedule;
     staff -> question_bank;
     staff -> review;
+    staff -> analytics;
+    analytics -> analytics_export;
     staff -> settings;
+    analytics -> settings [label="next sidebar item", style=dashed, constraint=false];
     staff -> admin;
+    admin -> delete_candidate;
     review -> grade;
+    review -> assessment_project;
     review -> export;
     review -> result_email;
 
@@ -73,7 +82,9 @@ digraph QCCandidateInterview {
     assessment -> database [label="drafts and submissions"];
     submit -> database;
     grade -> database;
+    assessment_project -> database [label="per-assessment project attribution"];
     create -> database;
+    delete_candidate -> database [label="account, submissions and draft"];
     schedule -> database;
     question_bank -> database;
     settings -> database;
@@ -81,6 +92,8 @@ digraph QCCandidateInterview {
 
     app -> analysis;
     analysis -> database [label="stored reports"];
+    app -> analytics;
+    analytics -> database [label="visible submissions and grades"];
 
     create -> smtp [label="staff credentials"];
     schedule -> smtp [label="candidate invitation"];

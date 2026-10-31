@@ -92,7 +92,7 @@ def test_questionnaire_groups_interleaved_question_types(postgres_db):
     at.run()
     assert not at.exception
     assert {widget.label for widget in at.selectbox} >= {
-        'Status', 'Discipline', 'Assessment Date'
+        'Status', 'Project', 'Discipline', 'Assessment Date', 'Assessment project'
     }
     assert any(widget.label == 'Name' for widget in at.text_input)
     assert at.radio[0].value == sid

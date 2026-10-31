@@ -43,7 +43,7 @@ STARTER_DISCIPLINES = (
     'Mechanical QC', 'NDT QC', 'Non-Metallic Piping QC', 'Piping QC', 'Welding QC',
     'Pipeline QC', 'PQCS',
 )
-RUNTIME_SCHEMA_VERSION = '10'
+RUNTIME_SCHEMA_VERSION = '11'
 
 
 
@@ -228,6 +228,15 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_disciplines TEXT[] NOT NULL DEFAULT ARRAY['All Disciplines']::TEXT[]")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS analysis_reports JSONB NOT NULL DEFAULT '{}'::jsonb")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS confidentiality_acceptance_id BIGINT REFERENCES confidentiality_acceptances(id)")
+        c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS project_assignment TEXT NOT NULL DEFAULT ''")
+        c.execute("""
+            UPDATE submissions AS s
+            SET project_assignment = u.project_assignment
+            FROM users AS u
+            WHERE u.id = s.user_id
+              AND BTRIM(s.project_assignment) = ''
+              AND BTRIM(u.project_assignment) <> ''
+        """)
         c.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS candidate_role TEXT NOT NULL DEFAULT 'Inspector'")
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS candidate_role TEXT NOT NULL DEFAULT ''")
         c.execute("UPDATE users SET candidate_role='' WHERE role IN ('Admin', 'Reviewer') AND candidate_role<>''")
@@ -260,7 +269,6 @@ def init_db():
             c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS employee_no")
             c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS exam_date")
             c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS project_location")
-            c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS project_assignment")
             c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS discipline")
             c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS mcq_score")
             c.execute("ALTER TABLE submissions DROP COLUMN IF EXISTS essay_score")
@@ -319,6 +327,7 @@ def init_db():
                 civil_questions,
             )
         c.execute("CREATE INDEX IF NOT EXISTS submissions_user_status_id_idx ON submissions(user_id, status, id DESC)")
+        c.execute("CREATE INDEX IF NOT EXISTS submissions_project_idx ON submissions(project_assignment)")
         c.execute("CREATE INDEX IF NOT EXISTS users_role_project_discipline_idx ON users(role, project_assignment, scheduled_discipline)")
         c.execute(
             "INSERT INTO schema_info (key, value) VALUES ('runtime_schema_version', %s) "
@@ -706,6 +715,50 @@ def update_candidate_schedule(actor, candidate_id, test_date, project_assignment
         c.execute("UPDATE users SET test_date=%s, project_assignment=%s, scheduled_discipline=%s, previous_schedules=%s::jsonb, invitation_sent_at=NULL WHERE id=%s AND role='Candidate'",
                   (test_date, str(project_assignment).strip(), str(scheduled_discipline).strip(), json.dumps(history), candidate_id))
 
+
+def update_assessment_project(actor, submission_id, project_assignment):
+    """Move one completed assessment without changing the candidate's schedule."""
+    project_assignment = str(project_assignment or '').strip() or 'Unassigned'
+    with connection() as c:
+        user = require(c, actor, ('Admin', 'Reviewer'))
+        assigned_projects = user.get('assigned_projects') or []
+        assigned_disciplines = user.get('assigned_disciplines') or ['All Disciplines']
+        visible = c.execute("""
+            SELECT s.id
+            FROM submissions s
+            LEFT JOIN users u ON u.id=s.user_id
+            WHERE s.id=%s AND (
+                %s='Admin'
+                OR (%s='Reviewer' AND (
+                    COALESCE(NULLIF(BTRIM(s.project_assignment), ''), NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')='Unassigned'
+                    OR ((cardinality(%s::text[])=0 OR COALESCE(NULLIF(BTRIM(s.project_assignment), ''), NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')=ANY(%s::text[]))
+                        AND ('All Disciplines'=ANY(%s::text[])
+                             OR COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline)=ANY(%s::text[])))
+                ))
+            )
+        """, (
+            submission_id, user['role'], user['role'], assigned_projects,
+            assigned_projects, assigned_disciplines, assigned_disciplines,
+        )).fetchone()
+        if not visible:
+            raise ValueError('Assessment not found or unavailable.')
+        if project_assignment != 'Unassigned':
+            project = c.execute(
+                'SELECT name FROM projects WHERE name=%s', (project_assignment,)
+            ).fetchone()
+            if not project:
+                raise ValueError('Select a valid project assignment.')
+            if (
+                user['role'] == 'Reviewer'
+                and assigned_projects
+                and project_assignment not in assigned_projects
+            ):
+                raise ValueError('You can only assign assessments to your assigned projects.')
+        c.execute(
+            'UPDATE submissions SET project_assignment=%s WHERE id=%s',
+            (project_assignment, submission_id),
+        )
+
 def remove_candidate_schedule(actor, candidate_id):
     """Remove an upcoming schedule without deleting the Candidate account."""
     with connection() as c:
@@ -1087,15 +1140,15 @@ def submit(actor, discipline, responses, token, candidate_details=None, question
         if not candidate_name:
             raise ValueError('Candidate name is required.')
         status = 'Pending Review' if any(q['q_type'] in REVIEWER_SCORED_TYPES for q in qs) else 'Graded'
-        project_assignment = str(details.get('project_assignment', '')).strip()
+        project_assignment = str(user.get('project_assignment') or '').strip()
         max_points = sum(1 if q['q_type'] == 'mcq' else min(q['max_points'], 10) for q in qs)
         maxima = {kind: sum(1 if q['q_type'] == 'mcq' else min(q['max_points'], 10) for q in qs if q['q_type'] == kind) for kind in QUESTION_TYPES}
         
         acc = c.execute("SELECT id FROM confidentiality_acceptances WHERE user_id = %s", (actor,)).fetchone()
         acc_id = acc['id'] if acc else None
         
-        sid = c.execute("INSERT INTO submissions(designation,max_possible_points,mcq_max,essay_max,oral_practical_max,status,user_id,token,created_at,confidentiality_acceptance_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP,%s) RETURNING id",
-                        (str(details.get('designation', '')).strip(), max_points, maxima['mcq'], maxima['essay'], maxima['oral_practical'], status, actor, token, acc_id)).fetchone()['id']
+        sid = c.execute("INSERT INTO submissions(designation,max_possible_points,mcq_max,essay_max,oral_practical_max,status,user_id,token,created_at,confidentiality_acceptance_id,project_assignment) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP,%s,%s) RETURNING id",
+                        (str(details.get('designation', '')).strip(), max_points, maxima['mcq'], maxima['essay'], maxima['oral_practical'], status, actor, token, acc_id, project_assignment)).fetchone()['id']
         answer_rows = []
         for q in qs:
             score = q['max_points'] if q['q_type'] == 'mcq' and responses[q['id']] == q['correct_answer'] else 0
@@ -1275,7 +1328,8 @@ def submissions(actor):
         return [dict(r) for r in c.execute("""
             SELECT s.*, u.name AS candidate_name, u.email, u.username, u.iqama_no, u.employee_no,
                    COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline) AS discipline,
-                   u.project_assignment, u.test_date AS scheduled_test_date,
+                   COALESCE(NULLIF(BTRIM(s.project_assignment), ''), NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned') AS project_assignment,
+                   u.test_date AS scheduled_test_date,
                    (s.created_at AT TIME ZONE 'Asia/Riyadh')::date AS exam_date,
                    calculated.mcq_score AS calculated_mcq_score,
                    calculated.essay_score AS calculated_essay_score,
@@ -1300,8 +1354,8 @@ def submissions(actor):
             ) calculated ON TRUE
             WHERE s.user_id=%s OR %s = 'Admin'
                OR (%s = 'Reviewer' AND (
-                    COALESCE(NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned') = 'Unassigned'
-                    OR ((cardinality(%s::text[]) = 0 OR u.project_assignment = ANY(%s::text[]))
+                    COALESCE(NULLIF(BTRIM(s.project_assignment), ''), NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned') = 'Unassigned'
+                    OR ((cardinality(%s::text[]) = 0 OR COALESCE(NULLIF(BTRIM(s.project_assignment), ''), NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned') = ANY(%s::text[]))
                         AND ('All Disciplines' = ANY(%s::text[])
                              OR COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline) = ANY(%s::text[])))
                ))
@@ -1322,8 +1376,8 @@ def submission_status_counts(actor):
             LEFT JOIN users u ON u.id=s.user_id
             WHERE s.user_id=%s OR %s='Admin'
                OR (%s='Reviewer' AND (
-                    COALESCE(NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')='Unassigned'
-                    OR ((cardinality(%s::text[])=0 OR u.project_assignment=ANY(%s::text[]))
+                    COALESCE(NULLIF(BTRIM(s.project_assignment), ''), NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')='Unassigned'
+                    OR ((cardinality(%s::text[])=0 OR COALESCE(NULLIF(BTRIM(s.project_assignment), ''), NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')=ANY(%s::text[]))
                         AND ('All Disciplines'=ANY(%s::text[])
                              OR COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline)=ANY(%s::text[])))
                ))
@@ -1341,14 +1395,15 @@ def submission_review_candidates(actor):
         assigned_disciplines = user.get('assigned_disciplines') or ['All Disciplines']
         return [dict(row) for row in c.execute("""
             SELECT s.id, s.status, u.name AS candidate_name,
+                   COALESCE(NULLIF(BTRIM(s.project_assignment), ''), NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned') AS project_assignment,
                    COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline) AS discipline,
                    (s.created_at AT TIME ZONE 'Asia/Riyadh')::date AS exam_date
             FROM submissions s
             LEFT JOIN users u ON u.id=s.user_id
             WHERE s.user_id=%s OR %s='Admin'
                OR (%s='Reviewer' AND (
-                    COALESCE(NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')='Unassigned'
-                    OR ((cardinality(%s::text[])=0 OR u.project_assignment=ANY(%s::text[]))
+                    COALESCE(NULLIF(BTRIM(s.project_assignment), ''), NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')='Unassigned'
+                    OR ((cardinality(%s::text[])=0 OR COALESCE(NULLIF(BTRIM(s.project_assignment), ''), NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')=ANY(%s::text[]))
                         AND ('All Disciplines'=ANY(%s::text[])
                              OR COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline)=ANY(%s::text[])))
                ))
@@ -1462,8 +1517,8 @@ def employment_verification_history_for_assessment(actor, submission_id):
             WHERE s.id=%s AND (
                 %s='Admin' OR (
                     %s='Reviewer' AND (
-                        COALESCE(NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')='Unassigned'
-                        OR ((cardinality(%s::text[])=0 OR u.project_assignment=ANY(%s::text[]))
+                        COALESCE(NULLIF(BTRIM(s.project_assignment), ''), NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')='Unassigned'
+                        OR ((cardinality(%s::text[])=0 OR COALESCE(NULLIF(BTRIM(s.project_assignment), ''), NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')=ANY(%s::text[]))
                             AND ('All Disciplines'=ANY(%s::text[])
                                  OR COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline)=ANY(%s::text[])))
                     )
@@ -1514,8 +1569,8 @@ def submission_page(actor, status=None, limit=15, offset=0, submission_id=None):
         visibility_sql = """
             (s.user_id=%s OR %s='Admin'
              OR (%s='Reviewer' AND (
-                  COALESCE(NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')='Unassigned'
-                  OR ((cardinality(%s::text[])=0 OR u.project_assignment=ANY(%s::text[]))
+                  COALESCE(NULLIF(BTRIM(s.project_assignment), ''), NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')='Unassigned'
+                  OR ((cardinality(%s::text[])=0 OR COALESCE(NULLIF(BTRIM(s.project_assignment), ''), NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned')=ANY(%s::text[]))
                       AND ('All Disciplines'=ANY(%s::text[])
                            OR COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline)=ANY(%s::text[])))
              )))
@@ -1529,7 +1584,8 @@ def submission_page(actor, status=None, limit=15, offset=0, submission_id=None):
         rows = c.execute(f'''
             SELECT s.*, u.name AS candidate_name, u.email, u.username, u.iqama_no, u.employee_no,
                    COALESCE(NULLIF(u.scheduled_discipline, ''), u.discipline) AS discipline,
-                   u.project_assignment, u.test_date AS scheduled_test_date,
+                   COALESCE(NULLIF(BTRIM(s.project_assignment), ''), NULLIF(BTRIM(u.project_assignment), ''), 'Unassigned') AS project_assignment,
+                   u.test_date AS scheduled_test_date,
                    (s.created_at AT TIME ZONE 'Asia/Riyadh')::date AS exam_date,
                    calculated.mcq_score AS calculated_mcq_score,
                    calculated.essay_score AS calculated_essay_score,

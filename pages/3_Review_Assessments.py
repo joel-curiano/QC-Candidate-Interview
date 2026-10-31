@@ -15,6 +15,7 @@ from shared import (
     require_login,
     sidebar_nav,
     cached_questions,
+    cached_projects,
     cached_submission_review_candidates,
     cached_submission_page,
     cached_submission_status_counts,
@@ -117,13 +118,20 @@ st.markdown(
 
 submissions = cached_submission_review_candidates(user["id"])
 disciplines = sorted({str(row.get("discipline") or "") for row in submissions if row.get("discipline")})
+projects = sorted(
+    {
+        str(row.get("project_assignment") or "").strip() or "Unassigned"
+        for row in submissions
+    },
+    key=str.casefold,
+)
 assessment_dates = sorted(
     {str(row.get("exam_date") or "")[:10] for row in submissions if row.get("exam_date")},
     reverse=True,
 )
 
 st.markdown("#### Find an assessment")
-filter_status, filter_discipline, filter_name, filter_date = st.columns([1, 1.3, 1.5, 1.2])
+filter_status, filter_name, filter_date = st.columns([1, 1.5, 1.2])
 with filter_status:
     status = st.selectbox(
         "Status",
@@ -131,17 +139,25 @@ with filter_status:
         index=1,
         key="assessment_review_status",
     )
-with filter_discipline:
-    discipline = st.selectbox("Discipline", ["All disciplines", *disciplines])
 with filter_name:
     candidate_name_filter = st.text_input("Name", placeholder="Search candidate name")
 with filter_date:
     assessment_date = st.selectbox("Assessment Date", ["All dates", *assessment_dates])
 
+filter_project, filter_discipline, _ = st.columns([1, 1.3, 1.4])
+with filter_project:
+    project = st.selectbox("Project", ["All projects", *projects])
+with filter_discipline:
+    discipline = st.selectbox("Discipline", ["All disciplines", *disciplines])
+
 search_name = candidate_name_filter.strip().casefold()
 filtered_rows = [
     row for row in submissions
     if (status == "All" or row.get("status") == status)
+    and (
+        project == "All projects"
+        or (str(row.get("project_assignment") or "").strip() or "Unassigned") == project
+    )
     and (discipline == "All disciplines" or row.get("discipline") == discipline)
     and (not search_name or search_name in str(row.get("candidate_name") or "").casefold())
     and (
@@ -190,6 +206,35 @@ with candidate_heading:
     st.caption(sub.get("discipline") or "No discipline")
 with status_heading:
     st.metric("Review status", sub["status"])
+
+project_options = ["Unassigned", *[p for p in cached_projects(user["id"]) if p != "Unassigned"]]
+current_project = str(sub.get("project_assignment") or "").strip() or "Unassigned"
+if current_project not in project_options:
+    project_options.append(current_project)
+project_col, project_action_col = st.columns([3, 1])
+with project_col:
+    selected_project = st.selectbox(
+        "Assessment project",
+        project_options,
+        index=project_options.index(current_project),
+        key=f"assessment_project_{sub['id']}",
+        help="This changes only the selected assessment, not the candidate's schedule.",
+    )
+with project_action_col:
+    st.write("")
+    st.write("")
+    save_project = st.button("Save project", key=f"save_assessment_project_{sub['id']}")
+if save_project:
+    try:
+        db.update_assessment_project(
+            user["id"], sub["id"], selected_project,
+        )
+        clear_read_caches()
+        st.session_state.assessment_candidate_selection = sub["id"]
+        st.success("Assessment project updated.")
+        st.rerun()
+    except ValueError as exc:
+        st.error(str(exc))
 
 detail_columns = st.columns(4)
 detail_columns[0].markdown(f"**Assessment date**  \n{format_result_datetime(sub.get('exam_date')) or '—'}")

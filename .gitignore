@@ -18,6 +18,7 @@ local-presentations/
 .agents/
 permissions.md
 .cache/
+tmp/
 pytest-cache-files-*/
 .coverage
 .coverage.*
@@ -28,6 +29,7 @@ pytest-cache-files-*/
 # Question files and folders
 *question*
 *Question*
+!pages/8_Question_Bank.py
 qc-question-template*.xlsx
 qc-question-template*.xlsx.inspect.ndjson
 

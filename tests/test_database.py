@@ -44,6 +44,21 @@ def test_candidate_login_requires_scheduled_date(accounts):
     assert db.authenticate('future', PASSWORD) is None
 
 
+def test_admin_can_delete_candidate_account_and_assessment_data(accounts):
+    sid, _ = attempt(accounts, token='candidate-account-deletion')
+    db.save_assessment_draft(accounts['alice'], {'assessment_phase': 'mcq'})
+
+    db.delete_user(accounts['admin'], accounts['alice'])
+
+    with db.connection() as c:
+        assert c.execute('SELECT id FROM users WHERE id=%s', (accounts['alice'],)).fetchone() is None
+        assert c.execute('SELECT id FROM submissions WHERE id=%s', (sid,)).fetchone() is None
+        assert c.execute('SELECT id FROM answers WHERE submission_id=%s', (sid,)).fetchall() == []
+        assert c.execute(
+            'SELECT user_id FROM assessment_drafts WHERE user_id=%s', (accounts['alice'],)
+        ).fetchone() is None
+
+
 def test_adverse_employment_finding_requires_evidence_notes_and_outcome():
     with pytest.raises(ValueError, match='evidence source'):
         db.record_employment_verification(
@@ -218,6 +233,46 @@ def test_reviewer_can_see_legacy_unassigned_candidate(accounts):
         )
 
     assert [sub['user_id'] for sub in db.submissions(accounts['reviewer'])] == [accounts['alice']]
+
+
+def test_candidate_assessments_keep_individual_project_assignments(accounts):
+    db.add_project(accounts['admin'], 'Project A')
+    db.add_project(accounts['admin'], 'Project B')
+    db.update_candidate_schedule(
+        accounts['admin'], accounts['alice'], date.today(), 'Project A', 'Welding QC',
+    )
+    first_submission, _ = attempt(accounts, 'project-a-assessment')
+    db.update_candidate_schedule(
+        accounts['admin'], accounts['alice'], date.today(), 'Project B', 'Welding QC',
+    )
+    second_submission, _ = attempt(accounts, 'project-b-assessment')
+
+    db.update_assessment_project(accounts['admin'], first_submission, 'Project B')
+
+    projects = {
+        row['id']: row['project_assignment']
+        for row in db.submissions(accounts['admin'])
+        if row['id'] in (first_submission, second_submission)
+    }
+    assert projects == {
+        first_submission: 'Project B',
+        second_submission: 'Project B',
+    }
+    db.update_assessment_project(accounts['admin'], first_submission, 'Unassigned')
+    projects = {
+        row['id']: row['project_assignment']
+        for row in db.submissions(accounts['admin'])
+        if row['id'] in (first_submission, second_submission)
+    }
+    assert projects == {
+        first_submission: 'Unassigned',
+        second_submission: 'Project B',
+    }
+    with db.connection() as c:
+        candidate = c.execute(
+            'SELECT project_assignment FROM users WHERE id=%s', (accounts['alice'],)
+        ).fetchone()
+    assert candidate['project_assignment'] == 'Project B'
 
 def test_validation_and_snapshots(accounts):
     qs = db.questions('Welding QC')

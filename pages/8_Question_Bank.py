@@ -50,7 +50,7 @@ def clear_question_data():
 
 def refresh_question_bank_page():
     """Return to the Question Bank after a mutation, preserving page context."""
-    st.switch_page("pages/7_Question_Bank.py")
+    st.switch_page("pages/8_Question_Bank.py")
 
 # ---------------------------------------------------------------------------
 # Import / Export controls
