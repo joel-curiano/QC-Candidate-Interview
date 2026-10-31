@@ -175,8 +175,6 @@ else:
                         "project_assignment": project_assignment,
                     }
                     st.session_state.candidate_schedule_saved_id = candidate["id"]
-                    # Keep the same candidate selected after cached data reloads.
-                    st.session_state.schedule_selected_candidate = candidate["id"]
                     st.rerun()
                 except ValueError as exc:
                     st.error(str(exc))
