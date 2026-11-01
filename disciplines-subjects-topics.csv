@@ -30,7 +30,7 @@ Civil QC,Inspection planning,Earthwork concrete and structural inspection plan
 Civil QC,Inspection planning,Hold and witness points before placement and backfilling
 Civil QC,Inspection planning,Survey equipment and test laboratory readiness
 Civil QC,Materials and traceability,Cement aggregate rebar and grout certificates
-Civil QC,Materials and traceability,Concrete mix design and delivery ticket traceability
+Civil QC,Materials and traceability,Approved concrete mix designation pour location and test specimen traceability
 Civil QC,Materials and traceability,Embedded item and structural steel identification
 Civil QC,Installation and workmanship,Excavation subgrade and compaction quality
 Civil QC,Installation and workmanship,Reinforcement formwork and embedded item inspection
@@ -272,27 +272,27 @@ Non-Metallic Piping QC,Documentation and turnover,Mechanical completion dossier 
 Non-Metallic Piping QC,Safety and field execution,Pressure test exclusion zone stored energy and controlled depressurization
 Non-Metallic Piping QC,Safety and field execution,Chemical handling ventilation and fire precautions where adhesive or resin systems are used
 Non-Metallic Piping QC,Safety and field execution,Safe lifting handling cutting and preparation of non-metallic piping materials
-Welding QC,Codes and standards,Controlled welding requirements and project document hierarchy
-Welding QC,Codes and standards,Applicable welding code and acceptance criteria
-Welding QC,Codes and standards,Approved WPS PQR and welder qualification controls
-Welding QC,Inspection planning,Welding inspection plan and hold points
-Welding QC,Inspection planning,Pipeline spread and piping spool welding inspection readiness
-Welding QC,Inspection planning,Calibrated welding and inspection equipment verification
+Welding QC,Codes and standards,Applicable Saudi Aramco SAES W series requirements and ASME Section IX interface
+Welding QC,Codes and standards,SAEP 352 welding procedure review package including WPS PQR and Weld Table
+Welding QC,Codes and standards,SAEP 324 welder certification registration and continuity controls
+Welding QC,Inspection planning,Preweld readiness including approved WPS qualified welder and joint identification
+Welding QC,Inspection planning,Pipeline spread and piping spool welding sequence readiness
+Welding QC,Inspection planning,Calibrated welding machine parameter and temperature measurement controls
 Welding QC,Materials and traceability,Base material heat number and MTC traceability
-Welding QC,Materials and traceability,Filler metal identification storage and conditioning
+Welding QC,Materials and traceability,Filler metal shielding gas and flux identification storage and conditioning
 Welding QC,Materials and traceability,Weld joint and welder traceability
-Welding QC,Installation and workmanship,Joint preparation fit up and alignment
-Welding QC,Installation and workmanship,Preheat interpass temperature and welding parameter control
-Welding QC,Installation and workmanship,Visual weld profile and defect prevention
-Welding QC,Testing and verification,WPS compliance and consumable control checks
-Welding QC,Testing and verification,Root pass hot pass fill and cap visual and dimensional acceptance
-Welding QC,Testing and verification,Back purging dissolved oxygen verification and sour service welding controls
-Welding QC,Nonconformance and corrective action,Weld defect reporting and repair authorization
+Welding QC,Installation and workmanship,Joint preparation bevel geometry fit up cleanliness and alignment
+Welding QC,Installation and workmanship,Preheat interpass temperature heat input and welding parameter control
+Welding QC,Installation and workmanship,Root pass hot pass fill and cap deposition sequence and weld profile
+Welding QC,Testing and verification,WPS variable compliance and production welding parameter records
+Welding QC,Testing and verification,Visual and dimensional verification of fit up and completed weld profile
+Welding QC,Testing and verification,Back purging oxygen control and sour service welding requirements
+Welding QC,Nonconformance and corrective action,Welding nonconformance reporting and repair authorization
 Welding QC,Nonconformance and corrective action,Repair cycle control and traceability
-Welding QC,Nonconformance and corrective action,Weld excavation root or cap repair execution and visual reinspection
-Welding QC,Documentation and turnover,Weld map WPS and welder qualification records
-Welding QC,Documentation and turnover,Daily welding production reports welder continuity and repair logs
-Welding QC,Documentation and turnover,Welding dossier and punch closure evidence
+Welding QC,Nonconformance and corrective action,Weld excavation root or cap repair execution and welding record update
+Welding QC,Documentation and turnover,Weld map WPS PQR Weld Table and welder qualification records
+Welding QC,Documentation and turnover,Daily welding production reports welder continuity and repair history
+Welding QC,Documentation and turnover,Welding dossier and weld traceability turnover records
 Welding QC,Safety and field execution,Hot work permit and fire watch controls
 Welding QC,Safety and field execution,Welding fume ventilation and PPE
 Welding QC,Safety and field execution,Gas cylinder handling and electrical safety

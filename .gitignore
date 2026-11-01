@@ -35,3 +35,6 @@ qc-question-template*.xlsx.inspect.ndjson
 
 # Local scripts and generated script artifacts
 scripts/
+
+# Local manuals and reference material
+manuals/

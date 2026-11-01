@@ -421,84 +421,88 @@ if user["role"] == "Admin":
                         progress_bar.empty()
                         st.error(str(exc))
 
-            st.error(
-                "The following option is destructive. It permanently deletes archived question records and removes any candidate submission that references them."
-            )
-            if st.button("Permanently delete archived questions and linked submissions"):
-                if hasattr(st, "dialog"):
-                    @st.dialog("Deleting Archived Questions")
-                    def _wipe_archived_dialog():
-                        st.warning(
-                            "This permanently deletes archived question records and any candidate submission that references them."
-                        )
-                        confirmed = st.checkbox(
-                            "I understand that archived question records and their linked candidate submissions cannot be recovered."
-                        )
-                        if st.button(
-                            "Permanently delete archived questions and linked submissions",
-                            type="primary",
-                            disabled=not confirmed,
-                        ):
-                            progress_bar = st.progress(0, text="Preparing to delete...")
-
-                            def wipe_progress(current, total):
-                                text = (
-                                    "Removing affected candidate records..."
-                                    if current == 0
-                                    else f"Deleted {total} archived questions."
-                                )
-                                progress_bar.progress(
-                                    current / total if total > 0 else 1.0, text=text
-                                )
-
-                            try:
-                                deleted_count = db.wipe_archived_questions(
-                                    user["id"], progress_callback=wipe_progress
-                                )
-                                clear_read_caches()
-                                progress_bar.empty()
-                                st.success(
-                                    f"Wipe complete. Deleted {deleted_count} archived question records and their linked submissions."
-                                )
-                            except ValueError as exc:
-                                progress_bar.empty()
-                                st.error(str(exc))
-                        if st.button("Close"):
-                            st.rerun()
-                    _wipe_archived_dialog()
-                else:
-                    st.session_state["confirm_wipe_archived_questions"] = True
-
-            if st.session_state.get("confirm_wipe_archived_questions"):
-                confirmed = st.checkbox(
-                    "I understand that archived question records and their linked candidate submissions cannot be recovered.",
-                    key="confirm_wipe_archived_questions_acknowledged",
-                )
-                if st.button(
-                    "Confirm permanent archive wipe", type="primary", disabled=not confirmed
-                ):
-                    progress_bar = st.progress(0, text="Preparing to delete...")
-
-                    def wipe_progress(current, total):
-                        text = (
-                            "Removing affected candidate records..."
-                            if current == 0
-                            else f"Deleted {total} archived questions."
-                        )
-                        progress_bar.progress(current / total if total > 0 else 1.0, text=text)
-
-                    try:
-                        deleted_count = db.wipe_archived_questions(
-                            user["id"], progress_callback=wipe_progress
-                        )
-                        clear_read_caches()
-                        progress_bar.empty()
-                        st.session_state.pop("confirm_wipe_archived_questions", None)
-                        st.success(
-                            f"Wipe complete. Deleted {deleted_count} archived question records and their linked submissions."
-                        )
-                    except ValueError as exc:
-                        progress_bar.empty()
-                        st.error(str(exc))
-
     _render_question_bank_wipe()
+
+    with st.container(border=True):
+        st.subheader("Permanent archive deletion")
+        st.error(
+            "This action permanently deletes archived question records and removes every candidate submission that references them."
+        )
+        st.caption("Use this only when the archived questions and linked submissions are no longer required.")
+
+        if st.button("Permanently delete archived questions and linked submissions"):
+            if hasattr(st, "dialog"):
+                @st.dialog("Deleting Archived Questions")
+                def _wipe_archived_dialog():
+                    st.warning(
+                        "This permanently deletes archived question records and any candidate submission that references them."
+                    )
+                    confirmed = st.checkbox(
+                        "I understand that archived question records and their linked candidate submissions cannot be recovered."
+                    )
+                    if st.button(
+                        "Permanently delete archived questions and linked submissions",
+                        type="primary",
+                        disabled=not confirmed,
+                    ):
+                        progress_bar = st.progress(0, text="Preparing to delete...")
+
+                        def wipe_progress(current, total):
+                            text = (
+                                "Removing affected candidate records..."
+                                if current == 0
+                                else f"Deleted {total} archived questions."
+                            )
+                            progress_bar.progress(
+                                current / total if total > 0 else 1.0, text=text
+                            )
+
+                        try:
+                            deleted_count = db.wipe_archived_questions(
+                                user["id"], progress_callback=wipe_progress
+                            )
+                            clear_read_caches()
+                            progress_bar.empty()
+                            st.success(
+                                f"Wipe complete. Deleted {deleted_count} archived question records and their linked submissions."
+                            )
+                        except ValueError as exc:
+                            progress_bar.empty()
+                            st.error(str(exc))
+                    if st.button("Close"):
+                        st.rerun()
+                _wipe_archived_dialog()
+            else:
+                st.session_state["confirm_wipe_archived_questions"] = True
+
+        if st.session_state.get("confirm_wipe_archived_questions"):
+            confirmed = st.checkbox(
+                "I understand that archived question records and their linked candidate submissions cannot be recovered.",
+                key="confirm_wipe_archived_questions_acknowledged",
+            )
+            if st.button(
+                "Confirm permanent archive wipe", type="primary", disabled=not confirmed
+            ):
+                progress_bar = st.progress(0, text="Preparing to delete...")
+
+                def wipe_progress(current, total):
+                    text = (
+                        "Removing affected candidate records..."
+                        if current == 0
+                        else f"Deleted {total} archived questions."
+                    )
+                    progress_bar.progress(current / total if total > 0 else 1.0, text=text)
+
+                try:
+                    deleted_count = db.wipe_archived_questions(
+                        user["id"], progress_callback=wipe_progress
+                    )
+                    clear_read_caches()
+                    progress_bar.empty()
+                    st.session_state.pop("confirm_wipe_archived_questions", None)
+                    st.success(
+                        f"Wipe complete. Deleted {deleted_count} archived question records and their linked submissions."
+                    )
+                except ValueError as exc:
+                    progress_bar.empty()
+                    st.error(str(exc))
