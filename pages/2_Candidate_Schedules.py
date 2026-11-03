@@ -194,15 +194,24 @@ else:
                         user["id"], candidate["id"], schedule_date,
                         project_assignment, scheduled_discipline, candidate_role,
                     )
+                    temporary_password = db.generate_password(length=6, alphanumeric_only=True)
+                    db.set_candidate_temporary_password(
+                        user["id"], candidate["id"], temporary_password
+                    )
                     clear_read_caches()
                     st.session_state.candidate_schedule_saved = {
                         "candidate_name": candidate["name"],
+                        "username": candidate["username"],
+                        "temporary_password": temporary_password,
                         "test_date": schedule_date.strftime("%A, %d %B %Y"),
                         "discipline": scheduled_discipline,
                         "candidate_role": candidate_role,
                         "project_assignment": project_assignment,
                     }
                     st.session_state.candidate_schedule_saved_id = candidate["id"]
+                    st.session_state[
+                        f"candidate_schedule_temporary_password_{candidate['id']}"
+                    ] = temporary_password
                     st.rerun()
                 except ValueError as exc:
                     st.error(str(exc))
@@ -210,10 +219,13 @@ else:
             if send_schedule:
                 try:
                     validate_email_address(candidate['email'], 'Candidate email in Accounts')
-                    temporary_password = db.generate_password(length=6, alphanumeric_only=True)
-                    db.set_candidate_temporary_password(
-                        user["id"], candidate["id"], temporary_password
-                    )
+                    password_key = f"candidate_schedule_temporary_password_{candidate['id']}"
+                    temporary_password = st.session_state.get(password_key)
+                    if not temporary_password:
+                        temporary_password = db.generate_password(length=6, alphanumeric_only=True)
+                        db.set_candidate_temporary_password(
+                            user["id"], candidate["id"], temporary_password
+                        )
                     send_candidate_invitation(
                         candidate["email"],
                         candidate["name"],
@@ -230,16 +242,26 @@ else:
                         "email": candidate["email"],
                     }
                     st.session_state.pop("candidate_schedule_saved_id", None)
+                    st.session_state.pop(password_key, None)
                     st.rerun()
                 except (EmailDeliveryError, OSError, ValueError) as exc:
                     st.error(str(exc))
 
 if saved_schedule:
-    st.success(
-        f"Schedule saved for {saved_schedule['candidate_name']}: "
-        f"{saved_schedule['test_date']} | {saved_schedule['discipline']} | "
-        f"{saved_schedule['candidate_role']} | Project: {saved_schedule['project_assignment']}"
-    )
+    with st.container(border=True):
+        st.success(f"Schedule saved for {saved_schedule['candidate_name']}.")
+        st.write(
+            f"{saved_schedule['test_date']} | {saved_schedule['discipline']} | "
+            f"{saved_schedule['candidate_role']} | Project: {saved_schedule['project_assignment']}"
+        )
+        username_column, password_column = st.columns(2)
+        with username_column:
+            st.caption('Username')
+            st.code(saved_schedule['username'], language=None)
+        with password_column:
+            st.caption('Temporary password')
+            st.code(saved_schedule['temporary_password'], language=None)
+        st.caption('Use Send Schedule to email these credentials to the candidate.')
 if sent_schedule:
     st.success(
         f"Schedule and login credentials sent to {sent_schedule['candidate_name']} "

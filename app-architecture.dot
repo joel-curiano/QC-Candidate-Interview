@@ -37,7 +37,7 @@ digraph QCCandidateInterview {
     create [label="Create candidate and\nreviewer accounts"];
     confirm_delete_candidate [label="Confirm permanent\ncandidate account deletion"];
     delete_candidate [label="Delete candidate account\nand assessment data"];
-    schedule [label="Schedule assessment date, discipline\nand discipline-specific candidate role"];
+    schedule [label="Schedule assessment date, discipline,\nrole and temporary login credentials"];
     question_bank [label="Manage disciplines\nand questions"];
     review [label="Review assessments\n(project and discipline filters)"];
     assessment_project [label="Reassign one assessment\nto a project"];
@@ -87,7 +87,7 @@ digraph QCCandidateInterview {
     assessment_project -> database [label="per-assessment project attribution"];
     create -> database;
     delete_candidate -> database [label="account, submissions and draft"];
-    schedule -> database;
+    schedule -> database [label="schedule and temporary credential hash"];
     question_bank -> database;
     schedule -> assessment [label="assigned candidate role"];
     settings -> database;

@@ -91,7 +91,7 @@ def account_form(key, bootstrap=False, actor=None, allowed_roles=None):
 
         if is_candidate:
             password = confirm = db.generate_password(length=6, alphanumeric_only=True)
-            st.info("Login credentials will be generated and emailed after the assessment is scheduled.")
+            st.info("Temporary login credentials will be created when the assessment schedule is saved.")
         else:
             password = st.text_input(
                 "Password (at least 6 characters)", type="password", key=password_key
