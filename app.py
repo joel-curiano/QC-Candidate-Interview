@@ -34,6 +34,7 @@ import assessment_analysis
 from assessment_input import essay_input
 from question_types import QUESTION_TYPES, REVIEWER_SCORED_TYPES
 from email_service import EmailDeliveryError, send_reviewer_credentials
+from candidate_roles import is_valid_candidate_role
 from shared import (
     cached_disciplines,
     cached_has_users,
@@ -628,6 +629,12 @@ if discipline not in cached_disciplines():
 bank = cached_questions(discipline)
 settings = cached_assessment_settings(user["id"])
 candidate_role = str(user.get('candidate_role') or '').strip()
+if not candidate_role:
+    st.warning("Your candidate role has not been assigned. Contact the assessment administrator.")
+    st.stop()
+if not is_valid_candidate_role(discipline, candidate_role):
+    st.warning("Your assigned candidate role does not match the scheduled discipline. Contact the assessment administrator.")
+    st.stop()
 question_pools = {
     kind: [
         q for q in bank
@@ -681,54 +688,43 @@ if not details:
     )
     with st.form("candidate_details_form"):
         st.text_input("Discipline", value=discipline, disabled=True, key="candidate_discipline_display")
-        candidate_role = str(user.get('candidate_role') or '').strip()
-        designation = st.selectbox(
-            "Job Title",
-            ["Inspector", "Supervisor", "Technician"],
-            index=(['Inspector', 'Supervisor', 'Technician'].index(candidate_role)
-                   if candidate_role in ('Inspector', 'Supervisor', 'Technician') else 0),
-            disabled=bool(candidate_role),
-            key="candidate_job_title",
-        )
+        st.text_input("Job Title", value=candidate_role, disabled=True)
         if st.form_submit_button("Start Multiple Choice Questions", type="primary"):
-            if not str(designation).strip():
-                st.error("Complete all candidate details before starting the assessment.")
-            else:
-                st.session_state.candidate_details = {
-                    "name": user["name"],
-                    "email": user.get("email", ""),
-                    "designation": str(designation).strip(),
-                    "iqama_no": user.get("iqama_no", ""),
-                    "employee_no": user.get("employee_no", ""),
-                    "exam_date": user.get("test_date") or date.today(),
-                    "project_assignment": user.get("project_assignment", ""),
+            st.session_state.candidate_details = {
+                "name": user["name"],
+                "email": user.get("email", ""),
+                "designation": candidate_role,
+                "iqama_no": user.get("iqama_no", ""),
+                "employee_no": user.get("employee_no", ""),
+                "exam_date": user.get("test_date") or date.today(),
+                "project_assignment": user.get("project_assignment", ""),
+            }
+            rng = secrets.SystemRandom()
+            try:
+                selected = select_assessment_questions(bank, settings, rng, candidate_role)
+                selected_mcqs = selected["mcq"]
+                st.session_state.assessment_mcq_ids = [q["id"] for q in selected["mcq"]]
+                st.session_state.assessment_essay_ids = [q["id"] for q in selected["essay"]]
+                st.session_state.assessment_reviewer_ids = [
+                    q["id"] for q in selected["oral_practical"]
+                ]
+                st.session_state.assessment_mcq_options = {
+                    q["id"]: rng.sample(question_options(q), len(question_options(q)))
+                    for q in selected_mcqs
                 }
-                rng = secrets.SystemRandom()
-                try:
-                    selected = select_assessment_questions(bank, settings, rng, str(designation).strip())
-                    selected_mcqs = selected["mcq"]
-                    st.session_state.assessment_mcq_ids = [q["id"] for q in selected["mcq"]]
-                    st.session_state.assessment_essay_ids = [q["id"] for q in selected["essay"]]
-                    st.session_state.assessment_reviewer_ids = [
-                        q["id"] for q in selected["oral_practical"]
-                    ]
-                    st.session_state.assessment_mcq_options = {
-                        q["id"]: rng.sample(question_options(q), len(question_options(q)))
-                        for q in selected_mcqs
-                    }
-                    # SERVER-SIDE TIMER: deadline is set here and stored in the draft.
-                    # On browser refresh the original deadline is restored from the DB,
-                    # so candidates cannot gain extra time by reloading.
-                    started_at = time.time()
-                    st.session_state.assessment_mcq_deadline = started_at + MCQ_TIME_LIMIT_SECONDS
-                    st.session_state.assessment_essay_started_at = {}
-                    st.session_state.assessment_essay_index = 0
-                    st.session_state.assessment_counts = {kind: settings[kind] for kind in QUESTION_TYPES}
-                    st.session_state.assessment_phase = "mcq"
-                    save_current_assessment_draft(user["id"])
-                    st.rerun()
-                except (TypeError, ValueError, json.JSONDecodeError) as exc:
-                    st.error(f"Unable to start the Competency Technical Assessment: {exc}")
+                # SERVER-SIDE TIMER: deadline is set here and stored in the draft.
+                # On browser refresh the original deadline is restored from the DB,
+                # so candidates cannot gain extra time by reloading.
+                started_at = time.time()
+                st.session_state.assessment_mcq_deadline = started_at + MCQ_TIME_LIMIT_SECONDS
+                st.session_state.assessment_essay_started_at = {}
+                st.session_state.assessment_essay_index = 0
+                st.session_state.assessment_counts = {kind: settings[kind] for kind in QUESTION_TYPES}
+                st.session_state.assessment_phase = "mcq"
+                save_current_assessment_draft(user["id"])
+                st.rerun()
+            except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                st.error(f"Unable to start the Competency Technical Assessment: {exc}")
     st.stop()
 
 # ---------------------------------------------------------------------------

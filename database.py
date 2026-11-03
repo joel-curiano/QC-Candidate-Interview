@@ -17,6 +17,11 @@ from contextlib import contextmanager
 from pathlib import Path
 from question_types import QUESTION_TYPES, REVIEWER_SCORED_TYPES
 from email_validation import validate_email_address
+from candidate_roles import (
+    default_candidate_role,
+    is_valid_candidate_role,
+    normalize_candidate_role,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +48,7 @@ STARTER_DISCIPLINES = (
     'Mechanical QC', 'NDT QC', 'Non-Metallic Piping QC', 'Piping QC', 'Welding QC',
     'Pipeline QC', 'PQCS',
 )
-RUNTIME_SCHEMA_VERSION = '11'
+RUNTIME_SCHEMA_VERSION = '12'
 
 
 
@@ -206,7 +211,7 @@ def init_db():
             difficulty TEXT NOT NULL DEFAULT 'moderate' CHECK (difficulty IN ('easy', 'moderate', 'difficult')),
             topic_group TEXT NOT NULL DEFAULT 'General',
             delivery_stage TEXT NOT NULL DEFAULT 'standard' CHECK (delivery_stage IN ('standard', 'oral_opening')),
-            candidate_role TEXT NOT NULL DEFAULT 'Inspector' CHECK (candidate_role IN ('All', 'Inspector', 'Supervisor', 'Technician')),
+            candidate_role TEXT NOT NULL DEFAULT 'Inspector' CHECK (candidate_role IN ('', 'All', 'Coordinator', 'Inspector', 'Supervisor')),
             archived_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             CHECK (delivery_stage = 'standard' OR (q_type = 'oral_practical' AND is_scored = FALSE))
         )""")
@@ -241,8 +246,6 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS candidate_role TEXT NOT NULL DEFAULT ''")
         c.execute("UPDATE users SET candidate_role='' WHERE role IN ('Admin', 'Reviewer') AND candidate_role<>''")
         c.execute("ALTER TABLE archived_questions ADD COLUMN IF NOT EXISTS candidate_role TEXT NOT NULL DEFAULT 'Inspector'")
-        c.execute("UPDATE questions SET candidate_role='Inspector' WHERE candidate_role='All' OR candidate_role IS NULL OR candidate_role=''")
-        c.execute("UPDATE archived_questions SET candidate_role='Inspector' WHERE candidate_role='All' OR candidate_role IS NULL OR candidate_role=''")
         initialized = c.execute("SELECT value FROM schema_info WHERE key='question_template_v1'").fetchone()
         
         if not initialized:
@@ -300,30 +303,41 @@ def init_db():
             c.execute("CREATE INDEX IF NOT EXISTS users_candidate_date_idx ON users(role, test_date)")
             c.execute("INSERT INTO schema_info (key, value) VALUES ('question_template_v1', 'true') ON CONFLICT (key) DO UPDATE SET value='true'")
 
+        _migrate_candidate_roles(c)
+
         original_questions = json.loads(Path(__file__).with_name('seed_questions.json').read_text(encoding='utf-8'))
         original_questions = [row[:4] + [row[4], row[5], 1 if row[1] == 'mcq' else row[6]] for row in original_questions]
         has_any_users = c.execute('SELECT 1 FROM users LIMIT 1').fetchone()
         
         # Only seed questions if the database is entirely empty (no questions and no users).
         if not has_any_users and not c.execute('SELECT 1 FROM questions LIMIT 1').fetchone():
-            c.cursor().executemany('INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points,subject,sub_subject,is_scored,difficulty,topic_group,delivery_stage) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)', original_questions)
+            seeded_questions = [
+                row + (default_candidate_role(row[0]),)
+                for row in original_questions
+            ]
+            c.cursor().executemany('INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points,subject,sub_subject,is_scored,difficulty,topic_group,delivery_stage,candidate_role) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)', seeded_questions)
             essay_prompts = {
                 'Electrical QC': 'Describe how you would inspect an electrical installation against approved drawings and test records. Explain how you would document and close an identified discrepancy.',
                 'Instrumentation QC': 'Describe how you would review instrument calibration and loop-check records. Explain traceability checks and how you would handle a failed result.',
             }
             for discipline, essay_prompt in essay_prompts.items():
                 options = ['Record and report the nonconformance', 'Ignore the result', 'Change the acceptance criteria', 'Approve without evidence']
-                c.execute('INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points,subject,sub_subject,is_scored,difficulty,topic_group,delivery_stage) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
-                          (discipline, 'mcq', f'During a {discipline} inspection, a result does not meet the approved acceptance criteria. What should you do?', json.dumps(options), options[0], '', 10))
-                c.execute('INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points,subject,sub_subject,is_scored,difficulty,topic_group,delivery_stage) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                default_role = default_candidate_role(discipline)
+                c.execute('INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points,subject,sub_subject,is_scored,difficulty,topic_group,delivery_stage,candidate_role) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                          (discipline, 'mcq', f'During a {discipline} inspection, a result does not meet the approved acceptance criteria. What should you do?', json.dumps(options), options[0], '', 10, 'General', 'General', True, 'moderate', 'General', 'standard', default_role))
+                c.execute('INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points,subject,sub_subject,is_scored,difficulty,topic_group,delivery_stage,candidate_role) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                           (discipline, 'essay', essay_prompt, None, None,
-                           'Award up to 5 points each for: approved documents and criteria; inspection steps and evidence; nonconformance handling; verified closure and traceability. Adapt technical criteria to the project.', 20))
+                           'Award up to 5 points each for: approved documents and criteria; inspection steps and evidence; nonconformance handling; verified closure and traceability. Adapt technical criteria to the project.', 20, 'General', 'General', True, 'moderate', 'General', 'standard', default_role))
 
         # Keep archived questions visible when the seed logic is intentionally restoring a prior archive state.
         if not has_any_users and not c.execute('SELECT 1 FROM questions WHERE discipline=%s LIMIT 1', ('Civil QC',)).fetchone():
             civil_questions = [q for q in original_questions if q[0] == 'Civil QC']
+            civil_questions = [
+                row + (default_candidate_role(row[0]),)
+                for row in civil_questions
+            ]
             c.cursor().executemany(
-                'INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points,subject,sub_subject,is_scored,difficulty,topic_group,delivery_stage) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                'INSERT INTO questions(discipline,q_type,question_text,options,correct_answer,rubric,max_points,subject,sub_subject,is_scored,difficulty,topic_group,delivery_stage,candidate_role) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                 civil_questions,
             )
         c.execute("CREATE INDEX IF NOT EXISTS submissions_user_status_id_idx ON submissions(user_id, status, id DESC)")
@@ -333,6 +347,126 @@ def init_db():
             "INSERT INTO schema_info (key, value) VALUES ('runtime_schema_version', %s) "
             "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
             (RUNTIME_SCHEMA_VERSION,),
+        )
+
+
+def _migrate_candidate_roles(connection):
+    """Replace Technician and invalid cross-discipline roles in stored records."""
+    constraints = connection.execute(
+        """
+        SELECT tc.table_name, tc.constraint_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.check_constraints cc
+          ON cc.constraint_schema = tc.constraint_schema
+         AND cc.constraint_name = tc.constraint_name
+        WHERE tc.table_schema = current_schema()
+          AND tc.table_name IN ('users', 'questions', 'archived_questions')
+          AND tc.constraint_type = 'CHECK'
+          AND cc.check_clause ILIKE '%candidate_role%'
+          AND cc.check_clause NOT ILIKE '%IS NOT NULL%'
+        """
+    ).fetchall()
+    for constraint in constraints:
+        connection.execute(
+            sql.SQL("ALTER TABLE {} DROP CONSTRAINT {}").format(
+                sql.Identifier(constraint["table_name"]),
+                sql.Identifier(constraint["constraint_name"]),
+            )
+        )
+
+    connection.execute(
+        """
+        UPDATE users
+        SET candidate_role = CASE
+            WHEN scheduled_discipline = 'NDT QC' THEN 'Coordinator'
+            WHEN scheduled_discipline <> '' THEN 'Inspector'
+            ELSE ''
+        END
+        WHERE role = 'Candidate'
+          AND (
+              candidate_role = 'Technician'
+              OR candidate_role = 'All'
+              OR (
+                  scheduled_discipline = 'NDT QC'
+                  AND candidate_role = 'Inspector'
+              )
+              OR (
+                  COALESCE(scheduled_discipline, '') = ''
+                  AND candidate_role <> ''
+              )
+              OR (
+                  scheduled_discipline <> ''
+                  AND candidate_role = ''
+              )
+              OR (
+                  scheduled_discipline <> ''
+                  AND scheduled_discipline <> 'NDT QC'
+                  AND candidate_role = 'Coordinator'
+              )
+          )
+        """
+    )
+    connection.execute(
+        """
+        UPDATE questions
+        SET candidate_role = CASE
+            WHEN discipline = 'NDT QC' THEN 'Coordinator'
+            ELSE 'Inspector'
+        END
+        WHERE candidate_role IN ('Technician', 'All', '')
+           OR (discipline = 'NDT QC' AND candidate_role = 'Inspector')
+           OR (discipline <> 'NDT QC' AND candidate_role = 'Coordinator')
+        """
+    )
+    connection.execute(
+        """
+        UPDATE archived_questions
+        SET candidate_role = CASE
+            WHEN discipline = 'NDT QC' THEN 'Coordinator'
+            ELSE 'Inspector'
+        END
+        WHERE candidate_role IN ('Technician', 'All', '')
+           OR (discipline = 'NDT QC' AND candidate_role = 'Inspector')
+           OR (discipline <> 'NDT QC' AND candidate_role = 'Coordinator')
+        """
+    )
+    connection.execute(
+        """
+        ALTER TABLE users ADD CONSTRAINT users_candidate_role_check
+        CHECK (
+            candidate_role = ''
+            OR (scheduled_discipline = 'NDT QC' AND candidate_role IN ('Coordinator', 'Supervisor'))
+            OR (
+                scheduled_discipline <> ''
+                AND scheduled_discipline <> 'NDT QC'
+                AND candidate_role IN ('Inspector', 'Supervisor')
+            )
+        )
+        """
+    )
+    for table in ("questions", "archived_questions"):
+        connection.execute(
+            sql.SQL(
+                """
+                ALTER TABLE {} ADD CONSTRAINT {} CHECK (
+                    candidate_role IN ('', 'All', 'Coordinator', 'Inspector', 'Supervisor')
+                    AND (
+                        candidate_role IN ('', 'All')
+                        OR (
+                            discipline = 'NDT QC'
+                            AND candidate_role IN ('Coordinator', 'Supervisor')
+                        )
+                        OR (
+                            discipline <> 'NDT QC'
+                            AND candidate_role IN ('Inspector', 'Supervisor')
+                        )
+                    )
+                )
+                """
+            ).format(
+                sql.Identifier(table),
+                sql.Identifier(f"{table}_candidate_role_check"),
+            )
         )
 
 
@@ -455,8 +589,8 @@ def set_maintenance_mode(actor, enabled):
 def create_user(username, name, password, role='Candidate', actor=None, bootstrap=False, email='', test_date=None, discipline='', iqama_no='', employee_no='', mobile_no='', candidate_role=''):
     if candidate_role and (bootstrap or role != 'Candidate'):
         raise ValueError('Only Candidate accounts can have a candidate role.')
-    if candidate_role not in ('', 'Inspector', 'Supervisor', 'Technician'):
-        raise ValueError('Select a valid candidate role.')
+    if candidate_role:
+        raise ValueError('Candidate roles are selected when scheduling an assessment.')
     username, name = username.strip().lower(), name.strip()
     if not username or not name or len(password) < 6:
         raise ValueError('Enter a username, full name, and password of at least 6 characters.')
@@ -550,16 +684,14 @@ def candidate_accounts(actor):
             "FROM users WHERE role='Candidate' ORDER BY test_date NULLS LAST, name"
         )]
 
-def update_candidate_details(actor, candidate_id, name, email, iqama_no, employee_no, mobile_no, candidate_role=None):
-    if candidate_role is not None and candidate_role not in ('', 'Inspector', 'Supervisor', 'Technician'):
-        raise ValueError('Select a valid candidate role.')
+def update_candidate_details(actor, candidate_id, name, email, iqama_no, employee_no, mobile_no):
     email = validate_email_address(email, 'Candidate email')
     with connection() as c:
         require(c, actor, ('Admin',))
         updated = c.execute(
-            "UPDATE users SET name=%s, email=%s, iqama_no=%s, employee_no=%s, mobile_no=%s, candidate_role=COALESCE(%s, candidate_role) "
+            "UPDATE users SET name=%s, email=%s, iqama_no=%s, employee_no=%s, mobile_no=%s "
             "WHERE id=%s AND role='Candidate' RETURNING id",
-            (name.strip(), email.strip().lower(), iqama_no.strip(), employee_no.strip(), mobile_no.strip(), candidate_role, candidate_id),
+            (name.strip(), email.strip().lower(), iqama_no.strip(), employee_no.strip(), mobile_no.strip(), candidate_id),
         ).fetchone()
         if not updated:
             raise ValueError('Candidate account not found.')
@@ -692,12 +824,16 @@ def delete_user(actor, user_id):
             
         c.execute('DELETE FROM users WHERE id=%s', (user_id,))
 
-def update_candidate_schedule(actor, candidate_id, test_date, project_assignment, scheduled_discipline):
+def update_candidate_schedule(actor, candidate_id, test_date, project_assignment, scheduled_discipline, candidate_role=None):
     if not test_date:
         raise ValueError('Candidate test date is required.')
+    scheduled_discipline = str(scheduled_discipline or '').strip()
+    candidate_role = candidate_role or default_candidate_role(scheduled_discipline)
+    if not is_valid_candidate_role(scheduled_discipline, candidate_role):
+        raise ValueError('Select a candidate role valid for the scheduled discipline.')
     with connection() as c:
         require(c, actor, ('Admin', 'Reviewer'))
-        if not project_assignment or not str(project_assignment).strip() or not scheduled_discipline or not str(scheduled_discipline).strip():
+        if not project_assignment or not str(project_assignment).strip() or not scheduled_discipline:
             raise ValueError('Candidate Discipline and Project Assignment are required.')
         current_user = c.execute("SELECT email, test_date, project_assignment, scheduled_discipline, discipline, previous_schedules FROM users WHERE id=%s", (candidate_id,)).fetchone()
         if not current_user:
@@ -712,8 +848,8 @@ def update_candidate_schedule(actor, candidate_id, test_date, project_assignment
                 'scheduled_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
             })
             
-        c.execute("UPDATE users SET test_date=%s, project_assignment=%s, scheduled_discipline=%s, previous_schedules=%s::jsonb, invitation_sent_at=NULL WHERE id=%s AND role='Candidate'",
-                  (test_date, str(project_assignment).strip(), str(scheduled_discipline).strip(), json.dumps(history), candidate_id))
+        c.execute("UPDATE users SET test_date=%s, project_assignment=%s, scheduled_discipline=%s, candidate_role=%s, previous_schedules=%s::jsonb, invitation_sent_at=NULL WHERE id=%s AND role='Candidate'",
+                  (test_date, str(project_assignment).strip(), scheduled_discipline, candidate_role, json.dumps(history), candidate_id))
 
 
 def update_assessment_project(actor, submission_id, project_assignment):
@@ -764,7 +900,7 @@ def remove_candidate_schedule(actor, candidate_id):
     with connection() as c:
         require(c, actor, ('Admin',))
         candidate = c.execute(
-            "UPDATE users SET test_date=NULL, project_assignment='', scheduled_discipline='', invitation_sent_at=NULL "
+            "UPDATE users SET test_date=NULL, project_assignment='', scheduled_discipline='', candidate_role='', invitation_sent_at=NULL "
             "WHERE id=%s AND role='Candidate' RETURNING id",
             (candidate_id,),
         ).fetchone()
@@ -791,8 +927,8 @@ def questions(discipline=None, include_inactive=False):
     result_rows = []
     for q in rows:
         d = dict(q)
-        if not d.get('candidate_role') or d.get('candidate_role') in ('All', ''):
-            d['candidate_role'] = 'Inspector'
+        if not d.get('candidate_role') or d.get('candidate_role') == 'All':
+            d['candidate_role'] = default_candidate_role(d['discipline'])
         result_rows.append(d)
     return result_rows
 
@@ -811,8 +947,10 @@ def question_count(discipline=None, question_type=None, candidate_role=None):
     """Return the active question count for the selected filters."""
     if question_type is not None and question_type not in QUESTION_TYPES:
         raise ValueError('Invalid question type.')
-    if candidate_role is not None and candidate_role not in ('All', 'Inspector', 'Supervisor', 'Technician'):
+    if candidate_role is not None and candidate_role not in ('Coordinator', 'Inspector', 'Supervisor'):
         raise ValueError('Invalid candidate role.')
+    if discipline is not None and candidate_role and not is_valid_candidate_role(discipline, candidate_role):
+        raise ValueError('Candidate role is not available for the selected discipline.')
     conditions = ['active=1']
     params = []
     if discipline is not None:
@@ -822,11 +960,13 @@ def question_count(discipline=None, question_type=None, candidate_role=None):
         conditions.append('q_type=%s')
         params.append(question_type)
     if candidate_role:
-        if candidate_role == 'Inspector':
-            conditions.append("(candidate_role = 'Inspector' OR candidate_role = 'All' OR candidate_role IS NULL OR candidate_role = '')")
+        if candidate_role == 'Coordinator':
+            conditions.append("(candidate_role = %s OR (candidate_role IN ('All', '') AND discipline = 'NDT QC'))")
+        elif candidate_role == 'Inspector':
+            conditions.append("(candidate_role = %s OR (candidate_role IN ('All', '') AND discipline <> 'NDT QC'))")
         else:
-            conditions.append('candidate_role=%s')
-            params.append(candidate_role)
+            conditions.append('candidate_role = %s')
+        params.append(candidate_role)
     with connection() as c:
         return c.execute(
             f"SELECT COUNT(*) AS question_count FROM questions WHERE {' AND '.join(conditions)}",
@@ -838,8 +978,10 @@ def question_page(discipline=None, question_type=None, limit=20, offset=0, candi
     """Return one filtered page of active questions and its total row count."""
     if question_type is not None and question_type not in QUESTION_TYPES:
         raise ValueError('Invalid question type.')
-    if candidate_role is not None and candidate_role not in ('All', 'Inspector', 'Supervisor', 'Technician'):
+    if candidate_role is not None and candidate_role not in ('Coordinator', 'Inspector', 'Supervisor'):
         raise ValueError('Invalid candidate role.')
+    if discipline is not None and candidate_role and not is_valid_candidate_role(discipline, candidate_role):
+        raise ValueError('Candidate role is not available for the selected discipline.')
     limit = max(1, min(int(limit), 100))
     offset = max(0, int(offset))
     conditions = ['q.active=1']
@@ -851,11 +993,13 @@ def question_page(discipline=None, question_type=None, limit=20, offset=0, candi
         conditions.append('q.q_type=%s')
         params.append(question_type)
     if candidate_role:
-        if candidate_role == 'Inspector':
-            conditions.append("(q.candidate_role = 'Inspector' OR q.candidate_role = 'All' OR q.candidate_role IS NULL OR q.candidate_role = '')")
+        if candidate_role == 'Coordinator':
+            conditions.append("(q.candidate_role = %s OR (q.candidate_role IN ('All', '') AND q.discipline = 'NDT QC'))")
+        elif candidate_role == 'Inspector':
+            conditions.append("(q.candidate_role = %s OR (q.candidate_role IN ('All', '') AND q.discipline <> 'NDT QC'))")
         else:
-            conditions.append('q.candidate_role=%s')
-            params.append(candidate_role)
+            conditions.append('q.candidate_role = %s')
+        params.append(candidate_role)
     where_clause = ' AND '.join(conditions)
     with connection() as c:
         total = c.execute(
@@ -875,8 +1019,8 @@ def question_page(discipline=None, question_type=None, limit=20, offset=0, candi
     result_rows = []
     for row in rows:
         d = dict(row)
-        if not d.get('candidate_role') or d.get('candidate_role') in ('All', ''):
-            d['candidate_role'] = 'Inspector'
+        if not d.get('candidate_role') or d.get('candidate_role') == 'All':
+            d['candidate_role'] = default_candidate_role(d['discipline'])
         result_rows.append(d)
     return total, result_rows
 
@@ -886,14 +1030,14 @@ def disciplines():
     return sorted(set(STARTER_DISCIPLINES) | {row['discipline'] for row in rows})
 
 def add_question(actor, discipline, kind, prompt, options, correct, rubric, subject='General', topic='General', difficulty='moderate'):
-    question = _validate_question(discipline, kind, prompt, options, correct, rubric, subject=subject, topic_group=topic, difficulty=difficulty)
+    question = _validate_question(discipline, kind, prompt, options, correct, rubric, subject=subject, topic_group=topic, difficulty=difficulty, candidate_role=default_candidate_role(discipline))
     with connection() as c:
         require(c, actor, ('Admin', 'Reviewer'))
         _insert_question(c, question)
 
-def _validate_question(discipline, kind, prompt, options, correct, rubric, subject='General', sub_subject='General', is_scored=True, difficulty='moderate', topic_group='General', delivery_stage='standard', candidate_role='Inspector'):
-    if not candidate_role or candidate_role in ('All', ''):
-        candidate_role = 'Inspector'
+def _validate_question(discipline, kind, prompt, options, correct, rubric, subject='General', sub_subject='General', is_scored=True, difficulty='moderate', topic_group='General', delivery_stage='standard', candidate_role=None):
+    discipline = discipline.strip()
+    candidate_role = normalize_candidate_role(discipline, candidate_role)
     options = [v.strip() for v in options if v.strip()]
     if not discipline.strip() or not prompt.strip():
         raise ValueError('Discipline and question are required.')
@@ -907,13 +1051,13 @@ def _validate_question(discipline, kind, prompt, options, correct, rubric, subje
         raise ValueError('Difficulty must be easy, moderate, or difficult.')
     if delivery_stage not in ('standard', 'oral_opening') or (delivery_stage == 'oral_opening' and (kind != 'oral_practical' or is_scored)):
         raise ValueError('Oral opening questions must be non-scored Oral-Practical questions.')
-    if candidate_role not in ('All', 'Inspector', 'Supervisor', 'Technician'):
-        raise ValueError('Candidate role must be All, Inspector, Supervisor, or Technician.')
+    if not is_valid_candidate_role(discipline, candidate_role):
+        raise ValueError('Candidate role must be valid for the selected discipline.')
     points = 1 if kind == 'mcq' else 10
     return (discipline.strip(), kind, prompt.strip(), options, correct.strip(), rubric.strip(), points, subject.strip() or 'General', sub_subject.strip() or 'General', bool(is_scored), difficulty, topic_group.strip() or 'General', delivery_stage, candidate_role)
 
 def _insert_question(connection, question):
-    values = list(question) + ['General', 'General', True, 'moderate', 'General', 'standard', 'Inspector']
+    values = list(question) + ['General', 'General', True, 'moderate', 'General', 'standard', default_candidate_role(question[0])]
     discipline, kind, prompt, options, correct, rubric, points, subject, sub_subject, is_scored, difficulty, topic_group, delivery_stage, candidate_role = values[:14]
     existing = connection.execute('SELECT id FROM questions WHERE discipline=%s AND q_type=%s AND question_text=%s', (discipline, kind, prompt)).fetchone()
     if existing:
@@ -934,7 +1078,7 @@ def add_questions(actor, parse_results, progress_callback=None):
             q = result['question']
             try:
                 with c.transaction():
-                    validated = _validate_question(q['discipline'], q['kind'], q['prompt'], q['options'], q['correct'], q['rubric'], q.get('subject'), q.get('sub_subject'), q.get('is_scored', True), q.get('difficulty'), q.get('topic_group'), q.get('delivery_stage'), q.get('candidate_role', 'Inspector'))
+                    validated = _validate_question(q['discipline'], q['kind'], q['prompt'], q['options'], q['correct'], q['rubric'], q.get('subject'), q.get('sub_subject'), q.get('is_scored', True), q.get('difficulty'), q.get('topic_group'), q.get('delivery_stage'), q.get('candidate_role') or default_candidate_role(q['discipline']))
                     _insert_question(c, validated)
             except (ValueError, psycopg.Error) as e:
                 result['success'] = False
@@ -1029,9 +1173,15 @@ def wipe_questions(actor, discipline=None, candidate_role=None, progress_callbac
             joined_conditions.append('q.discipline = %s')
             params.append(discipline)
         if candidate_role and candidate_role != 'All Roles':
-            if candidate_role == 'Inspector':
-                conditions.append("(candidate_role = 'Inspector' OR candidate_role = 'All' OR candidate_role IS NULL OR candidate_role = '')")
-                joined_conditions.append("(q.candidate_role = 'Inspector' OR q.candidate_role = 'All' OR q.candidate_role IS NULL OR q.candidate_role = '')")
+            if candidate_role not in ('Coordinator', 'Inspector', 'Supervisor'):
+                raise ValueError('Invalid candidate role.')
+            if candidate_role in ('Coordinator', 'Inspector'):
+                if candidate_role == 'Coordinator':
+                    conditions.append("(candidate_role = 'Coordinator' OR (candidate_role IN ('All', '') AND discipline = 'NDT QC'))")
+                    joined_conditions.append("(q.candidate_role = 'Coordinator' OR (q.candidate_role IN ('All', '') AND q.discipline = 'NDT QC'))")
+                else:
+                    conditions.append("(candidate_role = 'Inspector' OR (candidate_role IN ('All', '') AND discipline <> 'NDT QC'))")
+                    joined_conditions.append("(q.candidate_role = 'Inspector' OR (q.candidate_role IN ('All', '') AND q.discipline <> 'NDT QC'))")
             else:
                 conditions.append('candidate_role = %s')
                 joined_conditions.append('q.candidate_role = %s')

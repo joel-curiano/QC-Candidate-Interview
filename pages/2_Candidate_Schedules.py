@@ -6,6 +6,7 @@ import streamlit as st
 import database as db
 from email_service import EmailDeliveryError, send_candidate_invitation
 from email_validation import validate_email_address
+from candidate_roles import candidate_roles_for_discipline
 from shared import (
     inject_global_styles,
     render_logo,
@@ -103,6 +104,36 @@ else:
             f"**Email:** {candidate['email']} | **Current Test Date:** {candidate['test_date']}"
         )
 
+        disciplines = cached_disciplines()
+        discipline_options = ["Select discipline"] + disciplines
+        current_discipline = candidate.get("scheduled_discipline")
+        discipline_key = f"schedule_discipline_{candidate['id']}"
+        if discipline_key not in st.session_state:
+            st.session_state[discipline_key] = (
+                current_discipline if current_discipline in discipline_options else "Select discipline"
+            )
+        scheduled_discipline = st.selectbox(
+            "Candidate Discipline *",
+            discipline_options,
+            key=discipline_key,
+        )
+        candidate_role_options = (
+            ["Select role", *candidate_roles_for_discipline(scheduled_discipline)]
+            if scheduled_discipline != "Select discipline"
+            else ["Select role"]
+        )
+        candidate_role_key = f"schedule_candidate_role_{candidate['id']}"
+        if st.session_state.get(candidate_role_key) not in candidate_role_options:
+            current_role = candidate.get("candidate_role") or ""
+            st.session_state[candidate_role_key] = (
+                current_role if current_role in candidate_role_options else "Select role"
+            )
+        candidate_role = st.selectbox(
+            "Candidate Role *",
+            candidate_role_options,
+            key=candidate_role_key,
+        )
+
         with st.form(f"schedule_{candidate['id']}"):
             current_test_date = candidate["test_date"]
             schedule_date = st.date_input(
@@ -110,18 +141,6 @@ else:
                 value=current_test_date,
                 min_value=(
                     min(current_test_date, date.today()) if current_test_date else date.today()
-                ),
-            )
-            disciplines = cached_disciplines()
-            discipline_options = ["Select discipline"] + disciplines
-            current_discipline = candidate.get("scheduled_discipline")
-            scheduled_discipline = st.selectbox(
-                "Candidate Discipline *",
-                discipline_options,
-                index=(
-                    discipline_options.index(current_discipline)
-                    if current_discipline in discipline_options
-                    else 0
                 ),
             )
             projects = cached_projects(user["id"])
@@ -146,7 +165,13 @@ else:
             # Send button is only enabled once the schedule has been saved.
             saved_for_candidate = (
                 st.session_state.get("candidate_schedule_saved_id") == candidate["id"]
-                or bool(candidate.get("test_date"))
+                or (
+                    bool(candidate.get("test_date"))
+                    and schedule_date == candidate.get("test_date")
+                    and project_assignment == candidate.get("project_assignment")
+                    and scheduled_discipline == candidate.get("scheduled_discipline")
+                    and candidate_role == candidate.get("candidate_role")
+                )
             )
             with send_col:
                 send_schedule = st.form_submit_button(
@@ -161,17 +186,20 @@ else:
                         raise ValueError("Test date must be today or a future date.")
                     if scheduled_discipline == "Select discipline":
                         raise ValueError("Candidate Discipline is required.")
+                    if candidate_role == "Select role":
+                        raise ValueError("Candidate Role is required.")
                     if project_assignment == "Select project assignment":
                         raise ValueError("Project Assignment is required.")
                     db.update_candidate_schedule(
                         user["id"], candidate["id"], schedule_date,
-                        project_assignment, scheduled_discipline,
+                        project_assignment, scheduled_discipline, candidate_role,
                     )
                     clear_read_caches()
                     st.session_state.candidate_schedule_saved = {
                         "candidate_name": candidate["name"],
                         "test_date": schedule_date.strftime("%A, %d %B %Y"),
                         "discipline": scheduled_discipline,
+                        "candidate_role": candidate_role,
                         "project_assignment": project_assignment,
                     }
                     st.session_state.candidate_schedule_saved_id = candidate["id"]
@@ -193,6 +221,7 @@ else:
                         temporary_password,
                         candidate["test_date"],
                         candidate.get("scheduled_discipline") or candidate["discipline"],
+                        candidate.get("candidate_role", ""),
                     )
                     db.mark_invitation_sent(user["id"], candidate["id"])
                     clear_read_caches()
@@ -209,11 +238,10 @@ if saved_schedule:
     st.success(
         f"Schedule saved for {saved_schedule['candidate_name']}: "
         f"{saved_schedule['test_date']} | {saved_schedule['discipline']} | "
-        f"Project: {saved_schedule['project_assignment']}"
+        f"{saved_schedule['candidate_role']} | Project: {saved_schedule['project_assignment']}"
     )
 if sent_schedule:
     st.success(
         f"Schedule and login credentials sent to {sent_schedule['candidate_name']} "
         f"at {sent_schedule['email']}."
     )
-

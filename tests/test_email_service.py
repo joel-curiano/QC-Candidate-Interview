@@ -93,14 +93,15 @@ def test_invitation_contains_schedule_and_credentials(monkeypatch):
 
     send_candidate_invitation(
         'candidate@example.com', 'Candidate Name', 'candidate.user',
-        'Temp!Pass123', '2026-09-10', 'Welding QC',
+        'Temp!Pass123', '2026-09-10', 'NDT QC', 'Coordinator',
     )
 
     message = sent['message']
     body = message.get_content()
     assert message['To'] == 'candidate@example.com'
     assert 'Thursday, 10 September 2026' in body
-    assert 'Welding QC' in body
+    assert 'NDT QC' in body
+    assert 'Candidate role: Coordinator' in body
     assert 'candidate.user' in body
     assert 'Temp!Pass123' in body
     assert 'valid only on Thursday, 10 September 2026' in body

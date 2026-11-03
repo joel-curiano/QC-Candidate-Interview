@@ -63,7 +63,7 @@ def _deliver(message, host):
             ) from exc
 
 
-def send_candidate_invitation(email, name, username, temporary_password, test_date, discipline=''):
+def send_candidate_invitation(email, name, username, temporary_password, test_date, discipline='', candidate_role=''):
     host, sender, app_url = _email_settings()
 
     message = EmailMessage()
@@ -84,6 +84,7 @@ def send_candidate_invitation(email, name, username, temporary_password, test_da
         'keep this message available for the assessment date.\n\n'
         f'Scheduled date: {display_date}\n'
         f'Discipline: {discipline or "As assigned in the portal"}\n'
+        f'Candidate role: {candidate_role or "As assigned in the portal"}\n'
         f'Assessment portal: {app_url}\n\n'
         'Login credentials\n'
         f'Username: {username}\n'

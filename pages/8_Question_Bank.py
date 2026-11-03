@@ -4,6 +4,7 @@ import json
 import streamlit as st
 
 import database as db
+from candidate_roles import candidate_roles_for_discipline, default_candidate_role
 from question_import import QuestionImportError, export_questions_bytes, parse_questions, template_bytes
 from shared import (
     inject_global_styles,
@@ -46,6 +47,17 @@ if st.session_state.pop("question_bank_deleted", False):
 def clear_question_data():
     st.session_state.pop("question_export_bytes", None)
     clear_read_caches()
+
+
+def reset_question_browse_filters():
+    st.session_state["reset_question_browse_filters"] = True
+
+
+if st.session_state.pop("reset_question_browse_filters", False):
+    st.session_state["qb_filter_discipline"] = "All"
+    st.session_state["qb_filter_type"] = ""
+    st.session_state["qb_filter_candidate_role"] = ""
+    st.session_state["qb_page"] = 1
 
 
 def refresh_question_bank_page():
@@ -233,12 +245,6 @@ discipline_labels = {
 
 type_options = {k: v for k, v in QUESTION_TYPE_LABELS.items()}
 type_options_all = {"": "All types", **type_options}
-candidate_role_options = {
-    "": "All candidate roles",
-    "Inspector": "Inspector",
-    "Supervisor": "Supervisor",
-    "Technician": "Technician",
-}
 
 filter_col1, filter_col2, filter_col3 = st.columns(3)
 with filter_col1:
@@ -248,6 +254,17 @@ with filter_col1:
         format_func=lambda discipline: discipline_labels[discipline],
         key="qb_filter_discipline",
     )
+
+available_candidate_roles = (
+    ("Coordinator", "Inspector", "Supervisor")
+    if filter_discipline == "All"
+    else candidate_roles_for_discipline(filter_discipline)
+)
+candidate_role_options = {"": "All candidate roles"}
+candidate_role_options.update({role: role for role in available_candidate_roles})
+if st.session_state.get("qb_filter_candidate_role") not in candidate_role_options:
+    st.session_state["qb_filter_candidate_role"] = ""
+
 with filter_col2:
     filter_type = st.selectbox(
         "Question type",
@@ -310,8 +327,8 @@ else:
         ):
             st.write(q["question_text"])
             role_display = q.get('candidate_role')
-            if not role_display or role_display in ('All', ''):
-                role_display = 'Inspector'
+            if not role_display or role_display == 'All':
+                role_display = default_candidate_role(q["discipline"])
             st.caption(f"Candidate role: {role_display}")
             if q["q_type"] == "mcq":
                 options_list = json.loads(q["options"]) if q.get("options") else []
@@ -342,6 +359,7 @@ else:
                             try:
                                 db.delete_question(user["id"], q["id"], force=True)
                                 clear_read_caches()
+                                reset_question_browse_filters()
                                 refresh_question_bank_page()
                             except ValueError as exc:
                                 st.error(str(exc))
@@ -350,6 +368,7 @@ else:
                     try:
                         db.delete_question(user["id"], q["id"])
                         clear_read_caches()
+                        reset_question_browse_filters()
                         refresh_question_bank_page()
                     except ValueError as exc:
                         st.error(str(exc))
@@ -361,13 +380,21 @@ if user["role"] == "Admin":
     st.divider()
 
     def _render_question_bank_wipe():
-        with st.expander("Delete Questions from Bank"):
+        with st.container(border=True):
+            st.subheader("Delete Questions from Bank")
             st.warning(
                 "This clears the active question bank based on your selection. Any question that has already appeared in a candidate submission is archived so historical assessment records remain linked to the original question."
             )
             
             wipe_discipline = st.selectbox("Select Discipline to Delete", ['All Disciplines'] + db.disciplines(), key="wipe_discipline_select")
-            wipe_role = st.selectbox("Select Candidate Role to Delete", ['All Roles', 'Inspector', 'Supervisor', 'Technician'], key="wipe_role_select")
+            wipe_role_options = (
+                ['All Roles', 'Coordinator', 'Inspector', 'Supervisor']
+                if wipe_discipline == 'All Disciplines'
+                else ['All Roles', *candidate_roles_for_discipline(wipe_discipline)]
+            )
+            if st.session_state.get("wipe_role_select") not in wipe_role_options:
+                st.session_state["wipe_role_select"] = 'All Roles'
+            wipe_role = st.selectbox("Select Candidate Role to Delete", wipe_role_options, key="wipe_role_select")
 
             if st.button("Delete Questions from Bank", type="primary"):
                 if hasattr(st, "dialog"):
@@ -389,6 +416,7 @@ if user["role"] == "Admin":
                                 db.wipe_questions(user["id"], discipline, role, progress_callback=wipe_progress)
                                 clear_read_caches()
                                 progress_bar.empty()
+                                reset_question_browse_filters()
                                 st.session_state["question_bank_deleted"] = True
                                 st.rerun()
                             except ValueError as exc:
@@ -415,6 +443,7 @@ if user["role"] == "Admin":
                         clear_read_caches()
                         progress_bar.empty()
                         st.session_state.pop("confirm_wipe_question_bank", None)
+                        reset_question_browse_filters()
                         st.session_state["question_bank_deleted"] = True
                         st.rerun()
                     except ValueError as exc:

@@ -94,13 +94,6 @@ with st.expander("Manage Candidate Accounts"):
 
         with st.form("edit_candidate_account"):
             name = st.text_input("Full name *", value=candidate.get("name", ""))
-            candidate_roles = ['', 'Inspector', 'Supervisor', 'Technician']
-            current_role = candidate.get('candidate_role') or ''
-            candidate_role = st.selectbox(
-                'Candidate Role', candidate_roles,
-                index=candidate_roles.index(current_role) if current_role in candidate_roles else 0,
-                format_func=lambda value: value or 'Not assigned',
-            )
             email = st.text_input("Email *", value=candidate.get("email", ""))
             iqama_no = st.text_input("Iqama No *", value=candidate.get("iqama_no", ""))
             employee_no = st.text_input("Employee No", value=candidate.get("employee_no", ""))
@@ -117,7 +110,6 @@ with st.expander("Manage Candidate Accounts"):
                         raise ValueError("Name, email, and Iqama No are required.")
                     db.update_candidate_details(
                         user["id"], selected_id, name, email, iqama_no, employee_no, mobile_no,
-                        candidate_role=candidate_role,
                     )
                     clear_read_caches()
                     st.session_state.candidate_details_updated = True
@@ -150,23 +142,51 @@ with st.expander("Manage Candidate Accounts"):
             'This permanently deletes the candidate account, submitted assessments and answers, '
             'and any saved assessment draft. Accounts with employment verification history cannot be deleted.'
         )
-        confirmed = st.checkbox(
-            f"I understand that deleting {candidate['name']}'s account and assessment data is permanent.",
-            key=f"confirm_delete_candidate_{selected_id}",
-        )
         if st.button(
             'Delete Candidate Account',
             key=f"delete_candidate_{selected_id}",
-            type='primary',
-            disabled=not confirmed,
+            type='secondary',
         ):
-            try:
-                db.delete_user(user["id"], selected_id)
-                clear_read_caches()
-                st.session_state.candidate_account_deleted = candidate["name"]
-                st.rerun()
-            except ValueError as exc:
-                st.error(str(exc))
+            if hasattr(st, 'dialog'):
+                @st.dialog('Confirm Candidate Account Deletion')
+                def _delete_candidate_dialog(candidate_id, candidate_name):
+                    st.error(
+                        f"Delete {candidate_name}'s account permanently? This also deletes their "
+                        'submitted assessments, answers, and saved assessment draft.'
+                    )
+                    st.caption('This action cannot be undone.')
+                    if st.button('Permanently Delete Candidate Account', type='primary'):
+                        try:
+                            db.delete_user(user['id'], candidate_id)
+                            clear_read_caches()
+                            st.session_state.candidate_account_deleted = candidate_name
+                            st.rerun()
+                        except ValueError as exc:
+                            st.error(str(exc))
+
+                _delete_candidate_dialog(selected_id, candidate['name'])
+            else:
+                st.session_state[f'confirm_delete_candidate_{selected_id}'] = True
+
+        if st.session_state.get(f'confirm_delete_candidate_{selected_id}'):
+            confirmed = st.checkbox(
+                f"I understand that deleting {candidate['name']}'s account and assessment data is permanent.",
+                key=f"confirm_delete_candidate_acknowledged_{selected_id}",
+            )
+            if st.button(
+                'Permanently Delete Candidate Account',
+                key=f"permanently_delete_candidate_{selected_id}",
+                type='primary',
+                disabled=not confirmed,
+            ):
+                try:
+                    db.delete_user(user['id'], selected_id)
+                    clear_read_caches()
+                    st.session_state.candidate_account_deleted = candidate['name']
+                    st.session_state.pop(f'confirm_delete_candidate_{selected_id}', None)
+                    st.rerun()
+                except ValueError as exc:
+                    st.error(str(exc))
 
 st.divider()
 

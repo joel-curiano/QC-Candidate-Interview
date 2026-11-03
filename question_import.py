@@ -5,6 +5,11 @@ import json
 
 from openpyxl import Workbook, load_workbook
 from question_types import QUESTION_TYPES, REVIEWER_SCORED_TYPES
+from candidate_roles import (
+    candidate_roles_for_discipline,
+    is_valid_candidate_role,
+    normalize_candidate_role,
+)
 
 
 CORE_HEADERS = ['Discipline', 'Question type', 'Question', 'Multiple Choice options', 'Correct answer', 'Scoring rubric']
@@ -58,9 +63,8 @@ def parse_questions(workbook_bytes):
         discipline, kind, prompt, options, correct, rubric = map(_text, values[:6])
         metadata = list(row[6:13]) + ['', '', '', '', '', '', '']
         subject, sub_subject, scored, difficulty, topic_group, delivery_stage, candidate_role = map(_text, metadata[:7])
-        subject = subject or 'General'; sub_subject = sub_subject or 'General'; difficulty = difficulty or 'moderate'; topic_group = topic_group or 'General'; scored = scored.lower() not in ('no', 'false', '0', 'non-scored'); delivery_stage = delivery_stage or 'standard'; candidate_role = candidate_role or 'Inspector'
-        if candidate_role == 'All':
-            candidate_role = 'Inspector'
+        subject = subject or 'General'; sub_subject = sub_subject or 'General'; difficulty = difficulty or 'moderate'; topic_group = topic_group or 'General'; scored = scored.lower() not in ('no', 'false', '0', 'non-scored'); delivery_stage = delivery_stage or 'standard'
+        candidate_role = normalize_candidate_role(discipline, candidate_role)
         
         row_result = {'row_number': row_number, 'success': True, 'error': None, 'question': None, 'prompt': prompt}
         try:
@@ -70,8 +74,9 @@ def parse_questions(workbook_bytes):
                 raise QuestionImportError('Question type must be mcq, essay, or oral_practical.')
             if difficulty not in ('easy', 'moderate', 'difficult') or delivery_stage not in ('standard', 'oral_opening'):
                 raise QuestionImportError('Difficulty and delivery stage values are invalid.')
-            if candidate_role not in ('All', 'Inspector', 'Supervisor', 'Technician'):
-                raise QuestionImportError('Candidate role must be All, Inspector, Supervisor, or Technician.')
+            if not is_valid_candidate_role(discipline, candidate_role):
+                choices = ', '.join(candidate_roles_for_discipline(discipline))
+                raise QuestionImportError(f'Candidate role for {discipline} must be {choices}.')
             if delivery_stage == 'oral_opening' and (kind != 'oral_practical' or scored):
                 raise QuestionImportError('Oral opening questions must be non-scored Oral-Practical questions.')
             option_separator = '\n' if '\n' in options or '\r' in options else ';'
@@ -121,6 +126,7 @@ def template_bytes():
     instructions.append(['Fill the Questions sheet and leave no completely blank rows between questions.'])
     instructions.append(['Question type must be mcq, essay, or oral_practical. For Multiple Choice questions, put one option per line in Multiple Choice options.'])
     instructions.append(['Assessment Settings determines the maximum points for each question type. Keep the headers unchanged.'])
+    instructions.append(['Candidate role: use Coordinator or Supervisor for NDT QC; use Inspector or Supervisor for other disciplines.'])
     instructions.column_dimensions['A'].width = 110
     output = BytesIO()
     workbook.save(output)
@@ -144,7 +150,7 @@ def export_questions_bytes(questions):
             '\n'.join(str(option) for option in options),
             question.get('correct_answer', '') or '',
             question.get('rubric', '') or '', question.get('subject', 'General'), question.get('sub_subject', 'General'),
-            'yes' if question.get('is_scored', True) else 'no', question.get('difficulty', 'moderate'), question.get('topic_group', 'General'), question.get('delivery_stage', 'standard'), ('Inspector' if not question.get('candidate_role') or question.get('candidate_role') in ('All', '') else question.get('candidate_role')),
+            'yes' if question.get('is_scored', True) else 'no', question.get('difficulty', 'moderate'), question.get('topic_group', 'General'), question.get('delivery_stage', 'standard'), normalize_candidate_role(question.get('discipline', ''), question.get('candidate_role')),
         ])
         for cell in sheet[sheet.max_row]:
             if isinstance(cell.value, str):
@@ -153,6 +159,4 @@ def export_questions_bytes(questions):
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()
-
-
 

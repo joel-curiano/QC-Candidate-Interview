@@ -32,7 +32,10 @@ def test_candidate_and_reviewer_flow(postgres_db):
     db.init_db()
     db.create_user('admin', 'Admin', PASSWORD, bootstrap=True)
     admin = db.authenticate('admin', PASSWORD)
-    db.create_user('candidate', 'Candidate', PASSWORD, actor=admin['id'], email='candidate@example.com', test_date=date.today(), discipline='Welding QC', iqama_no='1234567890', employee_no='EMP-1')
+    candidate_id = db.create_user('candidate', 'Candidate', PASSWORD, actor=admin['id'], email='candidate@example.com', test_date=date.today(), discipline='Welding QC', iqama_no='1234567890', employee_no='EMP-1')
+    db.update_candidate_schedule(
+        admin['id'], candidate_id, date.today(), 'Unassigned', 'Welding QC', 'Inspector',
+    )
     mcq_difficulties = ['easy'] * 12 + ['moderate'] * 6 + ['difficult'] * 2
     for index, difficulty in enumerate(mcq_difficulties):
         db.add_question(
@@ -57,7 +60,6 @@ def test_candidate_and_reviewer_flow(postgres_db):
     at.text_input[1].input(PASSWORD)
     next(b for b in at.button if b.label == 'Sign in').click().run()
     assert not at.exception
-    next(widget for widget in at.selectbox if widget.label == 'Job Title').set_value('Inspector')
     next(b for b in at.button if b.label == 'Start Multiple Choice Questions').click().run()
     for radio in at.radio:
         if radio.label != 'Navigation':
