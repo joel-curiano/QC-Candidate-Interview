@@ -27,7 +27,8 @@ def test_restart_restores_mcq_and_essay_draft():
     state = State(
         attempt_token='same-attempt', assessment_discipline='Welding QC',
         assessment_phase='essay', assessment_essay_index=2,
-        assessment_mcq_deadline=1000, assessment_essay_started_at={11: 1100, 12: 1200},
+        assessment_mcq_deadline=1000, assessment_mcq_page=2,
+        assessment_essay_started_at={11: 1100, 12: 1200},
         assessment_mcq_options={1: ['B', 'A']}, assessment_responses={1: 'B'},
         assessment_essay_pending_unanswered=[3],
         answer_12='Essay in progress without pressing Next',
@@ -45,6 +46,7 @@ def test_restart_restores_mcq_and_essay_draft():
     assert restored.assessment_phase == 'essay'
     assert restored.assessment_essay_index == 2
     assert restored.assessment_mcq_deadline == 1000
+    assert restored.assessment_mcq_page == 2
     assert restored.assessment_essay_started_at == {11: 1100, 12: 1200}
     assert restored.assessment_mcq_options == {1: ['B', 'A']}
     assert restored.assessment_essay_pending_unanswered == [3]

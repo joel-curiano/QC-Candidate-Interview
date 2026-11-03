@@ -29,7 +29,7 @@ digraph QCCandidateInterview {
     staff [label="Reviewer or Admin", fillcolor="#FEF3C7"];
 
     choose [label="Choose scheduled\ndiscipline"];
-    assessment [label="Randomized MCQ, essay,\noral and practical assessment"];
+    assessment [label="Randomized MCQ pages of five,\nessay, oral and practical assessment"];
     draft [label="Persist draft and\ntimer state"];
     submit [label="Submit assessment"];
     results [label="View results and\nfeedback"];

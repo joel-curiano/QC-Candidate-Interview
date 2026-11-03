@@ -142,6 +142,7 @@ except db.DatabaseError as exc:
 # ---------------------------------------------------------------------------
 MCQ_TIME_LIMIT_SECONDS = 40 * 60
 ESSAY_TIME_LIMIT_SECONDS = 6 * 60
+MCQ_QUESTIONS_PER_PAGE = 5
 
 ASSESSMENT_DRAFT_KEYS = (
     "assessment_discipline",
@@ -152,6 +153,7 @@ ASSESSMENT_DRAFT_KEYS = (
     "assessment_reviewer_ids",
     "assessment_mcq_options",
     "assessment_mcq_deadline",
+    "assessment_mcq_page",
     "assessment_essay_started_at",
     "assessment_essay_index",
     "assessment_counts",
@@ -823,14 +825,14 @@ if st.session_state.get("assessment_phase", "mcq") == "mcq":
             "These Multiple Choice questions are unanswered: "
             + ", ".join(str(number) for number in pending_unanswered)
             + ". "
-            "Return to the questions to complete them, or proceed with those answers scored as zero."
+            "Return to the questions to complete them, or continue with those answers scored as zero."
         )
         return_col, proceed_col = st.columns(2)
         if return_col.button("Return to unanswered questions", type="primary"):
             st.session_state.pop("assessment_mcq_pending_unanswered", None)
             save_current_assessment_draft(user["id"])
             st.rerun()
-        if proceed_col.button("Proceed with unanswered questions"):
+        if proceed_col.button("Continue with unanswered questions"):
             for question in mcq_questions:
                 answer = st.session_state.get(
                     f"answer_{question['id']}", responses.get(question['id'], "")
@@ -844,26 +846,64 @@ if st.session_state.get("assessment_phase", "mcq") == "mcq":
             save_current_assessment_draft(user["id"])
             st.rerun()
     else:
-        for number, question in enumerate(mcq_questions, 1):
-            answer_key = f"answer_{question['id']}"
-            options = st.session_state.assessment_mcq_options[question["id"]]
-            if answer_key not in st.session_state:
-                saved_answer = responses.get(question["id"])
-                if saved_answer in options:
-                    st.session_state[answer_key] = saved_answer
-            st.radio(
-                f"{number}. {question['question_text']}",
-                st.session_state.assessment_mcq_options[question["id"]],
-                index=None,
-                key=answer_key,
-                disabled=is_mcq_expired,
-                on_change=save_assessment_answer,
-                args=(user["id"], question["id"]),
+        @st.fragment
+        def render_mcq_answers() -> None:
+            """Render one MCQ page and save answers without rerunning the assessment page."""
+            total_pages = max(1, (len(mcq_questions) + MCQ_QUESTIONS_PER_PAGE - 1) // MCQ_QUESTIONS_PER_PAGE)
+            page_index = min(
+                max(st.session_state.get("assessment_mcq_page", 0), 0),
+                total_pages - 1,
             )
-        st.info(
-            "Each selected answer is saved automatically. "
-            "You have six minutes for each Essay question after continuing."
-        )
+            st.session_state.assessment_mcq_page = page_index
+            first_question_index = page_index * MCQ_QUESTIONS_PER_PAGE
+            visible_questions = mcq_questions[
+                first_question_index:first_question_index + MCQ_QUESTIONS_PER_PAGE
+            ]
+            st.caption(
+                f"Questions {first_question_index + 1}-{first_question_index + len(visible_questions)} "
+                f"of {len(mcq_questions)}"
+            )
+            for number, question in enumerate(visible_questions, first_question_index + 1):
+                answer_key = f"answer_{question['id']}"
+                options = st.session_state.assessment_mcq_options[question["id"]]
+                if answer_key not in st.session_state:
+                    saved_answer = responses.get(question["id"])
+                    if saved_answer in options:
+                        st.session_state[answer_key] = saved_answer
+                st.radio(
+                    f"{number}. {question['question_text']}",
+                    options,
+                    index=None,
+                    key=answer_key,
+                    disabled=is_mcq_expired,
+                    on_change=save_assessment_answer,
+                    args=(user["id"], question["id"]),
+                )
+            if total_pages > 1:
+                previous_column, page_column, next_column = st.columns([1, 2, 1])
+                if previous_column.button(
+                    "Previous questions",
+                    key="previous_mcq_page",
+                    disabled=page_index == 0,
+                ):
+                    st.session_state.assessment_mcq_page = page_index - 1
+                    save_current_assessment_draft(user["id"])
+                    st.rerun(scope="fragment")
+                page_column.caption(f"Page {page_index + 1} of {total_pages}")
+                if next_column.button(
+                    "Next questions",
+                    key="next_mcq_page",
+                    disabled=page_index == total_pages - 1,
+                ):
+                    st.session_state.assessment_mcq_page = page_index + 1
+                    save_current_assessment_draft(user["id"])
+                    st.rerun(scope="fragment")
+            st.info(
+                "Each selected answer is saved automatically. "
+                "You have six minutes for each Essay question after continuing."
+            )
+
+        render_mcq_answers()
         submit_label = (
             "Time expired: Proceed to Essay Questions"
             if is_mcq_expired
@@ -989,7 +1029,7 @@ else:
             if col1.button("Return to question", type="primary"):
                 st.session_state.pop(f"confirm_empty_{question['id']}", None)
                 st.rerun()
-            if col2.button("Proceed without answering"):
+            if col2.button("Continue to next question"):
                 responses[question["id"]] = ""
                 st.session_state.pop(f"confirm_empty_{question['id']}", None)
                 st.session_state.assessment_essay_index = essay_index + 1

@@ -14,6 +14,7 @@ def mcq_app():
 import streamlit as st
 import time
 MCQ_TIME_LIMIT_SECONDS = 2400
+MCQ_QUESTIONS_PER_PAGE = 5
 user = {'id': 1}
 mcq_questions = [{'id': 1, 'question_text': 'First'}, {'id': 2, 'question_text': 'Second'}]
 st.session_state.setdefault('assessment_mcq_options', {1: ['A', 'B'], 2: ['A', 'B']})
@@ -52,11 +53,20 @@ def test_return_restores_answers_and_allows_completing_blanks(mcq_app):
     assert app.session_state['assessment_phase'] == 'essay'
 
 
+def test_mcq_answers_render_in_a_fragment():
+    source = (Path(__file__).parents[1] / 'app.py').read_text(encoding='utf-8')
+    phase = source.split('# ---- MCQ phase ----', 1)[1].split('# ---- Essay phase ----', 1)[0]
+    assert '@st.fragment\n        def render_mcq_answers' in phase
+    assert 'MCQ_QUESTIONS_PER_PAGE = 5' in source
+    assert 'Previous questions' in phase
+    assert 'Next questions' in phase
+
+
 def test_proceed_preserves_saved_answers(mcq_app):
     app = mcq_app
     app.radio[0].set_value('B').run()
     click(app, 'Continue to Essay Questions')
-    click(app, 'Proceed with unanswered questions')
+    click(app, 'Continue with unanswered questions')
     assert app.session_state['assessment_responses'] == {1: 'B', 2: '[Unanswered]'}
     assert app.session_state['assessment_mcq_unanswered_count'] == 1
 
