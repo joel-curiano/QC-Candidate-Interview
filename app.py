@@ -636,7 +636,8 @@ assessment_in_progress = bool(st.session_state.get("assessment_phase"))
 can_suspend_test = assessment_in_progress and user.get("test_suspension_allowed")
 
 if can_suspend_test:
-    if st.sidebar.button("Log out and pause test", type="primary", key="pause_logout_button"):
+    st.caption("Need to leave? Your assessment can be safely paused and resumed at your next sign-in.")
+    if st.button("Log out and pause test", type="primary", key="pause_logout_button"):
         st.session_state.confirm_assessment_pause_logout = True
 
     if st.session_state.get("confirm_assessment_pause_logout"):
@@ -678,9 +679,9 @@ if can_suspend_test:
                 st.session_state.pop("confirm_assessment_pause_logout", None)
                 st.rerun()
 elif assessment_in_progress:
-    st.sidebar.button("Sign out", disabled=True)
-    st.sidebar.caption("Sign-out is unavailable while this assessment is in progress.")
-elif st.sidebar.button("Sign out"):
+    st.button("Sign out", disabled=True, key="disabled_assessment_logout_button")
+    st.caption("Sign-out is unavailable while this assessment is in progress.")
+elif st.button("Sign out", key="candidate_logout_button"):
     db.release_login(user["id"], login_token)
     st.session_state.clear()
     st.rerun()

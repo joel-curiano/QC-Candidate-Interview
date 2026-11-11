@@ -86,3 +86,4 @@ def test_resumable_test_uses_a_confirmed_pause_logout_action():
     assert "Log out and pause test" in app_source
     assert "Your test will be paused" in app_source
     assert "when you next log in" in app_source
+    assert 'st.sidebar.button("Log out and pause test"' not in app_source

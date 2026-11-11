@@ -93,12 +93,6 @@ if user["role"] == "Admin":
         clear_question_caches()
         st.success("Cached question data cleared.")
 
-    st.divider()
-    st.subheader("Delete Candidate In-Progress Answers")
-    st.caption(
-        "This permanently removes one candidate's saved draft and ends their active session. "
-        "Submitted assessments are not affected."
-    )
     saved_drafts = db.assessment_drafts_for_review(user["id"])
     if saved_drafts:
         draft_options = {
@@ -137,6 +131,11 @@ if user["role"] == "Admin":
                 st.error(str(exc))
 
         st.divider()
+        st.subheader("Delete Candidate In-Progress Answers")
+        st.caption(
+            "This permanently removes one candidate's saved draft and ends their active session. "
+            "Submitted assessments are not affected."
+        )
         draft_id = st.selectbox(
             "Candidate draft to delete",
             list(draft_options),
