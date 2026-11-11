@@ -161,6 +161,7 @@ ASSESSMENT_DRAFT_KEYS = (
     "assessment_responses",
     "assessment_mcq_pending_unanswered",
     "assessment_essay_pending_unanswered",
+    "assessment_suspended_timer",
 )
 
 
@@ -205,6 +206,53 @@ def restore_assessment_draft(draft: dict) -> None:
             }
     for question_id, answer in st.session_state.get("assessment_responses", {}).items():
         st.session_state[f"answer_{question_id}"] = answer
+
+
+def resume_suspended_assessment_timer() -> bool:
+    """Restart an authorized suspended timer with its saved remaining duration."""
+    suspended_timer = st.session_state.pop("assessment_suspended_timer", None)
+    if not suspended_timer:
+        return False
+    remaining_seconds = max(0, float(suspended_timer.get("remaining_seconds", 0)))
+    if suspended_timer.get("phase") == "mcq":
+        st.session_state.assessment_mcq_deadline = time.time() + remaining_seconds
+    elif suspended_timer.get("phase") == "essay":
+        question_id = int(suspended_timer["question_id"])
+        essay_started_at = st.session_state.setdefault("assessment_essay_started_at", {})
+        essay_started_at[question_id] = time.time() - (ESSAY_TIME_LIMIT_SECONDS - remaining_seconds)
+    else:
+        return False
+    return True
+
+
+def suspend_assessment_timer() -> bool:
+    """Freeze the active MCQ or Essay timer before the candidate signs out."""
+    phase = st.session_state.get("assessment_phase")
+    if phase == "mcq":
+        deadline = st.session_state.get("assessment_mcq_deadline")
+        if deadline is None:
+            return False
+        st.session_state.assessment_suspended_timer = {
+            "phase": "mcq",
+            "remaining_seconds": max(0, float(deadline) - time.time()),
+        }
+        return True
+    if phase == "essay":
+        essay_index = st.session_state.get("assessment_essay_index", 0)
+        essay_ids = st.session_state.get("assessment_essay_ids", [])
+        if essay_index >= len(essay_ids):
+            return False
+        question_id = essay_ids[essay_index]
+        started_at = st.session_state.get("assessment_essay_started_at", {}).get(question_id)
+        if started_at is None:
+            return False
+        st.session_state.assessment_suspended_timer = {
+            "phase": "essay",
+            "question_id": question_id,
+            "remaining_seconds": max(0, started_at + ESSAY_TIME_LIMIT_SECONDS - time.time()),
+        }
+        return True
+    return False
 
 
 def hide_login_sidebar() -> None:
@@ -585,9 +633,16 @@ st.sidebar.write(f"**{user['name']}**")
 st.sidebar.caption(user["role"])
 
 if st.sidebar.button("Sign out"):
-    db.release_login(user["id"], login_token)
-    st.session_state.clear()
-    st.rerun()
+    assessment_in_progress = bool(st.session_state.get("assessment_phase"))
+    if assessment_in_progress and not user.get("test_suspension_allowed"):
+        st.sidebar.error("Sign-out is unavailable while this assessment is in progress.")
+    else:
+        if assessment_in_progress:
+            suspend_assessment_timer()
+            save_current_assessment_draft(user["id"])
+        db.release_login(user["id"], login_token)
+        st.session_state.clear()
+        st.rerun()
 
 candidate_subs = db.submissions(user["id"])
 if candidate_subs and not user.get("test_date") and not st.session_state.get("assessment_phase"):
@@ -669,6 +724,9 @@ if st.session_state.get("assessment_discipline") != discipline:
         and draft.get("attempt_token")
     ):
         restore_assessment_draft(draft)
+        if resume_suspended_assessment_timer():
+            save_current_assessment_draft(user["id"])
+            st.session_state.assessment_timer_resumed = True
         st.session_state.assessment_draft_restored = True
     else:
         st.session_state.assessment_discipline = discipline
@@ -785,6 +843,8 @@ def submit_candidate_assessment():
 
 if st.session_state.pop("assessment_draft_restored", False):
     st.success("Your saved assessment answers have been restored.")
+if st.session_state.pop("assessment_timer_resumed", False):
+    st.info("Your assessment timer has resumed from where it was suspended.")
 
 st.info(
     f"Complete {settings['mcq']} Multiple Choice Questions and "

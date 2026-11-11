@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS qc_portal.users (
     test_date DATE,
     project_assignment TEXT NOT NULL DEFAULT '',
     scheduled_discipline TEXT NOT NULL DEFAULT '',
+    test_suspension_allowed BOOLEAN NOT NULL DEFAULT FALSE,
     assigned_disciplines TEXT[] NOT NULL DEFAULT ARRAY['All Disciplines']::TEXT[],
     invitation_sent_at TIMESTAMPTZ,
     active_login_token TEXT,

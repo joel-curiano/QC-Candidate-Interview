@@ -158,6 +158,14 @@ else:
                 ),
                 help="Use Unassigned for new applicants taking the CTA before a project is assigned.",
             )
+            test_suspension_allowed = st.checkbox(
+                "Allow the candidate to suspend the test by signing out",
+                value=bool(candidate.get("test_suspension_allowed")),
+                help=(
+                    "When enabled, signing out during Multiple Choice or Essay questions "
+                    "pauses that test timer until the candidate signs in again."
+                ),
+            )
             save_col, send_col = st.columns(2)
             with save_col:
                 save_schedule = st.form_submit_button("Save Schedule", type="primary")
@@ -171,6 +179,7 @@ else:
                     and project_assignment == candidate.get("project_assignment")
                     and scheduled_discipline == candidate.get("scheduled_discipline")
                     and candidate_role == candidate.get("candidate_role")
+                    and test_suspension_allowed == bool(candidate.get("test_suspension_allowed"))
                 )
             )
             with send_col:
@@ -193,6 +202,7 @@ else:
                     db.update_candidate_schedule(
                         user["id"], candidate["id"], schedule_date,
                         project_assignment, scheduled_discipline, candidate_role,
+                        test_suspension_allowed,
                     )
                     temporary_password = db.generate_password(length=6, alphanumeric_only=True)
                     db.set_candidate_temporary_password(
@@ -207,6 +217,7 @@ else:
                         "discipline": scheduled_discipline,
                         "candidate_role": candidate_role,
                         "project_assignment": project_assignment,
+                        "test_suspension_allowed": test_suspension_allowed,
                     }
                     st.session_state.candidate_schedule_saved_id = candidate["id"]
                     st.session_state[
@@ -254,6 +265,8 @@ if saved_schedule:
             f"{saved_schedule['test_date']} | {saved_schedule['discipline']} | "
             f"{saved_schedule['candidate_role']} | Project: {saved_schedule['project_assignment']}"
         )
+        if saved_schedule["test_suspension_allowed"]:
+            st.caption("Candidate sign-out will pause the active MCQ or Essay timer.")
         username_column, password_column = st.columns(2)
         with username_column:
             st.caption('Username')

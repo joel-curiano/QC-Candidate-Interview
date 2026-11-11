@@ -30,14 +30,14 @@ digraph QCCandidateInterview {
 
     choose [label="Choose scheduled\ndiscipline"];
     assessment [label="Randomized MCQ pages of five,\nessay, oral and practical assessment"];
-    draft [label="Persist draft and\ntimer state"];
+    draft [label="Persist draft and timer state,\nincluding authorized suspended timers"];
     submit [label="Submit assessment"];
     results [label="View results and\nfeedback"];
 
     create [label="Create candidate and\nreviewer accounts"];
     confirm_delete_candidate [label="Confirm permanent\ncandidate account deletion"];
     delete_candidate [label="Delete candidate account\nand assessment data"];
-    schedule [label="Schedule assessment date, discipline,\nrole and temporary login credentials"];
+    schedule [label="Schedule assessment date, discipline, role,\ntemporary login credentials and sign-out suspension permission"];
     question_bank [label="Manage disciplines\nand questions"];
     review [label="Review assessments\n(project and discipline filters)"];
     assessment_project [label="Reassign one assessment\nto a project"];
@@ -61,6 +61,8 @@ digraph QCCandidateInterview {
     candidate -> choose;
     choose -> assessment;
     assessment -> draft;
+    draft -> login [label="authorized sign-out pauses MCQ or Essay timer"];
+    login -> assessment [label="sign-in resumes suspended timer"];
     assessment -> submit;
     submit -> results;
 

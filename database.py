@@ -48,7 +48,7 @@ STARTER_DISCIPLINES = (
     'Mechanical QC', 'NDT QC', 'Non-Metallic Piping QC', 'Piping QC', 'Welding QC',
     'Pipeline QC', 'PQCS',
 )
-RUNTIME_SCHEMA_VERSION = '12'
+RUNTIME_SCHEMA_VERSION = '13'
 
 
 
@@ -230,6 +230,10 @@ def init_db():
         # These columns are required for sign-in. Keep them outside the one-time
         # question-bank migration so existing deployments receive the update.
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS active_login_token TEXT")
+        c.execute(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS test_suspension_allowed "
+            "BOOLEAN NOT NULL DEFAULT FALSE"
+        )
         c.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_disciplines TEXT[] NOT NULL DEFAULT ARRAY['All Disciplines']::TEXT[]")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS analysis_reports JSONB NOT NULL DEFAULT '{}'::jsonb")
         c.execute("ALTER TABLE submissions ADD COLUMN IF NOT EXISTS confidentiality_acceptance_id BIGINT REFERENCES confidentiality_acceptances(id)")
@@ -523,7 +527,7 @@ def generate_password(length=12, alphanumeric_only=False):
 
 
 def require(c, user_id, roles):
-    user = c.execute('SELECT id,username,name,email,role,discipline,scheduled_discipline,iqama_no,employee_no,project_assignment,test_date,assigned_projects,assigned_disciplines FROM users WHERE id=%s', (user_id,)).fetchone()
+    user = c.execute('SELECT id,username,name,email,role,discipline,scheduled_discipline,iqama_no,employee_no,project_assignment,test_date,test_suspension_allowed,assigned_projects,assigned_disciplines FROM users WHERE id=%s', (user_id,)).fetchone()
     if not user or user['role'] not in roles:
         raise ValueError('You do not have permission for this action.')
     return dict(user)
@@ -629,7 +633,7 @@ def authenticate(username, password):
     stored = user['password'] if user else password_hash('dummy password', '0' * 32)
     valid_password = hmac.compare_digest(password_hash(password, stored.split('$')[0]), stored)
     if valid_password and user and (user['role'] != 'Candidate' or user['test_date'] == date.today()):
-        session_user = {k: user[k] for k in ('id', 'username', 'name', 'role', 'email', 'test_date', 'discipline', 'scheduled_discipline', 'iqama_no', 'employee_no', 'project_assignment')}
+        session_user = {k: user[k] for k in ('id', 'username', 'name', 'role', 'email', 'test_date', 'discipline', 'scheduled_discipline', 'iqama_no', 'employee_no', 'project_assignment', 'test_suspension_allowed')}
         if user['role'] == 'Candidate':
             session_user['candidate_role'] = user.get('candidate_role') or ''
         return session_user
@@ -679,7 +683,7 @@ def candidate_accounts(actor):
     with connection() as c:
         require(c, actor, ('Admin', 'Reviewer'))
         return [dict(row) for row in c.execute(
-            "SELECT id,username,name,email,candidate_role,test_date,project_assignment,scheduled_discipline,invitation_sent_at,discipline,iqama_no,employee_no,mobile_no,previous_schedules, "
+            "SELECT id,username,name,email,candidate_role,test_date,test_suspension_allowed,project_assignment,scheduled_discipline,invitation_sent_at,discipline,iqama_no,employee_no,mobile_no,previous_schedules, "
             "CASE WHEN EXISTS (SELECT 1 FROM submissions s WHERE s.user_id=users.id) THEN 'Complete' ELSE 'Incomplete' END AS assessment_completion_status "
             "FROM users WHERE role='Candidate' ORDER BY test_date NULLS LAST, name"
         )]
@@ -824,7 +828,10 @@ def delete_user(actor, user_id):
             
         c.execute('DELETE FROM users WHERE id=%s', (user_id,))
 
-def update_candidate_schedule(actor, candidate_id, test_date, project_assignment, scheduled_discipline, candidate_role=None):
+def update_candidate_schedule(
+    actor, candidate_id, test_date, project_assignment, scheduled_discipline,
+    candidate_role=None, test_suspension_allowed=False,
+):
     if not test_date:
         raise ValueError('Candidate test date is required.')
     scheduled_discipline = str(scheduled_discipline or '').strip()
@@ -848,8 +855,8 @@ def update_candidate_schedule(actor, candidate_id, test_date, project_assignment
                 'scheduled_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
             })
             
-        c.execute("UPDATE users SET test_date=%s, project_assignment=%s, scheduled_discipline=%s, candidate_role=%s, previous_schedules=%s::jsonb, invitation_sent_at=NULL WHERE id=%s AND role='Candidate'",
-                  (test_date, str(project_assignment).strip(), scheduled_discipline, candidate_role, json.dumps(history), candidate_id))
+        c.execute("UPDATE users SET test_date=%s, project_assignment=%s, scheduled_discipline=%s, candidate_role=%s, test_suspension_allowed=%s, previous_schedules=%s::jsonb, invitation_sent_at=NULL WHERE id=%s AND role='Candidate'",
+                  (test_date, str(project_assignment).strip(), scheduled_discipline, candidate_role, bool(test_suspension_allowed), json.dumps(history), candidate_id))
 
 
 def update_assessment_project(actor, submission_id, project_assignment):
@@ -900,7 +907,7 @@ def remove_candidate_schedule(actor, candidate_id):
     with connection() as c:
         require(c, actor, ('Admin',))
         candidate = c.execute(
-            "UPDATE users SET test_date=NULL, project_assignment='', scheduled_discipline='', candidate_role='', invitation_sent_at=NULL "
+            "UPDATE users SET test_date=NULL, project_assignment='', scheduled_discipline='', candidate_role='', test_suspension_allowed=FALSE, invitation_sent_at=NULL "
             "WHERE id=%s AND role='Candidate' RETURNING id",
             (candidate_id,),
         ).fetchone()
