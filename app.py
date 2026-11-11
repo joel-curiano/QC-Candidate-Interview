@@ -142,6 +142,7 @@ except db.DatabaseError as exc:
 # ---------------------------------------------------------------------------
 MCQ_TIME_LIMIT_SECONDS = 40 * 60
 ESSAY_TIME_LIMIT_SECONDS = 6 * 60
+ASSESSMENT_RESUME_BUFFER_SECONDS = 10
 MCQ_QUESTIONS_PER_PAGE = 5
 
 ASSESSMENT_DRAFT_KEYS = (
@@ -214,6 +215,7 @@ def resume_suspended_assessment_timer() -> bool:
     if not suspended_timer:
         return False
     remaining_seconds = max(0, float(suspended_timer.get("remaining_seconds", 0)))
+    remaining_seconds += ASSESSMENT_RESUME_BUFFER_SECONDS
     if suspended_timer.get("phase") == "mcq":
         st.session_state.assessment_mcq_deadline = time.time() + remaining_seconds
     elif suspended_timer.get("phase") == "essay":
@@ -467,8 +469,6 @@ if "user" not in st.session_state:
             st.session_state.clear()
             st.session_state.user = user
             st.session_state.login_token = login_token
-            if user["role"] == "Candidate":
-                st.session_state.show_candidate_start_dialog = True
             st.rerun()
         if col2.button("Decline and sign out"):
             st.session_state.clear()
@@ -503,8 +503,6 @@ if "user" not in st.session_state:
                     st.session_state.clear()
                     st.session_state.user = user
                     st.session_state.login_token = login_token
-                    if user["role"] == "Candidate":
-                        st.session_state.show_candidate_start_dialog = True
                     st.rerun()
                 else:
                     st.error("Invalid username or password.")
@@ -607,21 +605,6 @@ if user["role"] != "Candidate":
 # ---------------------------------------------------------------------------
 # Candidate assessment runner
 # ---------------------------------------------------------------------------
-if user["role"] == "Candidate" and st.session_state.pop("show_candidate_start_dialog", False):
-    if hasattr(st, "dialog"):
-        @st.dialog("Assessment Ready")
-        def _candidate_start_dialog():
-            st.write(
-                "Your assessment is ready. Click the button below to review your details "
-                "and start the test."
-            )
-            if st.button("Click to Start Assessment Test", type="primary"):
-                st.session_state.candidate_start_prompt_seen = True
-                st.rerun()
-        _candidate_start_dialog()
-    else:
-        st.info("Your assessment is ready. Review your details below, then start the test.")
-
 if user["role"] == "Candidate" and st.session_state.get("assessment_phase"):
     assessment_draft_heartbeat(user["id"])
 
@@ -780,7 +763,8 @@ if st.session_state.get("assessment_timer_resume_pending"):
     st.subheader("Assessment Paused")
     st.info(
         "Your saved assessment is ready to continue. The timer is still paused and will only "
-        "resume after you click the button below."
+        "resume after you click the button below. Ten seconds will be added to allow for the "
+        "connection to settle."
     )
     if st.button("Click to Resume Assessment", type="primary", key="resume_assessment_button"):
         if resume_suspended_assessment_timer():

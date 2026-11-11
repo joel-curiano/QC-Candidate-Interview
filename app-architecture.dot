@@ -30,7 +30,7 @@ digraph QCCandidateInterview {
 
     choose [label="Choose scheduled\ndiscipline"];
     assessment [label="Randomized MCQ pages of five,\nessay, oral and practical assessment"];
-    draft [label="Persist draft and timer state,\nincluding authorized suspended timers"];
+    draft [label="Persist draft and timer state,\nincluding authorized suspended timers\nand a 10-second resume buffer"];
     submit [label="Submit assessment"];
     results [label="View results and\nfeedback"];
 

@@ -32,6 +32,7 @@ def timer_helpers(state, clock):
         "time": clock,
         "MCQ_TIME_LIMIT_SECONDS": 40 * 60,
         "ESSAY_TIME_LIMIT_SECONDS": 6 * 60,
+        "ASSESSMENT_RESUME_BUFFER_SECONDS": 10,
     }
     exec(compile(ast.Module(body=nodes, type_ignores=[]), "timer_helpers", "exec"), namespace)
     return namespace
@@ -47,7 +48,7 @@ def test_mcq_timer_resumes_with_only_the_saved_time_remaining():
 
     clock.value = 1_000
     assert helpers["resume_suspended_assessment_timer"]() is True
-    assert state.assessment_mcq_deadline == 1_400
+    assert state.assessment_mcq_deadline == 1_410
     assert "assessment_suspended_timer" not in state
 
 
@@ -68,7 +69,7 @@ def test_essay_timer_resumes_with_only_the_saved_time_remaining():
 
     clock.value = 1_000
     assert helpers["resume_suspended_assessment_timer"]() is True
-    assert state.assessment_essay_started_at[12] == 940
+    assert state.assessment_essay_started_at[12] == 950
 
 
 def test_schedule_exposes_the_sign_out_suspension_option():
