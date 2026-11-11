@@ -78,3 +78,11 @@ def test_schedule_exposes_the_sign_out_suspension_option():
 
     assert "Allow the candidate to suspend the test by signing out" in schedule_source
     assert "test_suspension_allowed" in database_source
+
+
+def test_resumable_test_uses_a_confirmed_pause_logout_action():
+    app_source = (Path(__file__).parents[1] / "app.py").read_text(encoding="utf-8")
+
+    assert "Log out and pause test" in app_source
+    assert "Your test will be paused" in app_source
+    assert "when you next log in" in app_source

@@ -632,17 +632,58 @@ except AttributeError:
 st.sidebar.write(f"**{user['name']}**")
 st.sidebar.caption(user["role"])
 
-if st.sidebar.button("Sign out"):
-    assessment_in_progress = bool(st.session_state.get("assessment_phase"))
-    if assessment_in_progress and not user.get("test_suspension_allowed"):
-        st.sidebar.error("Sign-out is unavailable while this assessment is in progress.")
-    else:
-        if assessment_in_progress:
-            suspend_assessment_timer()
-            save_current_assessment_draft(user["id"])
-        db.release_login(user["id"], login_token)
-        st.session_state.clear()
-        st.rerun()
+assessment_in_progress = bool(st.session_state.get("assessment_phase"))
+can_suspend_test = assessment_in_progress and user.get("test_suspension_allowed")
+
+if can_suspend_test:
+    if st.sidebar.button("Log out and pause test", type="primary", key="pause_logout_button"):
+        st.session_state.confirm_assessment_pause_logout = True
+
+    if st.session_state.get("confirm_assessment_pause_logout"):
+        if hasattr(st, "dialog"):
+            @st.dialog("Pause test and log out?")
+            def _confirm_assessment_pause_logout():
+                st.write(
+                    "Your test will be paused. The active timer will stop now and resume "
+                    "when you next log in."
+                )
+                confirm_column, cancel_column = st.columns(2)
+                if confirm_column.button(
+                    "Pause test and log out", type="primary", key="confirm_pause_logout_button"
+                ):
+                    suspend_assessment_timer()
+                    save_current_assessment_draft(user["id"])
+                    db.release_login(user["id"], login_token)
+                    st.session_state.clear()
+                    st.rerun()
+                if cancel_column.button("Continue test", key="cancel_pause_logout_button"):
+                    st.session_state.pop("confirm_assessment_pause_logout", None)
+                    st.rerun()
+            _confirm_assessment_pause_logout()
+        else:
+            st.warning(
+                "Your test will be paused. The active timer will stop now and resume "
+                "when you next log in."
+            )
+            confirm_column, cancel_column = st.columns(2)
+            if confirm_column.button(
+                "Pause test and log out", type="primary", key="confirm_pause_logout_button"
+            ):
+                suspend_assessment_timer()
+                save_current_assessment_draft(user["id"])
+                db.release_login(user["id"], login_token)
+                st.session_state.clear()
+                st.rerun()
+            if cancel_column.button("Continue test", key="cancel_pause_logout_button"):
+                st.session_state.pop("confirm_assessment_pause_logout", None)
+                st.rerun()
+elif assessment_in_progress:
+    st.sidebar.button("Sign out", disabled=True)
+    st.sidebar.caption("Sign-out is unavailable while this assessment is in progress.")
+elif st.sidebar.button("Sign out"):
+    db.release_login(user["id"], login_token)
+    st.session_state.clear()
+    st.rerun()
 
 candidate_subs = db.submissions(user["id"])
 if candidate_subs and not user.get("test_date") and not st.session_state.get("assessment_phase"):
