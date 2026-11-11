@@ -766,9 +766,8 @@ if st.session_state.get("assessment_discipline") != discipline:
         and draft.get("attempt_token")
     ):
         restore_assessment_draft(draft)
-        if resume_suspended_assessment_timer():
-            save_current_assessment_draft(user["id"])
-            st.session_state.assessment_timer_resumed = True
+        if st.session_state.get("assessment_suspended_timer"):
+            st.session_state.assessment_timer_resume_pending = True
         st.session_state.assessment_draft_restored = True
     else:
         st.session_state.assessment_discipline = discipline
@@ -777,6 +776,22 @@ if st.session_state.get("assessment_discipline") != discipline:
 # ---------------------------------------------------------------------------
 # Candidate details / start screen
 # ---------------------------------------------------------------------------
+if st.session_state.get("assessment_timer_resume_pending"):
+    st.subheader("Assessment Paused")
+    st.info(
+        "Your saved assessment is ready to continue. The timer is still paused and will only "
+        "resume after you click the button below."
+    )
+    if st.button("Click to Resume Assessment", type="primary", key="resume_assessment_button"):
+        if resume_suspended_assessment_timer():
+            save_current_assessment_draft(user["id"])
+            st.session_state.pop("assessment_timer_resume_pending", None)
+            st.session_state.assessment_timer_resumed = True
+            st.rerun()
+        else:
+            st.error("The saved timer could not be resumed. Please contact the assessment administrator.")
+    st.stop()
+
 details = st.session_state.get("candidate_details")
 if not details:
     st.subheader("Candidate Details")

@@ -87,3 +87,13 @@ def test_resumable_test_uses_a_confirmed_pause_logout_action():
     assert "Your test will be paused" in app_source
     assert "when you next log in" in app_source
     assert 'st.sidebar.button("Log out and pause test"' not in app_source
+
+
+def test_suspended_timer_waits_for_explicit_resume_action_after_login():
+    app_source = (Path(__file__).parents[1] / "app.py").read_text(encoding="utf-8")
+
+    assert 'st.session_state.assessment_timer_resume_pending = True' in app_source
+    assert 'st.button("Click to Resume Assessment"' in app_source
+    assert app_source.index('st.button("Click to Resume Assessment"') < app_source.index(
+        '# Assessment runner'
+    )
